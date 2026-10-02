@@ -209,11 +209,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
-import {
-  legacyProjectCwdPreferenceKey,
-  toggleSidebarScopeSelection,
-  useUiStateStore,
-} from "../uiStateStore";
+import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -2033,7 +2029,10 @@ function OpenCommandPaletteDialog(props: {
         projectGroup.projectKey,
         activeThreadRef.environmentId,
       );
-      const scoped = useUiStateStore.getState().sidebarProjectScopeKeys.includes(scopeKey);
+      const scopeState = useUiStateStore.getState();
+      const scoped =
+        scopeState.sidebarFilterModes.project === "include" &&
+        scopeState.sidebarProjectScopeKeys.includes(scopeKey);
       actionItems.push({
         kind: "action",
         value: "thread-action:filter-by-project",
@@ -2042,9 +2041,11 @@ function OpenCommandPaletteDialog(props: {
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         run: async () => {
           const state = useUiStateStore.getState();
-          state.setSidebarProjectScopeKeys(
-            toggleSidebarScopeSelection(state.sidebarProjectScopeKeys, scopeKey),
-          );
+          const clearing =
+            state.sidebarFilterModes.project === "include" &&
+            state.sidebarProjectScopeKeys.includes(scopeKey);
+          state.setSidebarFilterMode("project", clearing ? "exclude" : "include");
+          state.setSidebarProjectScopeKeys(clearing ? [] : [scopeKey]);
         },
       });
     }

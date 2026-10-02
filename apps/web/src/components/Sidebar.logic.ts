@@ -1,3 +1,7 @@
+import {
+  matchesSidebarFilter,
+  type SidebarFilterModes,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
@@ -1114,10 +1118,14 @@ export function sidebarItemMatchesScope(
   item: { readonly environmentId: string; readonly projectId: string },
   environmentScopeIds: ReadonlySet<string> | null,
   scopedProjectKeys: ReadonlySet<string> | null,
+  modes: SidebarFilterModes = { environment: "include", project: "include", pinned: "include" },
 ): boolean {
   return (
-    (environmentScopeIds === null || environmentScopeIds.has(item.environmentId)) &&
-    (scopedProjectKeys === null || scopedProjectKeys.has(`${item.environmentId}:${item.projectId}`))
+    matchesSidebarFilter(environmentScopeIds?.has(item.environmentId) ?? null, modes.environment) &&
+    matchesSidebarFilter(
+      scopedProjectKeys?.has(`${item.environmentId}:${item.projectId}`) ?? null,
+      modes.project,
+    )
   );
 }
 

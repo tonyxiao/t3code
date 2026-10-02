@@ -8,7 +8,7 @@ import {
   createNativeMailSearchToolbarItem,
   NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED,
 } from "../layout/native-mail-search-toolbar";
-import { buildHomeListFilterMenu } from "./home-list-filter-menu";
+import { buildHomeListFilterMenu, type HomeListFilterMenuItem } from "./home-list-filter-menu";
 import type { HomeHeaderProps } from "./HomeHeader.types";
 
 export type { HomeHeaderEnvironment } from "./HomeHeader.types";
@@ -20,13 +20,33 @@ export function HomeHeader(props: HomeHeaderProps) {
   // the filter menu only carries the filters and the "customized" icon state
   // keys off those alone.
   const hasCustomListOptions =
-    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null || props.pinnedOnly;
+    props.selectedEnvironmentIds.length > 0 ||
+    props.selectedProjectKeys.length > 0 ||
+    props.filterModes.environment === "include" ||
+    props.filterModes.project === "include" ||
+    props.pinnedFilter !== "all";
   const focusSearch = useCallback(() => {
     searchBarRef.current?.focus();
     return searchBarRef.current !== null;
   }, []);
   useHardwareKeyboardCommand("focusSearch", focusSearch);
   const filterMenu = buildHomeListFilterMenu(props);
+  const renderMenuItem = (item: HomeListFilterMenuItem, key: string): React.ReactNode =>
+    item.type === "action" ? (
+      <NativeHeaderToolbar.MenuAction
+        key={key}
+        isOn={item.state === "on"}
+        onPress={item.onPress}
+        subtitle={item.subtitle}
+      >
+        <NativeHeaderToolbar.Label>{item.title}</NativeHeaderToolbar.Label>
+      </NativeHeaderToolbar.MenuAction>
+    ) : (
+      <NativeHeaderToolbar.Menu key={key} title={item.title}>
+        <NativeHeaderToolbar.Label>{item.title}</NativeHeaderToolbar.Label>
+        {item.items.map((child, index) => renderMenuItem(child, `${key}:${index}`))}
+      </NativeHeaderToolbar.Menu>
+    );
 
   return (
     <>
@@ -98,53 +118,7 @@ export function HomeHeader(props: HomeHeaderProps) {
             title="Thread list options"
             separateBackground
           >
-            <NativeHeaderToolbar.Menu title="Environment">
-              <NativeHeaderToolbar.Label>Environment</NativeHeaderToolbar.Label>
-              <NativeHeaderToolbar.MenuAction
-                isOn={props.selectedEnvironmentId === null}
-                onPress={() => props.onEnvironmentChange(null)}
-                subtitle="Show threads from every environment"
-              >
-                <NativeHeaderToolbar.Label>All environments</NativeHeaderToolbar.Label>
-              </NativeHeaderToolbar.MenuAction>
-              {props.environments.map((environment) => (
-                <NativeHeaderToolbar.MenuAction
-                  key={environment.environmentId}
-                  isOn={props.selectedEnvironmentId === environment.environmentId}
-                  onPress={() => props.onEnvironmentChange(environment.environmentId)}
-                >
-                  <NativeHeaderToolbar.Label>{environment.label}</NativeHeaderToolbar.Label>
-                </NativeHeaderToolbar.MenuAction>
-              ))}
-            </NativeHeaderToolbar.Menu>
-
-            {props.projects.length > 0 ? (
-              <NativeHeaderToolbar.Menu title="Project">
-                <NativeHeaderToolbar.Label>Project</NativeHeaderToolbar.Label>
-                <NativeHeaderToolbar.MenuAction
-                  isOn={props.selectedProjectKey === null}
-                  onPress={() => props.onProjectChange(null)}
-                  subtitle="Show threads from every project"
-                >
-                  <NativeHeaderToolbar.Label>All projects</NativeHeaderToolbar.Label>
-                </NativeHeaderToolbar.MenuAction>
-                {props.projects.map((project) => (
-                  <NativeHeaderToolbar.MenuAction
-                    key={project.key}
-                    isOn={props.selectedProjectKey === project.key}
-                    onPress={() => props.onProjectChange(project.key)}
-                  >
-                    <NativeHeaderToolbar.Label>{project.label}</NativeHeaderToolbar.Label>
-                  </NativeHeaderToolbar.MenuAction>
-                ))}
-              </NativeHeaderToolbar.Menu>
-            ) : null}
-            <NativeHeaderToolbar.MenuAction
-              isOn={props.pinnedOnly}
-              onPress={() => props.onPinnedOnlyChange(!props.pinnedOnly)}
-            >
-              <NativeHeaderToolbar.Label>Pinned conversations only</NativeHeaderToolbar.Label>
-            </NativeHeaderToolbar.MenuAction>
+            {filterMenu.items.map((item, index) => renderMenuItem(item, String(index)))}
           </NativeHeaderToolbar.Menu>
           <NativeHeaderToolbar.Spacer flexible />
           <NativeHeaderToolbar.Button

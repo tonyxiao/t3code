@@ -938,6 +938,52 @@ describe("filterSidebarScopeItems", () => {
 });
 
 describe("sidebarItemMatchesScope", () => {
+  it("intersects include and except scopes for threads and drafts", () => {
+    const modes = { environment: "include", project: "exclude", pinned: "include" } as const;
+    const environments = new Set(["environment-a"]);
+    const projects = new Set(["environment-a:project-a"]);
+    expect(
+      sidebarItemMatchesScope(
+        { environmentId: "environment-a", projectId: "project-a" },
+        environments,
+        projects,
+        modes,
+      ),
+    ).toBe(false);
+    expect(
+      sidebarItemMatchesScope(
+        { environmentId: "environment-a", projectId: "project-b" },
+        environments,
+        projects,
+        modes,
+      ),
+    ).toBe(true);
+    expect(
+      sidebarItemMatchesScope(
+        { environmentId: "environment-b", projectId: "project-b" },
+        environments,
+        projects,
+        modes,
+      ),
+    ).toBe(false);
+    expect(
+      sidebarItemMatchesScope(
+        { environmentId: "environment-a", projectId: "project-a" },
+        null,
+        null,
+        { ...modes, environment: "exclude" },
+      ),
+    ).toBe(true);
+    expect(
+      sidebarItemMatchesScope(
+        { environmentId: "environment-a", projectId: "project-b" },
+        environments,
+        null,
+        { ...modes, environment: "exclude" },
+      ),
+    ).toBe(false);
+  });
+
   const item = { environmentId: "environment-a", projectId: "project-a" };
 
   it("includes any selected environment and intersects selected projects", () => {

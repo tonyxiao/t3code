@@ -1,3 +1,8 @@
+import {
+  matchesSidebarFilter,
+  sidebarFilterValueChecked,
+  toggleSidebarFilterValues,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -99,7 +104,6 @@ import { previewEnvironment } from "../state/preview";
 import {
   legacyProjectCwdPreferenceKey,
   resolveProjectExpanded,
-  toggleSidebarScopeSelection,
   type SidebarThreadStatusFilter,
   useUiStateStore,
 } from "../uiStateStore";
@@ -240,6 +244,8 @@ const SIDEBAR_THREAD_STATUS_LABELS: Record<SidebarThreadStatusFilter, string> = 
   all: "All statuses",
   active: "Active",
   pinned: "Pinned",
+  unpinned: "Unpinned",
+  none: "No statuses",
   snoozed: "Snoozed",
   settled: "Settled",
 };
@@ -1196,6 +1202,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     threadStatusFilter,
     filterNow,
   } = props;
+  const environmentScopeMode = useUiStateStore((store) => store.sidebarFilterModes.environment);
   const environmentMachine = project.allRemoteMembersAreWsl
     ? "linux"
     : project.allRemoteMembersAreDesktopLocal
@@ -1282,11 +1289,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       unfilteredSidebarThreads.filter((thread) =>
         legacySidebarThreadMatchesFilters(thread, {
           environmentIds: environmentScopeIds,
+          environmentMode: environmentScopeMode,
           status: threadStatusFilter,
           now: filterNow,
         }),
       ),
-    [environmentScopeIds, filterNow, threadStatusFilter, unfilteredSidebarThreads],
+    [
+      environmentScopeIds,
+      environmentScopeMode,
+      filterNow,
+      threadStatusFilter,
+      unfilteredSidebarThreads,
+    ],
   );
   const sidebarThreadByKey = useMemo(
     () =>
@@ -2769,6 +2783,13 @@ function ProjectSortMenu({
   onEnvironmentScopeChange: (environmentIds: readonly string[]) => void;
   onThreadStatusFilterChange: (filter: SidebarThreadStatusFilter) => void;
 }) {
+  const environmentScopeMode = useUiStateStore((store) => store.sidebarFilterModes.environment);
+  const setFilterMode = useUiStateStore((store) => store.setSidebarFilterMode);
+  const allEnvironmentsChecked = environmentOptions
+    .filter((option) => option.value !== "all")
+    .every((option) =>
+      sidebarFilterValueChecked(option.value, environmentScopeIds, environmentScopeMode),
+    );
   const handleThreadPreviewCountChange = useCallback(
     (nextValue: number | null) => {
       if (nextValue === null) {
@@ -2806,23 +2827,48 @@ function ProjectSortMenu({
           <div className="px-2 py-1 sm:text-xs font-medium text-muted-foreground">Environment</div>
           <div>
             {environmentOptions.map((option) => (
-              <MenuCheckboxItem
-                key={option.value}
-                checked={
-                  option.value === "all"
-                    ? environmentScopeIds.length === 0
-                    : environmentScopeIds.includes(option.value)
-                }
-                onCheckedChange={() =>
-                  onEnvironmentScopeChange(
+              <div key={option.value} className="group/scope flex items-center">
+                <MenuCheckboxItem
+                  className="min-w-0 flex-1"
+                  checked={
                     option.value === "all"
-                      ? []
-                      : toggleSidebarScopeSelection(environmentScopeIds, option.value),
-                  )
-                }
-              >
-                {option.label}
-              </MenuCheckboxItem>
+                      ? allEnvironmentsChecked
+                      : sidebarFilterValueChecked(
+                          option.value,
+                          environmentScopeIds,
+                          environmentScopeMode,
+                        )
+                  }
+                  onCheckedChange={() => {
+                    if (option.value === "all") {
+                      setFilterMode("environment", allEnvironmentsChecked ? "include" : "exclude");
+                      onEnvironmentScopeChange([]);
+                    } else
+                      onEnvironmentScopeChange(
+                        toggleSidebarFilterValues(environmentScopeIds, environmentScopeMode, [
+                          option.value,
+                        ]),
+                      );
+                  }}
+                >
+                  {option.label}
+                </MenuCheckboxItem>
+                {option.value !== "all" ? (
+                  <div className="opacity-0 group-hover/scope:opacity-100 group-focus-within/scope:opacity-100 pointer-coarse:opacity-100">
+                    <Button
+                      size="xs"
+                      variant="ghost-muted"
+                      aria-label={`Only ${option.label}`}
+                      onClick={() => {
+                        setFilterMode("environment", "include");
+                        onEnvironmentScopeChange([option.value]);
+                      }}
+                    >
+                      Only
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         </MenuGroup>
@@ -3258,6 +3304,7 @@ export default function LegacySidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
+  const environmentScopeMode = useUiStateStore((store) => store.sidebarFilterModes.environment);
   const environmentScopeIds = useUiStateStore((store) => store.sidebarEnvironmentScopeIds);
   const setEnvironmentScopeIds = useUiStateStore((store) => store.setSidebarEnvironmentScopeIds);
   const threadStatusFilter = useUiStateStore((store) => store.sidebarThreadStatusFilter);
@@ -3359,10 +3406,13 @@ export default function LegacySidebar() {
   }, [projectOrder, projects]);
   const scopedOrderedProjects = useMemo(
     () =>
-      environmentScopeIds.length === 0
-        ? orderedProjects
-        : orderedProjects.filter((project) => environmentScopeIds.includes(project.environmentId)),
-    [environmentScopeIds, orderedProjects],
+      orderedProjects.filter((project) =>
+        matchesSidebarFilter(
+          environmentScopeIds.includes(project.environmentId),
+          environmentScopeMode,
+        ),
+      ),
+    [environmentScopeIds, environmentScopeMode, orderedProjects],
   );
 
   // Build a mapping from physical project key → logical project key for
@@ -3413,11 +3463,12 @@ export default function LegacySidebar() {
       sidebarThreads.filter((thread) =>
         legacySidebarThreadMatchesFilters(thread, {
           environmentIds: environmentScopeIds,
+          environmentMode: environmentScopeMode,
           status: threadStatusFilter,
           now: filterNow,
         }),
       ),
-    [environmentScopeIds, filterNow, sidebarThreads, threadStatusFilter],
+    [environmentScopeIds, environmentScopeMode, filterNow, sidebarThreads, threadStatusFilter],
   );
   const sidebarThreadByKey = useMemo(
     () =>

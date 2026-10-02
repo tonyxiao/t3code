@@ -79,31 +79,34 @@ export function HomeRouteScreen() {
   );
   const {
     options: listOptions,
-    setSelectedEnvironmentId,
-    setPinnedOnly,
+    setSelectedEnvironmentIds,
+    setSelectedProjectKeys,
+    setPinnedFilter,
+    setFilterMode,
   } = useHomeListOptions(availableEnvironmentIds);
-  const selectedEnvironmentId = listOptions.selectedEnvironmentId;
-  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
+  const selectedEnvironmentIds = listOptions.selectedEnvironmentIds;
+  const selectedProjectKeys = listOptions.selectedProjectKeys;
   const projectFilterOptions = useMemo(
     () =>
       buildHomeProjectScopes({
         projects,
-        environmentId: selectedEnvironmentId,
+        environmentId: null,
         projectGroupingMode: listOptions.projectGroupingMode,
       }).map((scope) => ({
         key: scope.key,
         label: scope.title,
       })),
-    [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
+    [listOptions.projectGroupingMode, projects],
   );
   useEffect(() => {
-    if (
-      selectedProjectKey !== null &&
-      !projectFilterOptions.some((project) => project.key === selectedProjectKey)
-    ) {
-      setSelectedProjectKey(null);
+    const remaining = selectedProjectKeys.filter((key) =>
+      projectFilterOptions.some((project) => project.key === key),
+    );
+    if (remaining.length !== selectedProjectKeys.length) {
+      setSelectedProjectKeys(remaining);
+      if (remaining.length === 0) setFilterMode("project", "exclude");
     }
-  }, [projectFilterOptions, selectedProjectKey]);
+  }, [projectFilterOptions, selectedProjectKeys, setFilterMode, setSelectedProjectKeys]);
 
   // In split layouts the persistent sidebar IS the thread list — Home becomes
   // an empty detail pane so selecting a thread never transitions layouts.
@@ -173,12 +176,14 @@ export function HomeRouteScreen() {
           environments={environments}
           projects={projectFilterOptions}
           searchQuery={searchQuery}
-          selectedEnvironmentId={selectedEnvironmentId}
-          selectedProjectKey={selectedProjectKey}
-          pinnedOnly={listOptions.pinnedOnly}
-          onEnvironmentChange={setSelectedEnvironmentId}
-          onProjectChange={setSelectedProjectKey}
-          onPinnedOnlyChange={setPinnedOnly}
+          selectedEnvironmentIds={selectedEnvironmentIds}
+          selectedProjectKeys={selectedProjectKeys}
+          pinnedFilter={listOptions.pinnedFilter}
+          filterModes={listOptions.filterModes}
+          onEnvironmentChange={setSelectedEnvironmentIds}
+          onProjectChange={setSelectedProjectKeys}
+          onPinnedFilterChange={setPinnedFilter}
+          onFilterModeChange={setFilterMode}
           onOpenEnvironments={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
@@ -216,8 +221,8 @@ export function HomeRouteScreen() {
           onMoveThread={moveThread}
           onRenameThread={renameThread}
           onRegenerateThreadTitle={regenerateThreadTitle}
-          onEnvironmentChange={setSelectedEnvironmentId}
-          onProjectChange={setSelectedProjectKey}
+          onEnvironmentChange={setSelectedEnvironmentIds}
+          onProjectChange={setSelectedProjectKeys}
           onOpenSettings={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
@@ -256,9 +261,10 @@ export function HomeRouteScreen() {
           projectSortOrder={listOptions.projectSortOrder}
           savedConnectionsById={savedConnectionsById}
           searchQuery={searchQuery}
-          selectedEnvironmentId={selectedEnvironmentId}
-          selectedProjectKey={selectedProjectKey}
-          pinnedOnly={listOptions.pinnedOnly}
+          selectedEnvironmentIds={selectedEnvironmentIds}
+          selectedProjectKeys={selectedProjectKeys}
+          pinnedFilter={listOptions.pinnedFilter}
+          filterModes={listOptions.filterModes}
           threads={threads}
         />
       </>

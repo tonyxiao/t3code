@@ -1,3 +1,7 @@
+import {
+  matchesSidebarFilter,
+  type SidebarFilterModes,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import {
   canSnooze,
@@ -495,6 +499,8 @@ export function buildThreadListV2ListItems(input: {
  * the settled recency tail, matching the web v2 list.
  */
 export function buildThreadListV2Items(input: {
+  readonly environmentIds?: ReadonlySet<EnvironmentId>;
+  readonly filterModes?: SidebarFilterModes;
   readonly pendingOrder?: PendingThreadOrder | null;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly environmentId: EnvironmentId | null;
@@ -551,8 +557,23 @@ export function buildThreadListV2Items(input: {
   let nextSnoozeWakeAt: string | null = null;
   for (const thread of input.threads) {
     // Callers pass live shells. The server stamps settledOverride for the tail.
-    if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
-    if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
+    if (
+      !matchesSidebarFilter(
+        input.environmentIds
+          ? input.environmentIds.has(thread.environmentId)
+          : input.environmentId === null
+            ? null
+            : thread.environmentId === input.environmentId,
+        input.filterModes?.environment,
+      )
+    )
+      continue;
+    if (
+      !matchesSidebarFilter(
+        projectKeys?.has(`${thread.environmentId}:${thread.projectId}`) ?? null,
+        input.filterModes?.project,
+      )
+    ) {
       continue;
     }
     if (

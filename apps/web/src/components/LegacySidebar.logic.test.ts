@@ -26,6 +26,44 @@ function thread(
   };
 }
 
+describe("legacy sidebar checkbox filter compatibility", () => {
+  it("honors exclusions, None, and the unpinned category after switching sidebars", () => {
+    const value = thread();
+    expect(
+      legacySidebarThreadMatchesFilters(value, {
+        environmentIds: ["environment-a"],
+        environmentMode: "exclude",
+        status: "all",
+        now: NOW,
+      }),
+    ).toBe(false);
+    expect(
+      legacySidebarThreadMatchesFilters(value, {
+        environmentIds: [],
+        environmentMode: "include",
+        status: "all",
+        now: NOW,
+      }),
+    ).toBe(false);
+    expect(
+      legacySidebarThreadMatchesFilters(value, {
+        environmentIds: [],
+        environmentMode: "exclude",
+        status: "unpinned",
+        now: NOW,
+      }),
+    ).toBe(true);
+    expect(
+      legacySidebarThreadMatchesFilters(value, {
+        environmentIds: [],
+        environmentMode: "exclude",
+        status: "none",
+        now: NOW,
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("legacySidebarThreadMatchesFilters", () => {
   it("includes threads from any selected environment", () => {
     expect(

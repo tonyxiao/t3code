@@ -1,3 +1,4 @@
+import { DEFAULT_SIDEBAR_FILTER_MODES } from "@t3tools/client-runtime/state/sidebar-filters";
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -15,6 +16,7 @@ import {
   setProjectExpanded,
   setSidebarEnvironmentScopeIds,
   setSidebarProjectScopeKeys,
+  setSidebarFilterMode,
   toggleSidebarScopeSelection,
   setSidebarThreadSortOrder,
   setSidebarThreadStatusFilter,
@@ -26,6 +28,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
   return {
     projectExpandedById: {},
     projectOrder: [],
+    sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
     sidebarEnvironmentScopeIds: [],
     sidebarProjectScopeKeys: [],
     sidebarThreadSortOrder: "created_at",
@@ -39,6 +42,53 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
 }
 
 describe("uiStateStore pure functions", () => {
+  it("migrates old except-pinned state once without reversing new pinned-only choices on reload", () => {
+    const old = {
+      sidebarThreadStatusFilter: "pinned",
+      sidebarFilterModes: { ...DEFAULT_SIDEBAR_FILTER_MODES, pinned: "exclude" as const },
+    };
+    expect(parsePersistedState(old).sidebarThreadStatusFilter).toBe("unpinned");
+    expect(
+      parsePersistedState({ ...old, sidebarFilterSelectionVersion: 1 }).sidebarThreadStatusFilter,
+    ).toBe("pinned");
+  });
+
+  it("preserves None on reload while migrating legacy empty selections to All", () => {
+    expect(
+      parsePersistedState({ sidebarEnvironmentScopeIds: [], sidebarProjectScopeKeys: [] })
+        .sidebarFilterModes,
+    ).toMatchObject({ environment: "exclude", project: "exclude" });
+    expect(
+      parsePersistedState({
+        sidebarFilterSelectionVersion: 1,
+        sidebarEnvironmentScopeIds: [],
+        sidebarProjectScopeKeys: [],
+        sidebarFilterModes: { environment: "include", project: "include", pinned: "include" },
+      }).sidebarFilterModes,
+    ).toMatchObject({ environment: "include", project: "include" });
+    expect(
+      parsePersistedState({
+        sidebarEnvironmentScopeIds: ["env-a"],
+        sidebarProjectScopeKeys: ["site"],
+      }).sidebarFilterModes,
+    ).toMatchObject({ environment: "include", project: "include" });
+  });
+
+  it("restores filter modes without changing existing include selections", () => {
+    expect(parsePersistedState({}).sidebarFilterModes).toEqual(DEFAULT_SIDEBAR_FILTER_MODES);
+    const state = setSidebarFilterMode(
+      makeUiState({ sidebarProjectScopeKeys: ["project-a"] }),
+      "project",
+      "exclude",
+    );
+    expect(state.sidebarProjectScopeKeys).toEqual(["project-a"]);
+    expect(setSidebarFilterMode(state, "project", "exclude")).toBe(state);
+    expect(
+      parsePersistedState({ sidebarFilterModes: state.sidebarFilterModes }).sidebarFilterModes
+        .project,
+    ).toBe("exclude");
+  });
+
   it("migrates existing single sidebar scopes to multi-selection", () => {
     expect(
       parsePersistedState({
@@ -277,6 +327,7 @@ describe("parsePersistedState", () => {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
+      sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
       sidebarEnvironmentScopeIds: [],
       sidebarProjectScopeKeys: [],
       sidebarThreadSortOrder: "created_at",
@@ -370,6 +421,21 @@ describe("uiStateStore persistence", () => {
     vi.unstubAllGlobals();
   });
 
+  it("persists exclusions with the selected scopes", () => {
+    const state = makeUiState({
+      sidebarEnvironmentScopeIds: ["env-a"],
+      sidebarProjectScopeKeys: ["project-b"],
+      sidebarFilterModes: { environment: "exclude", project: "include", pinned: "exclude" },
+    });
+    persistState(state);
+    const restored = parsePersistedState(
+      JSON.parse(localStorageStub.getItem(PERSISTED_STATE_KEY)!),
+    );
+    expect(restored.sidebarFilterModes).toEqual(state.sidebarFilterModes);
+    expect(restored.sidebarEnvironmentScopeIds).toEqual(["env-a"]);
+    expect(restored.sidebarProjectScopeKeys).toEqual(["project-b"]);
+  });
+
   it("persists raw UI preferences including thread visit markers", () => {
     const state = makeUiState({
       projectExpandedById: {
@@ -402,6 +468,8 @@ describe("uiStateStore persistence", () => {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
+      sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+      sidebarFilterSelectionVersion: 1,
       sidebarEnvironmentScopeIds: [],
       sidebarProjectScopeKeys: [],
       sidebarThreadSortOrder: "created_at",

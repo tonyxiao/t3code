@@ -235,6 +235,10 @@
       "types": "./src/state/threadSettled.ts",
       "default": "./src/state/threadSettled.ts"
     },
+    "./state/sidebar-filters": {
+      "types": "./src/state/sidebarFilters.ts",
+      "default": "./src/state/sidebarFilters.ts"
+    },
     "./state/thread-search": {
       "types": "./src/state/threadSearch.ts",
       "default": "./src/state/threadSearch.ts"

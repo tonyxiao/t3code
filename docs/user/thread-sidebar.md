@@ -153,13 +153,15 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
-On web and desktop, use the sidebar's environment and project filters to focus the thread list.
-Check more than one entry to include any of those environments or projects. The two filters
-combine, so a thread must match both when both are active. Choose **All environments** or
-**All projects** to clear that filter. A project has environment rows when it exists on several
-computers; check the computers you want to include. Use the pin filter to show only pinned
-conversations within the selected environments and projects.
-On mobile, choose **Pinned conversations only** from the thread list filter menu.
+Use the thread list's environment and project filters to focus your work. **All** starts with
+every entry checked. Uncheck entries to hide them, or use a row's **Only** shortcut to show just
+that entry. On mobile, these shortcuts are in the **Only…** submenu. Selecting All restores every
+entry; unchecking every entry shows no matches. Projects that exist on several computers have
+individual environment rows on web and desktop, plus a project-wide Only shortcut.
+
+Active filters combine, so a thread must match each one. The pin filter works the same way:
+**Pinned** and **Unpinned** are both checked by default. Uncheck either category to hide it, or
+choose Only to show that category.
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and

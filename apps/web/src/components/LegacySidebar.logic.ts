@@ -1,4 +1,8 @@
 import {
+  matchesSidebarFilter,
+  type SidebarFilterMode,
+} from "@t3tools/client-runtime/state/sidebar-filters";
+import {
   effectiveSnoozed,
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
@@ -17,15 +21,25 @@ export function legacySidebarThreadMatchesFilters(
   thread: LegacySidebarFilterableThread,
   input: {
     readonly environmentIds: readonly string[];
+    readonly environmentMode?: SidebarFilterMode;
     readonly status: SidebarThreadStatusFilter;
     readonly now: string;
   },
 ): boolean {
   if (thread.archivedAt !== null) return false;
-  if (input.environmentIds.length > 0 && !input.environmentIds.includes(thread.environmentId))
+  if (
+    !matchesSidebarFilter(
+      input.environmentMode === undefined && input.environmentIds.length === 0
+        ? null
+        : input.environmentIds.includes(thread.environmentId),
+      input.environmentMode,
+    )
+  )
     return false;
   if (input.status === "all") return true;
   if (input.status === "pinned") return thread.pinnedAt != null;
+  if (input.status === "unpinned") return thread.pinnedAt == null;
+  if (input.status === "none") return false;
 
   const status = effectiveSnoozed(thread, { now: input.now })
     ? "snoozed"
