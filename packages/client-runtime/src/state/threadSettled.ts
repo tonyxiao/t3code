@@ -278,6 +278,7 @@ export function snoozeWakeLabel(snoozedUntil: string, options: { readonly now: s
 
 export type CustomSnoozeInput =
   | { readonly mode: "date"; readonly date: string; readonly time: string }
+  | { readonly mode: "text"; readonly text: string }
   | {
       readonly mode: "duration";
       readonly amount: string;
@@ -287,7 +288,9 @@ export type CustomSnoozeInput =
 /** Resolve local calendar input or elapsed time, rejecting past and invalid dates. */
 export function resolveCustomSnooze(input: CustomSnoozeInput, now: Date): string | null {
   let wake: Date;
-  if (input.mode === "duration") {
+  if (input.mode === "text") {
+    return resolveNaturalSnooze(input.text, now);
+  } else if (input.mode === "duration") {
     const amount = Number(input.amount);
     if (!Number.isFinite(amount) || amount <= 0) return null;
     const unitMs = { minutes: 60_000, hours: HOUR_MS, days: 24 * HOUR_MS }[input.unit];
@@ -301,6 +304,49 @@ export function resolveCustomSnooze(input: CustomSnoozeInput, now: Date): string
   return Number.isFinite(wake.getTime()) && wake.getTime() > now.getTime()
     ? wake.toISOString()
     : null;
+}
+
+/** Resolve common snooze phrases locally, without sending thread text to a date service. */
+export function resolveNaturalSnooze(text: string, now: Date): string | null {
+  const phrase = text.trim().toLowerCase().replace(/\s+/g, " ");
+  const duration =
+    /^(?:in )?(\d+(?:\.\d+)?)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)$/.exec(phrase);
+  if (duration) {
+    const amount = Number(duration[1]);
+    const unit = duration[2]?.[0];
+    const multiplier =
+      unit === "m" ? 60_000 : unit === "h" ? HOUR_MS : unit === "d" ? DAY_MS : 7 * DAY_MS;
+    const wake = new Date(now.getTime() + amount * multiplier);
+    return amount > 0 && Number.isFinite(wake.getTime()) ? wake.toISOString() : null;
+  }
+
+  const match =
+    /^(today|tomorrow|tmr|tonight|next week|(?:next )?(?:sun|mon|tue|wed|thu|fri|sat)(?:day)?)(?:\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$/.exec(
+      phrase,
+    );
+  if (!match) return null;
+  const [, day, hourText, minuteText, meridiem] = match;
+  if (!day) return null;
+  const wake = new Date(now);
+  const weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  if (day === "tomorrow" || day === "tmr") wake.setDate(wake.getDate() + 1);
+  else if (day === "next week") wake.setDate(wake.getDate() + ((8 - wake.getDay()) % 7 || 7));
+  else if (day !== "today" && day !== "tonight") {
+    const target = weekdays.indexOf(day.replace(/^next /, "").slice(0, 3));
+    if (target < 0) return null;
+    const days = (target - wake.getDay() + 7) % 7 || 7;
+    wake.setDate(wake.getDate() + days);
+  }
+  let hour =
+    hourText === undefined ? (day === "tonight" ? EVENING_HOUR : MORNING_HOUR) : Number(hourText);
+  const minute = minuteText === undefined ? 0 : Number(minuteText);
+  if (minute > 59 || (meridiem && (hour < 1 || hour > 12)) || (!meridiem && hour > 23)) return null;
+  if (meridiem) hour = (hour % 12) + (meridiem === "pm" ? 12 : 0);
+  else if (hourText !== undefined && hour >= 1 && hour <= 6) hour += 12;
+  wake.setHours(hour, minute, 0, 0);
+  if (wake.getHours() !== hour || wake.getMinutes() !== minute || wake.getTime() <= now.getTime())
+    return null;
+  return wake.toISOString();
 }
 
 export function localSnoozeDate(date: Date): string {

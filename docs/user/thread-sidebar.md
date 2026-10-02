@@ -163,7 +163,8 @@ On mobile, choose **Pinned conversations only** from the thread list filter menu
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and
-includes your messages and final agent responses.
+includes your messages and final agent responses. While viewing a thread, search its
+actions there too, including snooze, title regeneration, and copy options.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -180,7 +181,8 @@ finishes; the call's own result shows its status.
 
 ## Snooze until later
 
-Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
-local time zone, or a duration in minutes, hours, or days. Durations start when
+Choose **Snooze → Custom…** from a thread's menu to type a time such as `1w`,
+`30days`, or `tomorrow at 9am`. You can also pick a date and time in your local
+time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.

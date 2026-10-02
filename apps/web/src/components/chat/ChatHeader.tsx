@@ -37,6 +37,7 @@ import { useRemoteOpenState, type RemoteOpenMode } from "../../remoteOpen";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { onRequestThreadRename } from "~/threadRenameBus";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -228,6 +229,18 @@ export const ChatHeader = memo(function ChatHeader({
     renameCommittedRef.current = false;
     setRenaming({ threadId: activeThreadId, title: activeThreadTitle });
   }, [activeThreadId, activeThreadTitle]);
+  useEffect(
+    () =>
+      onRequestThreadRename((threadRef) => {
+        if (
+          threadRef.environmentId === activeThreadEnvironmentId &&
+          threadRef.threadId === activeThreadId
+        ) {
+          startRename();
+        }
+      }),
+    [activeThreadEnvironmentId, activeThreadId, startRename],
+  );
   const commitRename = useCallback(
     (title: string) => {
       setRenaming(null);

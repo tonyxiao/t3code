@@ -7,7 +7,9 @@ import {
   RNHostView,
   Spacer,
   Text,
+  TextField,
   VStack,
+  useNativeState,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
@@ -39,6 +41,7 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 const durationAmounts = Array.from({ length: 99 }, (_, index) => index + 1);
 const SnoozeStack = createNativeStackNavigator<{ CustomSnooze: undefined }>();
 const modes = [
+  { value: "text", label: "Type a time" },
   { value: "date", label: "Date and time" },
   { value: "duration", label: "Duration" },
 ] as const;
@@ -53,7 +56,8 @@ export function CustomSnoozeSheet(props: {
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
   const { width, height } = useWindowDimensions();
-  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("date");
+  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
+  const text = useNativeState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -68,13 +72,19 @@ export function CustomSnoozeSheet(props: {
 
   const submit = () => {
     const input: CustomSnoozeInput =
-      mode === "date"
-        ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
-        : { mode, amount: String(amount), unit };
+      mode === "text"
+        ? { mode, text: text.get() }
+        : mode === "date"
+          ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+          : { mode, amount: String(amount), unit };
     const snoozedUntil = resolveCustomSnooze(input, new Date());
     if (!snoozedUntil) {
       setError(
-        mode === "date" ? "Choose a date and time in the future." : "Enter a positive duration.",
+        mode === "text"
+          ? "Try 1w, 30days, or tomorrow at 9am."
+          : mode === "date"
+            ? "Choose a date and time in the future."
+            : "Enter a positive duration.",
       );
       return;
     }
@@ -130,7 +140,19 @@ export function CustomSnoozeSheet(props: {
                     </Text>
                   ))}
                 </Picker>
-                {mode === "date" ? (
+                {mode === "text" ? (
+                  <VStack
+                    spacing={8}
+                    modifiers={[frame({ maxWidth: Infinity, minHeight: 180, maxHeight: 180 })]}
+                  >
+                    <Text>Snooze until</Text>
+                    <TextField
+                      text={text}
+                      placeholder="1w, 30days, tomorrow at 9am"
+                      onTextChange={() => setError(null)}
+                    />
+                  </VStack>
+                ) : mode === "date" ? (
                   <DatePicker
                     title="Snooze until"
                     selection={date}

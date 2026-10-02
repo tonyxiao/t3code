@@ -32,6 +32,7 @@ import {
 import {
   type DesktopWslState,
   type EnvironmentId,
+  type ContextMenuItem,
   type EnvironmentMachineKind,
   type FilesystemBrowseResult,
   type ProjectId,
@@ -82,6 +83,9 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useThreadActionMenu } from "../hooks/useThreadActionMenu";
+import { requestThreadRename } from "../threadRenameBus";
+import type { ThreadActionMenuId } from "./threadActionMenu.logic";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { useClientSettings } from "../hooks/useSettings";
@@ -171,7 +175,11 @@ import {
   reduceCommandPaletteUiState,
   type SearchOverlayMode,
 } from "./CommandPalette.logic";
-import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sidebar.logic";
+import {
+  orderItemsByPreferredIds,
+  sidebarProjectEnvironmentScopeKey,
+  sortLogicalProjectsForSidebar,
+} from "./Sidebar.logic";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import { CommandPaletteResults } from "./CommandPaletteResults";
@@ -201,7 +209,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
-import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import {
+  legacyProjectCwdPreferenceKey,
+  toggleSidebarScopeSelection,
+  useUiStateStore,
+} from "../uiStateStore";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -1153,6 +1165,17 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectCwd = currentProjectId
     ? (projectCwdById.get(currentProjectId) ?? null)
     : null;
+  const activeThreadRef = useMemo(
+    () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
+    [activeThread?.environmentId, activeThread?.id],
+  );
+  const threadActionMenu = useThreadActionMenu({
+    threadRef: activeThreadRef,
+    projectCwd: currentProjectCwd,
+    onStartRename: () => {
+      if (activeThreadRef) window.setTimeout(() => requestThreadRename(activeThreadRef), 0);
+    },
+  });
   const currentProjectCwdForBrowse =
     browseEnvironmentId && currentProjectEnvironmentId === browseEnvironmentId
       ? currentProjectCwd
@@ -1948,6 +1971,83 @@ function OpenCommandPaletteDialog(props: {
       shortcutCommand: "thread.copyReference",
       run: copyActiveThreadReference,
     });
+  }
+
+  if (activeThreadRef !== null) {
+    const menuItems = threadActionMenu.getMenuItems();
+    const toPaletteItem = (
+      item: ContextMenuItem<ThreadActionMenuId>,
+      parentLabel?: string,
+      parentDisabled = false,
+    ): CommandPaletteActionItem | CommandPaletteSubmenuItem => {
+      const base = {
+        value: `thread-action:${item.id}`,
+        searchTerms: [item.label, parentLabel ?? "", "thread", item.id.replaceAll("-", " ")],
+        title: parentLabel ? `${parentLabel} → ${item.label}` : item.label,
+        icon: item.checked ? (
+          <CheckIcon className={ITEM_ICON_CLASS} />
+        ) : (
+          <MessageSquareIcon className={ITEM_ICON_CLASS} />
+        ),
+        ...(item.checked ? { description: "Current" } : {}),
+        ...(item.disabled || parentDisabled ? { disabled: true } : {}),
+      };
+      if (item.children) {
+        return {
+          ...base,
+          kind: "submenu",
+          addonIcon: <MessageSquareIcon className={ADDON_ICON_CLASS} />,
+          groups: [
+            {
+              value: `thread-action-options:${item.id}`,
+              label: item.label,
+              items: item.children.map((child) => toPaletteItem(child, undefined, item.disabled)),
+            },
+          ],
+        };
+      }
+      return {
+        ...base,
+        kind: "action",
+        run: async () => threadActionMenu.runAction(item.id),
+      };
+    };
+    actionItems.push(...menuItems.map((item) => toPaletteItem(item)));
+    if (deferredQuery.trim()) {
+      actionItems.push(
+        ...menuItems.flatMap(
+          (item) =>
+            item.children?.map((child) => toPaletteItem(child, item.label, item.disabled)) ?? [],
+        ),
+      );
+    }
+    const projectGroup = projectGroups.find((group) =>
+      group.memberProjectRefs.some(
+        (ref) =>
+          ref.environmentId === activeThreadRef.environmentId &&
+          ref.projectId === activeThread?.projectId,
+      ),
+    );
+    if (projectGroup) {
+      const scopeKey = sidebarProjectEnvironmentScopeKey(
+        projectGroup.projectKey,
+        activeThreadRef.environmentId,
+      );
+      const scoped = useUiStateStore.getState().sidebarProjectScopeKeys.includes(scopeKey);
+      actionItems.push({
+        kind: "action",
+        value: "thread-action:filter-by-project",
+        searchTerms: ["filter by project", "show all projects", projectGroup.displayName, "thread"],
+        title: scoped ? "Show all projects" : `Filter by ${projectGroup.displayName}`,
+        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          const state = useUiStateStore.getState();
+          state.setSidebarProjectScopeKeys(
+            toggleSidebarScopeSelection(state.sidebarProjectScopeKeys, scopeKey),
+          );
+        },
+      });
+    }
   }
 
   if (

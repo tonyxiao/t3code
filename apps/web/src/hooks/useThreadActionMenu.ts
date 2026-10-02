@@ -54,9 +54,8 @@ function failureToast(title: string, error: unknown) {
 
 /**
  * The per-thread action menu (pin, settle, snooze, rename, copy, delete…) as
- * a self-contained hook, for surfaces other than the sidebar row — today the
- * chat header. Renders through the native context-menu bridge and dispatches
- * through the same mutations the sidebar uses.
+ * a self-contained hook for the chat header and command palette. The native
+ * context menu and palette dispatch through the same mutations.
  *
  * Unlike the sidebar, settle and snooze here never navigate away: the caller
  * is acting on the thread they are reading, and ChatView's parked-thread
@@ -121,44 +120,61 @@ export function useThreadActionMenu(input: {
     onError: (error) => failureToast("Failed to copy thread ID", error),
   });
 
+  const getMenuSnapshot = useCallback(() => {
+    if (threadRef === null) return null;
+    const thread = readThreadShell(threadRef);
+    if (!thread) return null;
+    const now = new Date();
+    const supports = {
+      settlement: readEnvironmentSupportsSettlement(threadRef.environmentId),
+      autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(threadRef.environmentId),
+      snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
+      pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
+      titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
+    };
+    const isRegeneratingTitle = thread.titleRegeneration != null;
+    const snoozePresets = resolveSnoozePresets(now, timestampFormat);
+    const items = buildThreadActionMenuItems({
+      branch: thread.branch ?? null,
+      // The chat header has no project-scoped thread list behind the
+      // menu, so the "Filter by project" affordance is sidebar-only.
+      projectFilter: null,
+      isPinned: thread.pinnedAt != null,
+      isSettled: supports.settlement && thread.settledOverride === "settled",
+      autoSettleEnabled: thread.autoSettleDisabledAt == null,
+      isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
+      canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
+      isRegeneratingTitle,
+      isRunning: thread.session?.status === "running" && thread.session.activeTurnId != null,
+      supports,
+      snoozePresets,
+    });
+    return { items, snoozePresets, isRegeneratingTitle };
+  }, [threadRef, timestampFormat]);
+
   const openMenu = useCallback(
-    (position: { x: number; y: number }) => {
+    (position: { x: number; y: number }, directAction?: ThreadActionMenuId) => {
       if (threadRef === null) return;
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
-        // Snapshot at open time — the menu is modal, so state read now is
-        // what the user is looking at.
+        const snapshot = getMenuSnapshot();
+        if (!snapshot) return;
         const thread = readThreadShell(threadRef);
         if (!thread) return;
-        const now = new Date();
-        const supports = {
-          settlement: readEnvironmentSupportsSettlement(threadRef.environmentId),
-          autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(threadRef.environmentId),
-          snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
-          pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
-          titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
-        };
-        const isRegeneratingTitle = thread.titleRegeneration != null;
-        const snoozePresets = resolveSnoozePresets(now, timestampFormat);
-        const items = buildThreadActionMenuItems({
-          branch: thread.branch ?? null,
-          // The chat header has no project-scoped thread list behind the
-          // menu, so the "Filter by project" affordance is sidebar-only.
-          projectFilter: null,
-          isPinned: thread.pinnedAt != null,
-          isSettled: supports.settlement && thread.settledOverride === "settled",
-          autoSettleEnabled: thread.autoSettleDisabledAt == null,
-          isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
-          canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
-          isRegeneratingTitle,
-          isRunning: thread.session?.status === "running" && thread.session.activeTurnId != null,
-          supports,
-          snoozePresets,
-        });
-        const clicked = await settlePromise(() => api.contextMenu.show(items, position));
+        const { items, snoozePresets, isRegeneratingTitle } = snapshot;
+        const clicked = directAction
+          ? { _tag: "Success" as const, value: directAction }
+          : await settlePromise(() => api.contextMenu.show(items, position));
         if (clicked._tag === "Failure" || clicked.value === null) return;
         const action: ThreadActionMenuId = clicked.value;
+        if (directAction) {
+          const selected = items.find((item) => item.id === action);
+          const parent = items.find((item) => item.children?.some((child) => child.id === action));
+          const child = parent?.children?.find((item) => item.id === action);
+          if ((!selected && !child) || selected?.disabled || parent?.disabled || child?.disabled)
+            return;
+        }
         if (action.startsWith("snooze:")) {
           const preset =
             action === "snooze:custom"
@@ -334,6 +350,7 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      getMenuSnapshot,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
@@ -347,7 +364,6 @@ export function useThreadActionMenu(input: {
       settleThread,
       snoozeThread,
       threadRef,
-      timestampFormat,
       unsettleThread,
       unsnoozeThread,
       updateThreadMetadata,
@@ -358,5 +374,10 @@ export function useThreadActionMenu(input: {
     void readLocalApi()?.contextMenu.close();
   }, []);
 
-  return { openMenu, closeMenu };
+  return {
+    openMenu,
+    closeMenu,
+    getMenuItems: () => getMenuSnapshot()?.items ?? [],
+    runAction: (action: ThreadActionMenuId) => openMenu({ x: 0, y: 0 }, action),
+  };
 }

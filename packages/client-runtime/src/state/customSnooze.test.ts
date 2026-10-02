@@ -1,12 +1,46 @@
 // @effect-diagnostics globalDate:off -- Tests exercise local calendar and elapsed-time snooze input.
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { localSnoozeDate, localSnoozeTime, resolveCustomSnooze } from "./threadSettled.ts";
+import {
+  localSnoozeDate,
+  localSnoozeTime,
+  resolveCustomSnooze,
+  resolveNaturalSnooze,
+} from "./threadSettled.ts";
 
 const now = new Date(2026, 8, 14, 14, 30);
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe("custom snooze", () => {
+  it.each([
+    ["1 w", 7 * 24 * 3_600_000],
+    ["30days", 30 * 24 * 3_600_000],
+    ["in 45 min", 45 * 60_000],
+  ])("resolves typed duration %s", (phrase, elapsed) => {
+    expect(resolveNaturalSnooze(phrase, now)).toBe(new Date(now.getTime() + elapsed).toISOString());
+  });
+
+  it("resolves common day phrases in local time", () => {
+    expect(resolveNaturalSnooze("tomorrow at 9am", now)).toBe(
+      new Date(2026, 8, 15, 9).toISOString(),
+    );
+    expect(resolveNaturalSnooze("tmr at 3", now)).toBe(
+      new Date(2026, 8, 15, 15).toISOString(),
+    );
+    expect(resolveNaturalSnooze("tmr 3pm", now)).toBe(
+      new Date(2026, 8, 15, 15).toISOString(),
+    );
+    expect(resolveNaturalSnooze("next week", now)).toBe(new Date(2026, 8, 21, 9).toISOString());
+    expect(resolveNaturalSnooze("Friday 9:30 pm", now)).toBe(
+      new Date(2026, 8, 18, 21, 30).toISOString(),
+    );
+  });
+
+  it.each(["", "0w", "tomorrow at 25", "yesterday", "today at 9am", "infinity days"])(
+    "rejects invalid or past typed time %s",
+    (phrase) => expect(resolveNaturalSnooze(phrase, now)).toBeNull(),
+  );
+
   it("converts local date and time to an absolute wake time", () => {
     expect(resolveCustomSnooze({ mode: "date", date: "2026-09-15", time: "09:15" }, now)).toBe(
       new Date(2026, 8, 15, 9, 15).toISOString(),
