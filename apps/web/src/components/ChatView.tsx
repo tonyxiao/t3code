@@ -55,6 +55,7 @@ import { readPastedComposerContext } from "./composerInlineTokenPaste";
 import { isPasteAsTextShortcut } from "@t3tools/client-runtime/text-paste";
 import { type CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import { effectiveSnoozed, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
+import { formatUpcomingTimestamp } from "../timestampFormat";
 import {
   parseCodexFeedbackCommand,
   submitCodexFeedback,
@@ -6349,11 +6350,21 @@ export default function ChatView(props: ChatViewProps) {
       return null;
     }
     const isSnoozed = activeThreadSnoozed;
+    const wakeTime =
+      isSnoozed && activeThreadShell?.snoozedUntil
+        ? formatUpcomingTimestamp(
+            activeThreadShell.snoozedUntil,
+            timestampFormat,
+            Date.parse(`${nowMinute}:00.000Z`),
+          )
+        : "";
     return {
       id: `thread-${isSnoozed ? "snoozed" : "settled"}:${activeThread?.id ?? "unknown"}`,
       variant: "info",
       icon: isSnoozed ? <AlarmClockIcon /> : <CheckCircle2Icon />,
-      title: `This thread is ${isSnoozed ? "snoozed" : "settled"}`,
+      title: isSnoozed
+        ? `This thread is snoozed${wakeTime ? ` until ${wakeTime}` : ""}`
+        : "This thread is settled",
       description: `Send a message to ${isSnoozed ? "wake" : "unsettle"}`,
       actions: (
         <Button
@@ -6376,12 +6387,15 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [
     activeThread?.id,
+    activeThreadShell?.snoozedUntil,
     activeThreadSettled,
     activeThreadSnoozed,
     handleUnsnoozeActiveThread,
     handleUnsettleActiveThread,
     isUnsnoozing,
     isUnsettling,
+    nowMinute,
+    timestampFormat,
   ]);
   // Session-scoped dismissals, one key per (thread, snapshot). A set rather
   // than a single slot so dismissing the banner on one thread does not
