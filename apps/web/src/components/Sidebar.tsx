@@ -4945,7 +4945,7 @@ export default function Sidebar() {
                     // and grows to fit project names up to a cap, past which
                     // the rows truncate.
                     anchor={headerSearchRef}
-                    className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
+                    className="w-72 max-w-[min(18rem,var(--available-width))] overflow-hidden"
                   >
                     <ComboboxSearchInput
                       aria-label="Search projects"
@@ -5101,6 +5101,13 @@ export default function Sidebar() {
                                     Only
                                   </Button>
                                 </div>
+                              ) : null}
+                              {project &&
+                              projectEnvironmentKeys.length === 1 &&
+                              item.environmentId !== null ? (
+                                <span className="max-w-24 shrink-0 truncate px-2 text-right text-xs text-muted-foreground">
+                                  {environmentLabelById.get(item.environmentId) ?? "Environment"}
+                                </span>
                               ) : null}
                               {project && projectEnvironmentKeys.length === 1 ? (
                                 <Button
