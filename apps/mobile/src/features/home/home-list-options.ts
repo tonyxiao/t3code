@@ -17,6 +17,7 @@ import type { HomeProjectSortOrder } from "./homeThreadList";
 export interface HomeListOptions {
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly projectSortOrder: HomeProjectSortOrder;
+  readonly pinnedOnly: boolean;
 }
 
 export interface ResolvedHomeListOptions extends HomeListOptions {
@@ -26,6 +27,7 @@ export interface ResolvedHomeListOptions extends HomeListOptions {
 function defaultHomeListOptions(): HomeListOptions {
   return {
     selectedEnvironmentId: null,
+    pinnedOnly: false,
     projectSortOrder:
       DEFAULT_SIDEBAR_PROJECT_SORT_ORDER === "manual"
         ? "updated_at"
@@ -81,9 +83,13 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const setProjectSortOrder = useCallback((value: HomeProjectSortOrder) => {
     setOptions((current) => ({ ...current, projectSortOrder: value }));
   }, []);
+  const setPinnedOnly = useCallback((value: boolean) => {
+    setOptions((current) => ({ ...current, pinnedOnly: value }));
+  }, []);
   return {
     options: resolvedOptions,
     setSelectedEnvironmentId,
     setProjectSortOrder,
+    setPinnedOnly,
   } as const;
 }

@@ -13,8 +13,10 @@ describe("buildHomeListFilterMenu", () => {
       ],
       selectedEnvironmentId: null,
       selectedProjectKey: "environment-1:project-1",
+      pinnedOnly: false,
       onEnvironmentChange: vi.fn(),
       onProjectChange,
+      onPinnedOnlyChange: vi.fn(),
     });
 
     const projectMenu = menu.items.find(
@@ -35,5 +37,24 @@ describe("buildHomeListFilterMenu", () => {
     projectMenu.items[2]?.onPress();
     expect(onProjectChange).toHaveBeenNthCalledWith(1, null);
     expect(onProjectChange).toHaveBeenNthCalledWith(2, "environment-1:project-2");
+  });
+
+  it("toggles the pinned conversation filter", () => {
+    const onPinnedOnlyChange = vi.fn();
+    const menu = buildHomeListFilterMenu({
+      environments: [],
+      projects: [],
+      selectedEnvironmentId: null,
+      selectedProjectKey: null,
+      pinnedOnly: true,
+      onEnvironmentChange: vi.fn(),
+      onProjectChange: vi.fn(),
+      onPinnedOnlyChange,
+    });
+    const pinnedAction = menu.items.find((item) => item.title === "Pinned conversations only");
+    expect(pinnedAction).toMatchObject({ type: "action", state: "on" });
+    if (pinnedAction?.type !== "action") throw new Error("Expected pinned action");
+    pinnedAction.onPress();
+    expect(onPinnedOnlyChange).toHaveBeenCalledWith(false);
   });
 });

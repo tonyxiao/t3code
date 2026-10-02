@@ -20,7 +20,7 @@ export function HomeHeader(props: HomeHeaderProps) {
   // the filter menu only carries the filters and the "customized" icon state
   // keys off those alone.
   const hasCustomListOptions =
-    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null;
+    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null || props.pinnedOnly;
   const focusSearch = useCallback(() => {
     searchBarRef.current?.focus();
     return searchBarRef.current !== null;
@@ -139,6 +139,12 @@ export function HomeHeader(props: HomeHeaderProps) {
                 ))}
               </NativeHeaderToolbar.Menu>
             ) : null}
+            <NativeHeaderToolbar.MenuAction
+              isOn={props.pinnedOnly}
+              onPress={() => props.onPinnedOnlyChange(!props.pinnedOnly)}
+            >
+              <NativeHeaderToolbar.Label>Pinned conversations only</NativeHeaderToolbar.Label>
+            </NativeHeaderToolbar.MenuAction>
           </NativeHeaderToolbar.Menu>
           <NativeHeaderToolbar.Spacer flexible />
           <NativeHeaderToolbar.Button

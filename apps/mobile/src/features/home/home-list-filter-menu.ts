@@ -34,8 +34,10 @@ export function buildHomeListFilterMenu(props: {
   readonly projects: ReadonlyArray<HomeListFilterMenuProject>;
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
+  readonly pinnedOnly: boolean;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly onPinnedOnlyChange: (pinnedOnly: boolean) => void;
 }): HomeListFilterMenu {
   const items: Array<HomeListFilterMenuAction | HomeListFilterMenuSubmenu> = [];
 
@@ -83,6 +85,13 @@ export function buildHomeListFilterMenu(props: {
       ],
     });
   }
+
+  items.push({
+    type: "action",
+    title: "Pinned conversations only",
+    state: props.pinnedOnly ? "on" : "off",
+    onPress: () => props.onPinnedOnlyChange(!props.pinnedOnly),
+  });
 
   return {
     title: "Thread list options",

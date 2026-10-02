@@ -57,6 +57,12 @@ describe("uiStateStore pure functions", () => {
     ).toEqual(["environment-a", "environment-b"]);
   });
 
+  it("restores the pinned conversation filter", () => {
+    expect(
+      parsePersistedState({ sidebarThreadStatusFilter: "pinned" }).sidebarThreadStatusFilter,
+    ).toBe("pinned");
+  });
+
   it("stores server timestamps without moving visit state backwards", () => {
     const threadId = ThreadId.make("thread-1");
     const initialState = makeUiState();

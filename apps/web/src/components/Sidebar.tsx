@@ -2513,6 +2513,8 @@ export default function Sidebar() {
   // app restarts keep it.
   const projectScopeKeys = useUiStateStore((store) => store.sidebarProjectScopeKeys);
   const setProjectScopeKeys = useUiStateStore((store) => store.setSidebarProjectScopeKeys);
+  const pinnedOnly = useUiStateStore((store) => store.sidebarThreadStatusFilter === "pinned");
+  const setThreadStatusFilter = useUiStateStore((store) => store.setSidebarThreadStatusFilter);
   // {value, label} items let Base UI drive the combobox selection contract
   // while the popup search filters the same collection.
   const projectScopeItems = useMemo(
@@ -2612,6 +2614,7 @@ export default function Sidebar() {
   // an open never-left draft, which only softens the empty state.
   const routeDraftIdForRows = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
+    if (pinnedOnly) return 0;
     let count = 0;
     for (const [draftKey, session] of Object.entries(store.draftThreadsByThreadKey)) {
       if (session.promotedTo != null) {
@@ -2631,7 +2634,7 @@ export default function Sidebar() {
   // hidden now, and bulk actions must never count or touch invisible rows.
   useEffect(() => {
     clearSelection();
-  }, [clearSelection, environmentScopeIds, projectScopeKeys]);
+  }, [clearSelection, environmentScopeIds, pinnedOnly, projectScopeKeys]);
 
   const openProjectSettings = useCallback(
     (projectGroup: SidebarProjectSnapshot) => {
@@ -2701,6 +2704,7 @@ export default function Sidebar() {
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        (!pinnedOnly || thread.pinnedAt != null) &&
         sidebarItemMatchesScope(thread, scopedEnvironmentIds, scopedProjectKeys),
     );
     const pinned: EnvironmentThreadShell[] = [];
@@ -2801,6 +2805,7 @@ export default function Sidebar() {
     nowMinute,
     optimisticDrop,
     scopedProjectKeys,
+    pinnedOnly,
     serverConfigs,
     sidebarThreadSortOrder,
     snoozeWakeTick,
@@ -2887,7 +2892,7 @@ export default function Sidebar() {
   // filter context changes so a scope/search flip never inherits a deep
   // page state.
   const [settledVisibleCount, setSettledVisibleCount] = useState(SETTLED_TAIL_INITIAL_COUNT);
-  const settledResetKey = JSON.stringify([environmentScopeIds, projectScopeKeys]);
+  const settledResetKey = JSON.stringify([environmentScopeIds, projectScopeKeys, pinnedOnly]);
   const lastSettledResetKeyRef = useRef(settledResetKey);
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
@@ -4882,6 +4887,7 @@ export default function Sidebar() {
                         return (
                           <Fragment key={item.value}>
                             {project &&
+                            projectEnvironmentKeys.length > 1 &&
                             sidebarProjectScopeHeader(filteredProjectScopeItems, index) !== null ? (
                               <div className="flex items-center gap-2 px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
                                 <Button
@@ -4919,8 +4925,14 @@ export default function Sidebar() {
                                 </Button>
                               </div>
                             ) : null}
-                            <div className={project ? "pl-4" : undefined}>
+                            <div
+                              className={cn(
+                                "flex items-center",
+                                projectEnvironmentKeys.length > 1 && "pl-4",
+                              )}
+                            >
                               <ComboboxItem
+                                className="min-w-0 flex-1"
                                 hideIndicator
                                 value={item}
                                 aria-label={
@@ -4939,7 +4951,9 @@ export default function Sidebar() {
                                       : effectiveProjectScopeKeys.includes(item.value)
                                   }
                                 />
-                                {project && item.environmentId !== null ? (
+                                {project && projectEnvironmentKeys.length === 1 ? (
+                                  <ProjectFavicon project={project} className="size-4 shrink-0" />
+                                ) : project && item.environmentId !== null ? (
                                   <EnvironmentMachineIcon
                                     kind={
                                       environmentMachineById.get(item.environmentId) ?? "server"
@@ -4950,12 +4964,26 @@ export default function Sidebar() {
                                   <FolderIcon className="size-4 shrink-0" />
                                 )}
                                 <span className="min-w-0 flex-1 truncate text-sm">
-                                  {item.environmentId === null
+                                  {item.environmentId === null ||
+                                  projectEnvironmentKeys.length === 1
                                     ? item.label
                                     : (environmentLabelById.get(item.environmentId) ??
                                       "Environment")}
                                 </span>
                               </ComboboxItem>
+                              {project && projectEnvironmentKeys.length === 1 ? (
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  title={`Project settings for ${project.displayName}`}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    void handleProjectSettings(event, project);
+                                  }}
+                                >
+                                  <SettingsIcon className="size-3.5" />
+                                </Button>
+                              ) : null}
                             </div>
                           </Fragment>
                         );
@@ -4963,6 +4991,16 @@ export default function Sidebar() {
                     </ComboboxList>
                   </ComboboxPopup>
                 </Combobox>
+              }
+              pinnedFilter={
+                <SidebarHeaderIconButton
+                  label={pinnedOnly ? "Show all conversations" : "Show pinned conversations only"}
+                  badge={pinnedOnly}
+                  aria-pressed={pinnedOnly}
+                  onClick={() => setThreadStatusFilter(pinnedOnly ? "all" : "pinned")}
+                >
+                  <PinIcon className="size-4" />
+                </SidebarHeaderIconButton>
               }
               sortOrder={
                 <Menu>

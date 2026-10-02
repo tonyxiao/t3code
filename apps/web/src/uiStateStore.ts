@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
-export type SidebarThreadStatusFilter = "all" | "active" | "snoozed" | "settled";
+export type SidebarThreadStatusFilter = "all" | "active" | "pinned" | "snoozed" | "settled";
 // Version 1 stored card visibility, not folder expansion.
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
 const LEGACY_PERSISTED_STATE_KEYS = [
@@ -119,7 +119,9 @@ function sanitizeSidebarThreadSortOrder(value: unknown): SidebarThreadSortOrder 
 }
 
 function sanitizeSidebarThreadStatusFilter(value: unknown): SidebarThreadStatusFilter {
-  return value === "active" || value === "snoozed" || value === "settled" ? value : "all";
+  return value === "active" || value === "pinned" || value === "snoozed" || value === "settled"
+    ? value
+    : "all";
 }
 
 function sanitizeTimestampRecord(value: unknown): Record<string, string> {

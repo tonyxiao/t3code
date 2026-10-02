@@ -174,7 +174,8 @@ function ThreadNavigationSidebarPane(
     () => new Set(environments.map((environment) => environment.environmentId)),
     [environments],
   );
-  const { options, setSelectedEnvironmentId } = useHomeListOptions(availableEnvironmentIds);
+  const { options, setSelectedEnvironmentId, setPinnedOnly } =
+    useHomeListOptions(availableEnvironmentIds);
   const searchEnvironmentIds = useMemo(
     () =>
       options.selectedEnvironmentId === null
@@ -278,7 +279,7 @@ function ThreadNavigationSidebarPane(
   const [settledVisibleCount, setSettledVisibleCount] = useState(
     THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   );
-  const settledResetKey = `${options.selectedEnvironmentId ?? "all"}:${selectedProjectKey ?? "all"}:${props.searchQuery.trim()}`;
+  const settledResetKey = `${options.selectedEnvironmentId ?? "all"}:${selectedProjectKey ?? "all"}:${options.pinnedOnly}:${props.searchQuery.trim()}`;
   const lastSettledResetKeyRef = useRef(settledResetKey);
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
@@ -429,7 +430,9 @@ function ThreadNavigationSidebarPane(
   const threadListV2Layout = useMemo(() => {
     return buildThreadListV2Items({
       pendingOrder,
-      threads: threads.filter((thread) => thread.archivedAt === null),
+      threads: threads.filter(
+        (thread) => thread.archivedAt === null && (!options.pinnedOnly || thread.pinnedAt != null),
+      ),
       environmentId: options.selectedEnvironmentId,
       projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,
       searchQuery: props.searchQuery,
@@ -452,6 +455,7 @@ function ThreadNavigationSidebarPane(
     settledShelfExpanded,
     props.selectedThreadKey,
     options.selectedEnvironmentId,
+    options.pinnedOnly,
     props.searchQuery,
     matchedThreadKeys,
     settledVisibleCount,
@@ -483,6 +487,7 @@ function ThreadNavigationSidebarPane(
     const v2SearchQuery = props.searchQuery.trim().toLocaleLowerCase();
     const v2PendingTasks = pendingTasks.filter(
       (pendingTask) =>
+        !options.pinnedOnly &&
         (options.selectedEnvironmentId === null ||
           pendingTask.environmentId === options.selectedEnvironmentId) &&
         (selectedProjectRefs === null ||
@@ -518,6 +523,7 @@ function ThreadNavigationSidebarPane(
   }, [
     nowMinute,
     options.selectedEnvironmentId,
+    options.pinnedOnly,
     pendingTasks,
     props.searchQuery,
     queuedThreadKeys,
@@ -572,6 +578,11 @@ function ThreadNavigationSidebarPane(
               ],
             },
           ] satisfies MenuAction[])),
+      {
+        id: "pinned-only",
+        title: "Pinned conversations only",
+        state: options.pinnedOnly ? "on" : "off",
+      },
     ],
     [environments, options, projectFilterOptions, selectedProjectKey],
   );
@@ -593,6 +604,10 @@ function ThreadNavigationSidebarPane(
         setSelectedProjectKey(null);
         return;
       }
+      if (event === "pinned-only") {
+        setPinnedOnly(!options.pinnedOnly);
+        return;
+      }
       if (event.startsWith("project:")) {
         const projectKey = event.slice("project:".length);
         if (projectFilterOptions.some((project) => project.key === projectKey)) {
@@ -601,7 +616,13 @@ function ThreadNavigationSidebarPane(
         return;
       }
     },
-    [environments, projectFilterOptions, setSelectedEnvironmentId],
+    [
+      environments,
+      options.pinnedOnly,
+      projectFilterOptions,
+      setPinnedOnly,
+      setSelectedEnvironmentId,
+    ],
   );
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number | null>(null);
@@ -869,7 +890,8 @@ function ThreadNavigationSidebarPane(
   );
   // The list ignores sort/group options, so only the environment and project
   // filters can light the "customized" state.
-  const filterCustomized = options.selectedEnvironmentId !== null || selectedProjectKey !== null;
+  const filterCustomized =
+    options.selectedEnvironmentId !== null || selectedProjectKey !== null || options.pinnedOnly;
   const filterIcon = filterCustomized
     ? "line.3.horizontal.decrease.circle.fill"
     : "line.3.horizontal.decrease.circle";
@@ -880,10 +902,19 @@ function ThreadNavigationSidebarPane(
         projects: projectFilterOptions,
         selectedEnvironmentId: options.selectedEnvironmentId,
         selectedProjectKey,
+        pinnedOnly: options.pinnedOnly,
         onEnvironmentChange: setSelectedEnvironmentId,
         onProjectChange: setSelectedProjectKey,
+        onPinnedOnlyChange: setPinnedOnly,
       }),
-    [environments, options, projectFilterOptions, selectedProjectKey, setSelectedEnvironmentId],
+    [
+      environments,
+      options,
+      projectFilterOptions,
+      selectedProjectKey,
+      setPinnedOnly,
+      setSelectedEnvironmentId,
+    ],
   );
   const nativeHeaderItems = useMemo(
     () =>
@@ -912,9 +943,11 @@ function ThreadNavigationSidebarPane(
             ? threadSearch.isPending
               ? "Searching thread messages…"
               : "No matching threads"
-            : selectedProjectScope !== null
-              ? `No threads in ${selectedProjectScope.title}`
-              : "No threads yet"}
+            : options.pinnedOnly
+              ? "No pinned conversations"
+              : selectedProjectScope !== null
+                ? `No threads in ${selectedProjectScope.title}`
+                : "No threads yet"}
     </Text>
   );
 

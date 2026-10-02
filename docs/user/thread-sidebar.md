@@ -156,8 +156,10 @@ The linked pull request participates in automatic settlement.
 On web and desktop, use the sidebar's environment and project filters to focus the thread list.
 Check more than one entry to include any of those environments or projects. The two filters
 combine, so a thread must match both when both are active. Choose **All environments** or
-**All projects** to clear that filter. Projects appear under their environments; when a project
-exists on several computers, check its row under each computer you want to include.
+**All projects** to clear that filter. A project has environment rows when it exists on several
+computers; check the computers you want to include. Use the pin filter to show only pinned
+conversations within the selected environments and projects.
+On mobile, choose **Pinned conversations only** from the thread list filter menu.
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and

@@ -14,6 +14,7 @@ function thread(
   return {
     archivedAt: null,
     environmentId: EnvironmentId.make("environment-a"),
+    pinnedAt: null,
     settledOverride: null,
     snoozedAt: null,
     snoozedUntil: null,
@@ -78,5 +79,22 @@ describe("legacySidebarThreadMatchesFilters", () => {
         now: NOW,
       }),
     ).toBe(true);
+  });
+
+  it("filters to pinned conversations", () => {
+    expect(
+      legacySidebarThreadMatchesFilters(thread({ pinnedAt: NOW }), {
+        environmentIds: [],
+        status: "pinned",
+        now: NOW,
+      }),
+    ).toBe(true);
+    expect(
+      legacySidebarThreadMatchesFilters(thread(), {
+        environmentIds: [],
+        status: "pinned",
+        now: NOW,
+      }),
+    ).toBe(false);
   });
 });

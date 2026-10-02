@@ -9,6 +9,7 @@ import type { SidebarThreadStatusFilter } from "../uiStateStore";
 export type LegacySidebarFilterableThread = ThreadSnoozeShell & {
   readonly archivedAt: string | null;
   readonly environmentId: EnvironmentId;
+  readonly pinnedAt?: string | null | undefined;
   readonly settledOverride: "active" | "settled" | null;
 };
 
@@ -24,6 +25,7 @@ export function legacySidebarThreadMatchesFilters(
   if (input.environmentIds.length > 0 && !input.environmentIds.includes(thread.environmentId))
     return false;
   if (input.status === "all") return true;
+  if (input.status === "pinned") return thread.pinnedAt != null;
 
   const status = effectiveSnoozed(thread, { now: input.now })
     ? "snoozed"

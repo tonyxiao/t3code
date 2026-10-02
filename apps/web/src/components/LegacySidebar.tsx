@@ -239,6 +239,7 @@ const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
 const SIDEBAR_THREAD_STATUS_LABELS: Record<SidebarThreadStatusFilter, string> = {
   all: "All statuses",
   active: "Active",
+  pinned: "Pinned",
   snoozed: "Snoozed",
   settled: "Settled",
 };
