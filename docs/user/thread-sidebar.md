@@ -104,11 +104,11 @@ their default order until the server is updated.
 
 On web and desktop, turn on **Settings → General → Working section (beta)** to move threads that
 are working or monitoring into a collapsed **Working** section at the bottom of the sidebar. A
-thread returns to the top of the active list when it finishes, fails, or needs an approval or
+thread returns to the active list when it finishes, fails, or needs an approval or
 answer. Pinned threads stay in the pinned section.
 
-While this is on, the active list is ordered by when each thread last came back to you, so you
-cannot drag to reorder it. Your saved order returns when you turn it off.
+The active list keeps your chosen sort order, including **Last action time**. You cannot drag to
+reorder it while the Working section is on.
 
 ## Settle finished work
 

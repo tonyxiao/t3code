@@ -1167,10 +1167,7 @@ export function reduceSidebarScopeMenuState(
   }
 }
 
-/** Working beta: the inbox lists threads newest first by when each last came
-    back to the user, so a thread that leaves the Working shelf lands on top.
-    `observedReturnAt` adds returns the server does not stamp, such as an
-    approval request mid-turn or background work ending. */
+/** Working shelf rows list newest work first using turn timestamps. */
 export function sortInboxThreadsByReturn<
   T extends Pick<
     SidebarThreadSummary,

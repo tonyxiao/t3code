@@ -305,38 +305,6 @@ const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
-// Working beta: when this client saw each thread leave the Working shelf.
-// Module scope keeps the inbox order across routes that unmount the sidebar.
-let lastWorkingThreadKeys: ReadonlySet<string> | null = null;
-const observedInboxReturns = new Map<string, number>();
-
-/** Stamps threads that stopped working since the last call. The first call
-    only takes a baseline, so mounting never reshuffles the inbox. Pass null
-    to reset when the beta is off. */
-function observeInboxReturns(threads: readonly EnvironmentThreadShell[] | null): void {
-  if (threads === null) {
-    lastWorkingThreadKeys = null;
-    observedInboxReturns.clear();
-    return;
-  }
-  const working = new Set<string>();
-  const present = new Set<string>();
-  for (const thread of threads) {
-    const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-    present.add(key);
-    if (isSidebarThreadWorking(thread)) working.add(key);
-  }
-  // Drop deleted threads so the map stays bounded by the live thread list.
-  for (const key of observedInboxReturns.keys()) {
-    if (!present.has(key)) observedInboxReturns.delete(key);
-  }
-  const now = Date.now();
-  for (const key of lastWorkingThreadKeys ?? []) {
-    if (present.has(key) && !working.has(key)) observedInboxReturns.set(key, now);
-  }
-  lastWorkingThreadKeys = working;
-}
-
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
   return label.endsWith(" ago") ? label.slice(0, -4) : label;
@@ -2738,7 +2706,6 @@ export default function Sidebar() {
         thread.archivedAt === null &&
         sidebarItemMatchesScope(thread, scopedEnvironmentIds, scopedProjectKeys),
     );
-    observeInboxReturns(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const working: EnvironmentThreadShell[] = [];
@@ -2799,13 +2766,7 @@ export default function Sidebar() {
     // sort, or mixed-version fleets would render different pinned orders on
     // web and mobile from the same data.
     const sortedPinned = sortPinnedThreadsForSidebar(pinned);
-    const sortedActive = workingShelfEnabled
-      ? sortInboxThreadsByReturn(active, (thread) =>
-          observedInboxReturns.get(
-            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-          ),
-        )
-      : sortThreadsForSidebar(active, sidebarThreadSortOrder);
+    const sortedActive = sortThreadsForSidebar(active, sidebarThreadSortOrder);
     return {
       pinnedThreads:
         optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
@@ -3729,21 +3690,21 @@ export default function Sidebar() {
       applySidebarThreadDrop(thread, "settled", dragState.occurredAt),
     ]).map(key);
   }, [dragState, settledThreads, threadByKey]);
-  // Working beta: the inbox is time-ordered too, so the preview shows the
-  // slot a drop will land in, not the slot under the pointer.
+  // While the Working shelf is on, a lifecycle drop lands according to the
+  // selected sort order instead of the pointer's position.
   const draggedActiveOrder = useMemo(() => {
     const thread = dragState === null ? undefined : threadByKey.get(dragState.activeKey);
     if (!workingShelfEnabled || dragState === null || thread === undefined) return undefined;
     const key = (candidate: EnvironmentThreadShell) =>
       scopedThreadKey(scopeThreadRef(candidate.environmentId, candidate.id));
-    return sortInboxThreadsByReturn(
+    return sortThreadsForSidebar(
       [
         ...activeThreads.filter((candidate) => key(candidate) !== dragState.activeKey),
         applySidebarThreadDrop(thread, "active", dragState.occurredAt),
       ],
-      (candidate) => observedInboxReturns.get(key(candidate)),
+      sidebarThreadSortOrder,
     ).map(key);
-  }, [activeThreads, dragState, threadByKey, workingShelfEnabled]);
+  }, [activeThreads, dragState, sidebarThreadSortOrder, threadByKey, workingShelfEnabled]);
   const sidebarSortingStrategy = useMemo(
     () =>
       createSidebarSortingStrategy({
@@ -5008,38 +4969,36 @@ export default function Sidebar() {
                 </Combobox>
               }
               sortOrder={
-                workingShelfEnabled ? null : (
-                  <Menu>
-                    <MenuTrigger
-                      render={
-                        <SidebarHeaderIconButton
-                          badge={sidebarThreadSortOrder !== "created_at"}
-                          label={`Sort threads: ${SIDEBAR_THREAD_SORT_LABELS[sidebarThreadSortOrder]}`}
-                        />
-                      }
+                <Menu>
+                  <MenuTrigger
+                    render={
+                      <SidebarHeaderIconButton
+                        badge={sidebarThreadSortOrder !== "created_at"}
+                        label={`Sort threads: ${SIDEBAR_THREAD_SORT_LABELS[sidebarThreadSortOrder]}`}
+                      />
+                    }
+                  >
+                    <ArrowUpDownIcon className="size-4" />
+                  </MenuTrigger>
+                  <MenuPopup align="end" className="min-w-40">
+                    <MenuRadioGroup
+                      value={sidebarThreadSortOrder}
+                      onValueChange={(value) => {
+                        setSidebarThreadSortOrder(value as SidebarThreadSortOrder);
+                      }}
                     >
-                      <ArrowUpDownIcon className="size-4" />
-                    </MenuTrigger>
-                    <MenuPopup align="end" className="min-w-40">
-                      <MenuRadioGroup
-                        value={sidebarThreadSortOrder}
-                        onValueChange={(value) => {
-                          setSidebarThreadSortOrder(value as SidebarThreadSortOrder);
-                        }}
-                      >
-                        {(
-                          Object.entries(SIDEBAR_THREAD_SORT_LABELS) as Array<
-                            [SidebarThreadSortOrder, string]
-                          >
-                        ).map(([value, label]) => (
-                          <MenuRadioItem key={value} value={value}>
-                            {label}
-                          </MenuRadioItem>
-                        ))}
-                      </MenuRadioGroup>
-                    </MenuPopup>
-                  </Menu>
-                )
+                      {(
+                        Object.entries(SIDEBAR_THREAD_SORT_LABELS) as Array<
+                          [SidebarThreadSortOrder, string]
+                        >
+                      ).map(([value, label]) => (
+                        <MenuRadioItem key={value} value={value}>
+                          {label}
+                        </MenuRadioItem>
+                      ))}
+                    </MenuRadioGroup>
+                  </MenuPopup>
+                </Menu>
               }
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
