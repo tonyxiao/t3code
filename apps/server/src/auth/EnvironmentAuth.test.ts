@@ -352,10 +352,8 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const paired = yield* sessions.verify(access.access_token);
 
       expect(paired.subject).toBe("custom-device");
-      expect(paired.expiresAt?.epochMilliseconds).toBeGreaterThan(
-        253_000_000_000_000,
-      );
-      expect(access.expires_in).toBeGreaterThan(30 * 24 * 60 * 60);
+      expect(paired.expiresAt).toBeUndefined();
+      expect(access.expires_in).toBeUndefined();
       expect(yield* sessions.revoke(paired.sessionId)).toBe(true);
       expect((yield* Effect.flip(sessions.verify(access.access_token)))._tag).toBe(
         "SessionTokenRevokedError",

@@ -336,6 +336,12 @@ const loadSecondaryConnectionRegistration = Effect.fn(
     scopes: AuthStandardClientScopes,
     clientMetadata: clientMetadata(),
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
+  if (access.expires_in === undefined) {
+    return yield* new ConnectionTransientError({
+      reason: "endpoint-unavailable",
+      detail: `Desktop-local backend ${entry.id} did not provide a token expiry.`,
+    });
+  }
   // Keep the desktop pool's stable backend id in the connection id. The
   // descriptor environment id still scopes projects and RPC state, while the
   // backend id lets desktop-only operations (notably the WSL folder picker)

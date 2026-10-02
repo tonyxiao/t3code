@@ -57,9 +57,11 @@ on web and desktop and **Settings → Environments** on mobile. A loopback addre
 such as `127.0.0.1` reaches only the device opening the link.
 
 Pairing authorizes that device until you revoke it under **Settings → Connections →
-Authorized clients**. Use a fresh one-time link for each new device; you do not
-need the original token to reconnect. Existing paired app credentials that the
-device still has remain valid even if their old 30-day expiry has passed. A
+Authorized clients**. This list shows connected clients by default; choose **Show
+disconnected clients** to find and revoke a device that is offline. Use a fresh
+one-time link for each new device; you do not need the original token to
+reconnect. Newly paired app credentials have no
+expiry; previously issued credentials still follow their existing expiry. A
 browser that has already discarded its cookie must pair again. T3 Code renews a
 retained cookie when the browser checks its session. Links
 created in Settings can only be copied from the client that created them while

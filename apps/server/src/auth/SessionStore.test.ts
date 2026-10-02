@@ -1,7 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
-import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -24,10 +23,9 @@ import {
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import * as SessionStore from "./SessionStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
-import { base64UrlDecodeUtf8, base64UrlEncode, signPayload } from "./utils.ts";
+import { base64UrlDecodeUtf8 } from "./utils.ts";
 
 const decodeJsonUnknown = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
-const encodeJsonUnknown = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -281,7 +279,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(verified.scopes).toEqual(["orchestration:read", "access:write"]);
       expect(verified.client.label).toBe("Desktop app");
       expect(verified.client.browser).toBe("Electron");
-      expect(verified.expiresAt?.toString()).toBe(issued.expiresAt.toString());
+      expect(verified.expiresAt?.toString()).toBe(issued.expiresAt?.toString());
     }).pipe(Effect.provide(makeSessionStoreLayer())),
   );
   it.effect("rejects malformed session tokens", () =>
@@ -350,52 +348,69 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
   );
 
-  it.effect("restores expired unrevoked paired bearer credentials and keeps revocation effective", () =>
+  it.effect("honors the expiration of previously issued bearer credentials", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
-      const sql = yield* SqlClient.SqlClient;
-      const secrets = yield* ServerSecretStore.ServerSecretStore;
       const issued = yield* sessions.issue({
         method: "bearer-access-token",
         subject: "one-time-token",
+        ttl: Duration.seconds(1),
       });
-      const [payload] = issued.token.split(".");
-      const claims = (yield* decodeJsonUnknown(base64UrlDecodeUtf8(payload ?? ""))) as {
-        iat: number;
-        exp: number;
-      };
-      const legacyExpiresAt = DateTime.formatIso(DateTime.makeUnsafe(claims.iat + 1_000));
-      const legacyPayload = base64UrlEncode(
-        yield* encodeJsonUnknown({
-          ...claims,
-          exp: claims.iat + 1_000,
-        }),
-      );
-      const secret = yield* secrets.getOrCreateRandom("server-signing-key", 32);
-      const legacyToken = `${legacyPayload}.${signPayload(legacyPayload, secret)}`;
-      yield* sql`UPDATE auth_sessions SET expires_at = ${legacyExpiresAt} WHERE session_id = ${issued.sessionId}`;
 
       yield* TestClock.adjust(Duration.seconds(2));
 
-      expect((yield* sessions.verify(legacyToken)).sessionId).toBe(issued.sessionId);
-      expect((yield* sessions.listActive()).map((session) => session.sessionId)).toContain(
-        issued.sessionId,
-      );
-      const websocket = yield* sessions.issueWebSocketToken(issued.sessionId);
-      expect((yield* sessions.verifyWebSocketToken(websocket.token)).sessionId).toBe(
-        issued.sessionId,
-      );
-
-      expect(yield* sessions.revoke(issued.sessionId)).toBe(true);
-      expect((yield* Effect.flip(sessions.verify(legacyToken)))._tag).toBe(
-        "SessionTokenRevokedError",
-      );
-      expect((yield* Effect.flip(sessions.verifyWebSocketToken(websocket.token)))._tag).toBe(
-        "WebSocketSessionRevokedError",
+      expect((yield* Effect.flip(sessions.verify(issued.token)))._tag).toBe(
+        "SessionTokenExpiredError",
       );
       expect(yield* sessions.listActive()).toEqual([]);
+      const websocket = yield* sessions.issueWebSocketToken(issued.sessionId);
+      expect((yield* Effect.flip(sessions.verifyWebSocketToken(websocket.token)))._tag).toBe(
+        "WebSocketSessionExpiredError",
+      );
+    }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
+  );
+
+  it.effect("issues paired bearer credentials without an expiry and revokes them explicitly", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const sql = yield* SqlClient.SqlClient;
+      const issued = yield* sessions.issue({
+        method: "bearer-access-token",
+        subject: "one-time-token",
+        persistUntilRevoked: true,
+      });
+      const [payload] = issued.token.split(".");
+      const claims = (yield* decodeJsonUnknown(base64UrlDecodeUtf8(payload ?? ""))) as Record<
+        string,
+        unknown
+      >;
+      expect(claims).not.toHaveProperty("exp");
+      expect(issued.expiresAt).toBeNull();
+      const rows = yield* sql<{ readonly expiresAt: string | null }>`
+        SELECT expires_at AS "expiresAt" FROM auth_sessions WHERE session_id = ${issued.sessionId}
+      `;
+      expect(rows).toEqual([{ expiresAt: null }]);
+
+      yield* TestClock.adjust(Duration.days(31));
+      expect((yield* sessions.verify(issued.token)).expiresAt).toBeUndefined();
+      expect(
+        (yield* sessions.listActive()).find((session) => session.sessionId === issued.sessionId)
+          ?.expiresAt,
+      ).toBeNull();
+      expect(
+        (yield* sessions.verifyWebSocketToken(
+          (yield* sessions.issueWebSocketToken(issued.sessionId)).token,
+        )).sessionId,
+      ).toBe(issued.sessionId);
+
+      expect(yield* sessions.revoke(issued.sessionId)).toBe(true);
+      expect((yield* Effect.flip(sessions.verify(issued.token)))._tag).toBe(
+        "SessionTokenRevokedError",
+      );
     }).pipe(
-      Effect.provide(Layer.mergeAll(makeSessionStoreLayer(), SqlitePersistenceMemory, TestClock.layer())),
+      Effect.provide(
+        Layer.mergeAll(makeSessionStoreLayer(), SqlitePersistenceMemory, TestClock.layer()),
+      ),
     ),
   );
 
@@ -504,7 +519,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(error._tag).toBe("WebSocketSessionExpiredError");
       if (error._tag === "WebSocketSessionExpiredError") {
         expect(error.sessionId).toBe(issued.sessionId);
-        expect(error.expiresAt.epochMilliseconds).toBe(issued.expiresAt.epochMilliseconds);
+        expect(error.expiresAt.epochMilliseconds).toBe(issued.expiresAt?.epochMilliseconds);
         expect(error.observedAt.epochMilliseconds).toBeGreaterThan(
           error.expiresAt.epochMilliseconds,
         );
@@ -532,7 +547,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(sessionError._tag).toBe("SessionTokenExpiredError");
       if (sessionError._tag === "SessionTokenExpiredError") {
         expect(sessionError.sessionId).toBe(issued.sessionId);
-        expect(sessionError.expiresAt.epochMilliseconds).toBe(issued.expiresAt.epochMilliseconds);
+        expect(sessionError.expiresAt.epochMilliseconds).toBe(issued.expiresAt?.epochMilliseconds);
         expect(sessionError.observedAt.epochMilliseconds).toBeGreaterThan(
           sessionError.expiresAt.epochMilliseconds,
         );

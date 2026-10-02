@@ -60,7 +60,7 @@ export interface IssuedBearerSession {
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly subject: string;
   readonly client: AuthClientMetadata;
-  readonly expiresAt: DateTime.Utc;
+  readonly expiresAt: DateTime.Utc | null;
 }
 
 export interface AuthenticatedSession {
@@ -762,7 +762,7 @@ export const make = Effect.gen(function* () {
               authenticated: true,
               scopes: session.scopes,
               sessionMethod: session.method,
-              expiresAt: DateTime.toUtc(session.expiresAt),
+              expiresAt: DateTime.toUtc(session.expiresAt ?? REUSABLE_DEV_SESSION_EXPIRES_AT),
             } satisfies AuthBrowserSessionResult,
             sessionToken: session.token,
           }) satisfies BootstrapExchangeResult,
@@ -847,12 +847,16 @@ export const make = Effect.gen(function* () {
                   access_token: session.token,
                   issued_token_type: AuthAccessTokenType,
                   token_type: input?.proofKeyThumbprint ? "DPoP" : "Bearer",
-                  expires_in: Math.max(
-                    0,
-                    Math.floor(
-                      (session.expiresAt.epochMilliseconds - now.epochMilliseconds) / 1000,
-                    ),
-                  ),
+                  ...(session.expiresAt === null
+                    ? {}
+                    : {
+                        expires_in: Math.max(
+                          0,
+                          Math.floor(
+                            (session.expiresAt.epochMilliseconds - now.epochMilliseconds) / 1000,
+                          ),
+                        ),
+                      }),
                   scope: encodeOAuthScope(session.scopes),
                 }) satisfies AuthAccessTokenResult,
             ),
@@ -954,7 +958,7 @@ export const make = Effect.gen(function* () {
               scopes: issued.scopes,
               subject: input?.subject ?? DEFAULT_SESSION_SUBJECT,
               client: issued.client,
-              expiresAt: DateTime.toUtc(issued.expiresAt),
+              expiresAt: issued.expiresAt === null ? null : DateTime.toUtc(issued.expiresAt),
             }) satisfies IssuedBearerSession,
         ),
         Effect.mapError((cause) => new ServerAuthSessionTokenIssueError({ cause })),

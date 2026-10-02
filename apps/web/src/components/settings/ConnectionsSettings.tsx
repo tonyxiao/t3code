@@ -446,7 +446,7 @@ function summarizeAuthorizedClients(
   links: ReadonlyArray<ServerPairingLinkRecord>,
 ): string {
   const parts = [
-    `${sessions.length} ${sessions.length === 1 ? "client" : "clients"}`,
+    `${sessions.length} connected ${sessions.length === 1 ? "client" : "clients"}`,
     links.length > 0
       ? `${links.length} ${links.length === 1 ? "pairing link" : "pairing links"}`
       : null,
@@ -478,7 +478,8 @@ function toDesktopClientSessionRecord(clientSession: AuthClientSession): ServerC
   return {
     ...clientSession,
     issuedAt: DateTime.formatIso(clientSession.issuedAt),
-    expiresAt: DateTime.formatIso(clientSession.expiresAt),
+    expiresAt:
+      clientSession.expiresAt === null ? null : DateTime.formatIso(clientSession.expiresAt),
     lastConnectedAt:
       clientSession.lastConnectedAt === null
         ? null
@@ -1100,6 +1101,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
       <Button
         size="xs"
         variant="destructive-outline"
+        title="Revoke all other authorized clients, including disconnected clients"
         disabled={
           isRevokingOtherClients || clientSessions.every((clientSession) => clientSession.current)
         }
@@ -1281,7 +1283,7 @@ const PairingClientsList = memo(function PairingClientsList({
 
       {pairingLinks.length === 0 && clientSessions.length === 0 && !isLoading ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-muted-foreground/60">No pairing links or client sessions.</p>
+          <p className="text-xs text-muted-foreground/60">No pairing links or connected clients.</p>
         </div>
       ) : null}
     </>
@@ -1956,6 +1958,7 @@ export function ConnectionsSettings() {
   const [revokingDesktopClientSessionId, setRevokingDesktopClientSessionId] = useState<
     string | null
   >(null);
+  const [showDisconnectedDesktopClients, setShowDisconnectedDesktopClients] = useState(false);
   const [isRevokingOtherDesktopClients, setIsRevokingOtherDesktopClients] = useState(false);
   const [addBackendDialogOpen, setAddBackendDialogOpen] = useState(false);
   const [savedBackendMode, setSavedBackendMode] = useState<"remote" | "ssh">("remote");
@@ -2099,6 +2102,18 @@ export function ConnectionsSettings() {
       ),
     );
   }, [authAccessChanges.data]);
+  const connectedDesktopClientSessions = useMemo(
+    () =>
+      desktopClientSessions.filter(
+        (clientSession) => clientSession.current || clientSession.connected,
+      ),
+    [desktopClientSessions],
+  );
+  const disconnectedDesktopClientCount =
+    desktopClientSessions.length - connectedDesktopClientSessions.length;
+  const visibleDesktopClientSessions = showDisconnectedDesktopClients
+    ? desktopClientSessions
+    : connectedDesktopClientSessions;
   const isLocalBackendNetworkAccessible = desktopBridge
     ? desktopServerExposureState?.mode === "network-accessible"
     : currentAuthPolicy === "remote-reachable";
@@ -3210,12 +3225,25 @@ export function ConnectionsSettings() {
         isLoading={isLoadingDesktopAccessManagement}
         pairingLinks={visibleDesktopPairingLinks}
         createdPairingCredentials={createdPairingCredentials}
-        clientSessions={desktopClientSessions}
+        clientSessions={visibleDesktopClientSessions}
         revokingPairingLinkId={revokingDesktopPairingLinkId}
         revokingClientSessionId={revokingDesktopClientSessionId}
         onRevokePairingLink={handleRevokeDesktopPairingLink}
         onRevokeClientSession={handleRevokeDesktopClientSession}
       />
+      {disconnectedDesktopClientCount > 0 ? (
+        <div className={accessRowClassName(presentation)}>
+          <Button
+            size="xs"
+            variant="ghost-muted"
+            onClick={() => setShowDisconnectedDesktopClients((shown) => !shown)}
+          >
+            {showDisconnectedDesktopClients
+              ? "Hide disconnected clients"
+              : `Show ${disconnectedDesktopClientCount} disconnected ${disconnectedDesktopClientCount === 1 ? "client" : "clients"}`}
+          </Button>
+        </div>
+      ) : null}
     </>
   );
   const renderNetworkAccessRow = () => (
@@ -3390,7 +3418,7 @@ export function ConnectionsSettings() {
               id="authorized-clients"
               title="Authorized clients"
               summary={summarizeAuthorizedClients(
-                desktopClientSessions,
+                connectedDesktopClientSessions,
                 visibleDesktopPairingLinks,
               )}
               control={

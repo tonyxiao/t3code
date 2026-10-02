@@ -199,7 +199,7 @@ export const AuthAccessTokenResult = Schema.Struct({
   access_token: TrimmedNonEmptyString,
   issued_token_type: Schema.Literal(AuthAccessTokenType),
   token_type: Schema.Literals(["Bearer", "DPoP"]),
-  expires_in: Schema.Number,
+  expires_in: Schema.optionalKey(Schema.Number),
   scope: TrimmedNonEmptyString,
 });
 export type AuthAccessTokenResult = typeof AuthAccessTokenResult.Type;
@@ -246,7 +246,7 @@ export const AuthClientSession = Schema.Struct({
   method: ServerAuthSessionMethod,
   client: AuthClientMetadata,
   issuedAt: Schema.DateTimeUtc,
-  expiresAt: Schema.DateTimeUtc,
+  expiresAt: Schema.NullOr(Schema.DateTimeUtc),
   lastConnectedAt: Schema.NullOr(Schema.DateTimeUtc),
   connected: Schema.Boolean,
   current: Schema.Boolean,
