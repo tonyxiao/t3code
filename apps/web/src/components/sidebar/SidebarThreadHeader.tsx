@@ -35,6 +35,8 @@ export interface SidebarThreadHeaderProps {
   environmentScope: ReactNode;
   /** The project scope combobox, rendered as the first icon of the group. */
   projectScope: ReactNode;
+  /** Toggle for showing pinned conversations only. */
+  pinnedFilter: ReactNode;
   /** Thread ordering control, rendered after the scope controls. */
   sortOrder: ReactNode;
   onNewProject: () => void;
@@ -61,6 +63,7 @@ export function SidebarThreadHeader({
   hasMultipleEnvironments,
   environmentScope,
   projectScope,
+  pinnedFilter,
   sortOrder,
   onNewProject,
   onNewThread,
@@ -135,6 +138,7 @@ export function SidebarThreadHeader({
       <div className="flex shrink-0 items-center">
         {hasMultipleEnvironments ? environmentScope : null}
         {hasProjects ? projectScope : null}
+        {pinnedFilter}
         {sortOrder}
         {hasProjects ? (
           <SidebarHeaderIconButton label="New project" onClick={onNewProject}>
