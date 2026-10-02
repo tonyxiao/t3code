@@ -193,7 +193,7 @@ function ThreadListV2ShelfHeader(
   const label = props.kind === "snoozed" ? "Snoozed" : "Settled";
   return (
     <ThreadListV2Section
-      label={props.expanded ? label : `${label} (${props.count})`}
+      label={`${label} (${props.count})`}
       pane={props.pane}
       tone={props.kind === "snoozed" ? "snoozed" : "default"}
       disclosure={{
