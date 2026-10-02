@@ -370,7 +370,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
   );
 
-  it.effect("issues paired bearer credentials without an expiry and revokes them explicitly", () =>
+  it.effect("issues paired bearer credentials with a ten-year expiry and supports revocation", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionStore.SessionStore;
       const sql = yield* SqlClient.SqlClient;
@@ -384,19 +384,19 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         string,
         unknown
       >;
-      expect(claims).not.toHaveProperty("exp");
-      expect(issued.expiresAt).toBeNull();
+      expect(claims.exp).toBe(Number(claims.iat) + Duration.toMillis(Duration.days(10 * 365)));
+      expect(issued.expiresAt).not.toBeNull();
       const rows = yield* sql<{ readonly expiresAt: string | null }>`
         SELECT expires_at AS "expiresAt" FROM auth_sessions WHERE session_id = ${issued.sessionId}
       `;
-      expect(rows).toEqual([{ expiresAt: null }]);
+      expect(rows[0]?.expiresAt).not.toBeNull();
 
       yield* TestClock.adjust(Duration.days(31));
-      expect((yield* sessions.verify(issued.token)).expiresAt).toBeUndefined();
+      expect((yield* sessions.verify(issued.token)).expiresAt).toBeDefined();
       expect(
         (yield* sessions.listActive()).find((session) => session.sessionId === issued.sessionId)
           ?.expiresAt,
-      ).toBeNull();
+      ).not.toBeNull();
       expect(
         (yield* sessions.verifyWebSocketToken(
           (yield* sessions.issueWebSocketToken(issued.sessionId)).token,
@@ -406,6 +406,16 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
       expect(yield* sessions.revoke(issued.sessionId)).toBe(true);
       expect((yield* Effect.flip(sessions.verify(issued.token)))._tag).toBe(
         "SessionTokenRevokedError",
+      );
+
+      const expiring = yield* sessions.issue({
+        method: "bearer-access-token",
+        subject: "one-time-token",
+        persistUntilRevoked: true,
+      });
+      yield* TestClock.adjust(Duration.days(10 * 365 + 1));
+      expect((yield* Effect.flip(sessions.verify(expiring.token)))._tag).toBe(
+        "SessionTokenExpiredError",
       );
     }).pipe(
       Effect.provide(

@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AuthAdministrativeScopes } from "@t3tools/contracts";
+import { AuthAccessTokenResult, AuthAdministrativeScopes } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,6 +21,9 @@ import * as SessionStore from "./SessionStore.ts";
 const TEST_SERVER_PORT = 13_773;
 const isPairingCredentialIssueError = Schema.is(PairingGrantStore.PairingCredentialIssueError);
 const isPersistenceSqlError = Schema.is(PersistenceErrors.PersistenceSqlError);
+const decodeReleasedMobileAccessToken = Schema.decodeUnknownEffect(
+  Schema.Struct({ ...AuthAccessTokenResult.fields, expires_in: Schema.Number }),
+);
 
 const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -352,8 +355,10 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const paired = yield* sessions.verify(access.access_token);
 
       expect(paired.subject).toBe("custom-device");
-      expect(paired.expiresAt).toBeUndefined();
-      expect(access.expires_in).toBeUndefined();
+      expect(paired.expiresAt).toBeDefined();
+      // Released mobile clients still require expires_in in the token response.
+      yield* decodeReleasedMobileAccessToken(access);
+      expect(access.expires_in).toBe(10 * 365 * 24 * 60 * 60);
       expect(yield* sessions.revoke(paired.sessionId)).toBe(true);
       expect((yield* Effect.flip(sessions.verify(access.access_token)))._tag).toBe(
         "SessionTokenRevokedError",

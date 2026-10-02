@@ -424,7 +424,7 @@ const SIGNING_SECRET_NAME = "server-signing-key";
 const DEFAULT_SESSION_TTL = Duration.days(30);
 const DEFAULT_WEBSOCKET_TOKEN_TTL = Duration.minutes(5);
 // Browser cookies need a finite expiry even when their paired session is
-// authorized until revoked. Device bearer credentials omit expiry entirely.
+// authorized until revoked. Paired device bearer credentials last ten years.
 const PAIRED_SESSION_EXPIRES_AT = Schema.decodeSync(Schema.DateTimeUtcFromString)(
   "9999-12-31T23:59:59.000Z",
 );
@@ -680,7 +680,7 @@ export const make = Effect.gen(function* () {
       const persistent = input?.persistUntilRevoked || isPairedBrowserSession(subject, method);
       const expiresAt =
         persistent && method === "bearer-access-token"
-          ? null
+          ? DateTime.add(issuedAt, { milliseconds: Duration.toMillis(Duration.days(10 * 365)) })
           : persistent && method === "browser-session-cookie"
             ? PAIRED_SESSION_EXPIRES_AT
             : DateTime.add(issuedAt, {

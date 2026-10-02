@@ -847,16 +847,17 @@ export const make = Effect.gen(function* () {
                   access_token: session.token,
                   issued_token_type: AuthAccessTokenType,
                   token_type: input?.proofKeyThumbprint ? "DPoP" : "Bearer",
-                  ...(session.expiresAt === null
-                    ? {}
-                    : {
-                        expires_in: Math.max(
+                  // Released mobile clients require an expiry in the response.
+                  // This compatibility value does not expire the stored session.
+                  expires_in:
+                    session.expiresAt === null
+                      ? Duration.toSeconds(Duration.days(10 * 365))
+                      : Math.max(
                           0,
                           Math.floor(
                             (session.expiresAt.epochMilliseconds - now.epochMilliseconds) / 1000,
                           ),
                         ),
-                      }),
                   scope: encodeOAuthScope(session.scopes),
                 }) satisfies AuthAccessTokenResult,
             ),
