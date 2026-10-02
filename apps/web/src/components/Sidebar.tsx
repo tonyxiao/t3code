@@ -2032,6 +2032,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 aria-hidden
                 className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
               >
+                <span className="max-w-20 truncate text-sidebar-muted-foreground">
+                  {props.environmentLabel ?? "Environment"}
+                </span>
                 {isRemote ? (
                   <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
                     <EnvironmentMachineIcon
@@ -2058,9 +2061,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     />
                   </span>
                 ) : null}
-              </span>
-              <span className="max-w-20 shrink-0 truncate text-sidebar-muted-foreground">
-                {props.environmentLabel ?? "Environment"}
               </span>
             </div>
           </div>
