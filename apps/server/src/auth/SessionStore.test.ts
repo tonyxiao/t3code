@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,6 +9,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -22,6 +24,10 @@ import {
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import * as SessionStore from "./SessionStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
+import { base64UrlDecodeUtf8, base64UrlEncode, signPayload } from "./utils.ts";
+
+const decodeJsonUnknown = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+const encodeJsonUnknown = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -46,7 +52,7 @@ const makeSessionStoreLayer = (
 ) =>
   SessionStore.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
-    Layer.provide(ServerSecretStore.layer),
+    Layer.provideMerge(ServerSecretStore.layer),
     Layer.provide(makeServerEnvironmentLayer(environmentId)),
     Layer.provide(makeServerConfigLayer(overrides)),
   );
@@ -341,6 +347,72 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         "review:write",
         "relay:read",
       ]);
+    }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
+  );
+
+  it.effect("restores expired unrevoked paired bearer credentials and keeps revocation effective", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const sql = yield* SqlClient.SqlClient;
+      const secrets = yield* ServerSecretStore.ServerSecretStore;
+      const issued = yield* sessions.issue({
+        method: "bearer-access-token",
+        subject: "one-time-token",
+      });
+      const [payload] = issued.token.split(".");
+      const claims = (yield* decodeJsonUnknown(base64UrlDecodeUtf8(payload ?? ""))) as {
+        iat: number;
+        exp: number;
+      };
+      const legacyExpiresAt = DateTime.formatIso(DateTime.makeUnsafe(claims.iat + 1_000));
+      const legacyPayload = base64UrlEncode(
+        yield* encodeJsonUnknown({
+          ...claims,
+          exp: claims.iat + 1_000,
+        }),
+      );
+      const secret = yield* secrets.getOrCreateRandom("server-signing-key", 32);
+      const legacyToken = `${legacyPayload}.${signPayload(legacyPayload, secret)}`;
+      yield* sql`UPDATE auth_sessions SET expires_at = ${legacyExpiresAt} WHERE session_id = ${issued.sessionId}`;
+
+      yield* TestClock.adjust(Duration.seconds(2));
+
+      expect((yield* sessions.verify(legacyToken)).sessionId).toBe(issued.sessionId);
+      expect((yield* sessions.listActive()).map((session) => session.sessionId)).toContain(
+        issued.sessionId,
+      );
+      const websocket = yield* sessions.issueWebSocketToken(issued.sessionId);
+      expect((yield* sessions.verifyWebSocketToken(websocket.token)).sessionId).toBe(
+        issued.sessionId,
+      );
+
+      expect(yield* sessions.revoke(issued.sessionId)).toBe(true);
+      expect((yield* Effect.flip(sessions.verify(legacyToken)))._tag).toBe(
+        "SessionTokenRevokedError",
+      );
+      expect((yield* Effect.flip(sessions.verifyWebSocketToken(websocket.token)))._tag).toBe(
+        "WebSocketSessionRevokedError",
+      );
+      expect(yield* sessions.listActive()).toEqual([]);
+    }).pipe(
+      Effect.provide(Layer.mergeAll(makeSessionStoreLayer(), SqlitePersistenceMemory, TestClock.layer())),
+    ),
+  );
+
+  it.effect("keeps DPoP access tokens short lived even when issued from a pairing grant", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const issued = yield* sessions.issue({
+        method: "dpop-access-token",
+        subject: "one-time-token",
+        proofKeyThumbprint: "pairing-proof-key",
+        ttl: Duration.seconds(1),
+      });
+      yield* TestClock.adjust(Duration.seconds(2));
+      expect((yield* Effect.flip(sessions.verify(issued.token)))._tag).toBe(
+        "SessionTokenExpiredError",
+      );
+      expect(yield* sessions.listActive()).toEqual([]);
     }).pipe(Effect.provide(Layer.merge(makeSessionStoreLayer(), TestClock.layer()))),
   );
 

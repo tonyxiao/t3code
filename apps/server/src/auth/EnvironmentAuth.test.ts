@@ -339,6 +339,30 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
   );
 
+  it.effect("keeps a directly paired client with a custom subject until revoked", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const sessions = yield* SessionStore.SessionStore;
+      const pairing = yield* serverAuth.createPairingLink({ subject: "custom-device" });
+      const access = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
+        pairing.credential,
+        undefined,
+        requestMetadata,
+      );
+      const paired = yield* sessions.verify(access.access_token);
+
+      expect(paired.subject).toBe("custom-device");
+      expect(paired.expiresAt?.epochMilliseconds).toBeGreaterThan(
+        253_000_000_000_000,
+      );
+      expect(access.expires_in).toBeGreaterThan(30 * 24 * 60 * 60);
+      expect(yield* sessions.revoke(paired.sessionId)).toBe(true);
+      expect((yield* Effect.flip(sessions.verify(access.access_token)))._tag).toBe(
+        "SessionTokenRevokedError",
+      );
+    }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+  );
+
   it.effect("prefers a bearer token over a stale legacy cookie", () =>
     Effect.gen(function* () {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;

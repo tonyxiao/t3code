@@ -745,6 +745,7 @@ export const make = Effect.gen(function* () {
             method: "browser-session-cookie",
             subject: grant.subject,
             scopes: grant.scopes,
+            persistUntilRevoked: grant.method === "one-time-token",
             client: {
               ...requestMetadata,
               ...(grant.label ? { label: grant.label } : {}),
@@ -815,6 +816,8 @@ export const make = Effect.gen(function* () {
                 method: input?.proofKeyThumbprint ? "dpop-access-token" : "bearer-access-token",
                 subject: grant.subject,
                 scopes: grantedScopes,
+                persistUntilRevoked:
+                  grant.method === "one-time-token" && !input?.proofKeyThumbprint,
                 ...(input?.proofKeyThumbprint
                   ? {
                       proofKeyThumbprint: input.proofKeyThumbprint,
