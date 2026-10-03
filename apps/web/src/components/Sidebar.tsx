@@ -112,6 +112,7 @@ import {
   threadTraversalDirectionFromCommand,
 } from "../keybindings";
 import { useShortcutModifierState } from "../shortcutModifierState";
+import { useSidebarEnvironmentScope } from "../hooks/useSidebarEnvironmentScope";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
@@ -2345,7 +2346,7 @@ export default function Sidebar() {
     () => openCommandPalette({ open: "add-project" }),
     [],
   );
-  const { environments, isReady: environmentsReady } = useEnvironments();
+  const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
@@ -2476,17 +2477,13 @@ export default function Sidebar() {
 
   // Environment and project scopes are independent and intersect when both
   // are selected. They persist so Settings and app restarts keep the filter.
-  const filterModes = useUiStateStore((store) => store.sidebarFilterModes);
-  const setFilterMode = useUiStateStore((store) => store.setSidebarFilterMode);
-  const environmentScopeIds = useUiStateStore((store) => store.sidebarEnvironmentScopeIds);
-  const setEnvironmentScopeIds = useUiStateStore((store) => store.setSidebarEnvironmentScopeIds);
-  const scopedEnvironmentIds = useMemo(
-    () =>
-      environmentScopeIds.length === 0 && filterModes.environment === "exclude"
-        ? null
-        : new Set(environmentScopeIds),
-    [environmentScopeIds, filterModes.environment],
-  );
+  const {
+    filterModes,
+    setFilterMode,
+    environmentScopeIds,
+    setEnvironmentScopeIds,
+    scopedEnvironmentIds,
+  } = useSidebarEnvironmentScope();
   const environmentScopeItems = useMemo<
     readonly { value: string; label: string; machine: EnvironmentMachineKind | null }[]
   >(
@@ -2529,15 +2526,6 @@ export default function Sidebar() {
       }),
     [environmentScopeFilter, environmentScopeItems, environmentScopeMenuState.query],
   );
-  useEffect(() => {
-    if (!environmentsReady || environmentScopeIds.length === 0) return;
-    const available = new Set<string>(environments.map((environment) => environment.environmentId));
-    const remaining = environmentScopeIds.filter((id) => available.has(id));
-    if (remaining.length !== environmentScopeIds.length) {
-      setEnvironmentScopeIds(remaining);
-      if (remaining.length === 0) setFilterMode("environment", "exclude");
-    }
-  }, [environmentScopeIds, environments, environmentsReady, setEnvironmentScopeIds, setFilterMode]);
 
   // Project scope: one menu above the list. Scoping filters the list without
   // making the header width depend on the number or length of project names.
