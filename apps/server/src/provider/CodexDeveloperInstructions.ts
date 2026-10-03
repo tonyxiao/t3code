@@ -4,11 +4,11 @@ import { buildRuntimeInstructions } from "./RuntimeInstructions.ts";
 
 const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `## T3 Code collaborative browser
 
-You are running inside T3 Code. The \`t3-code\` MCP server is the product-native collaborative browser shared with the user. When it exposes \`preview_*\` tools, prefer those tools for browser navigation, inspection, interaction, screenshots, and recordings.
+When the user requests a particular browser, browser skill, or automation setup (for example, Chrome), use it, including for development verification.
 
-For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
+For general web browsing and automation, use the user's browser setup and configured browser skills. The T3 preview preference applies only to inspecting or testing an application or server being developed in this environment, including a remotely hosted development environment.
 
-Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T3 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T3 preview tool call should be inspected and retried with corrected arguments when the error is actionable.`;
+For that development verification, prefer the \`t3-code\` MCP server's \`preview_*\` tools when available so the user can follow along. Call \`preview_status\`, then \`preview_open\` if no automation-capable preview is attached. Use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools, preferring snapshot-provided locators over coordinates. Retry actionable errors with corrected arguments; if the preview is unavailable, use the user's browser setup.`;
 
 const T3_CODE_DEVICE_TOOL_INSTRUCTIONS = `## T3 Code devices
 
@@ -27,9 +27,8 @@ const normalizeAvailability = (
 /**
  * Each block is omitted entirely when its tools aren't attached. Describing
  * `preview_*` or `device_*` tools that aren't in the turn's tool list would be
- * worse than saying nothing: the instructions actively steer the model away
- * from Playwright, agent-browser, and raw simctl/adb, so leaving them in would
- * talk it out of the only automation it still has.
+ * worse than saying nothing: the instructions would steer the model toward
+ * development verification tools it cannot call.
  */
 const toolInstructions = (availability: boolean | T3CodeToolAvailability): string => {
   const tools = normalizeAvailability(availability);

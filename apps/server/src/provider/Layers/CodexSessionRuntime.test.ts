@@ -639,13 +639,30 @@ describe("buildCodexAdditionalContext", () => {
 describe("T3 tool instructions", () => {
   const runtime = { model: "gpt-5.3-codex", reasoningEffort: "high" };
 
-  it("prefers the product-native preview tools when they are attached", () => {
+  it("scopes the attached preview preference to development verification", () => {
     const tools = buildCodexAdditionalContext(runtime, true).t3_code_tools?.value ?? "";
     NodeAssert.match(tools, /t3-code/);
     NodeAssert.match(tools, /preview_status/);
     NodeAssert.match(tools, /preview_open/);
-    NodeAssert.match(tools, /Do not switch to global browser skills/);
+    NodeAssert.match(
+      tools,
+      /preference applies only to inspecting or testing an application or server being developed in this environment/,
+    );
+    NodeAssert.match(tools, /including a remotely hosted development environment/);
+    NodeAssert.match(
+      tools,
+      /For general web browsing and automation, use the user's browser setup and configured browser skills/,
+    );
+    NodeAssert.doesNotMatch(tools, /Do not switch|For browser work/);
     NodeAssert.doesNotMatch(tools, /device_open/);
+  });
+
+  it("honors an explicitly requested browser even for development verification", () => {
+    const tools = buildCodexAdditionalContext(runtime, true).t3_code_tools?.value ?? "";
+    NodeAssert.match(
+      tools,
+      /When the user requests a particular browser, browser skill, or automation setup \(for example, Chrome\), use it, including for development verification/,
+    );
   });
 
   it("describes device tools only when the credential grants them", () => {
@@ -657,8 +674,7 @@ describe("T3 tool instructions", () => {
   });
 
   it("omits the tool entry entirely when no tools are attached", () => {
-    // Steering away from other browser automation must go with the tools;
-    // keeping it would leave the model talked out of its only option.
+    // Verification guidance must go with the tools it describes.
     const context = buildCodexAdditionalContext(runtime, false);
     NodeAssert.deepStrictEqual(Object.keys(context), ["t3_code_runtime"]);
   });
