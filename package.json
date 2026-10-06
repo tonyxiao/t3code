@@ -37,6 +37,7 @@
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
     "dist:desktop:artifact": "node scripts/build-desktop-artifact.ts",
+    "dist:desktop:app": "bash scripts/build-local-desktop-app.sh",
     "dist:desktop:dmg": "node scripts/build-desktop-artifact.ts --platform mac --target dmg",
     "dist:desktop:dmg:arm64": "node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64",
     "dist:desktop:dmg:x64": "node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch x64",

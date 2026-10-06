@@ -146,6 +146,9 @@ vp run dist:desktop:linux
 vp run dist:desktop:win
 ```
 
+On macOS, `vp run dist:desktop:app` writes the unpacked `.app` to `build/`. Quit a
+running copy before rebuilding it.
+
 DMGs default to the host architecture. Use `--arch` to choose another target and `--keep-stage`
 to retain packaging files for inspection. Run `vp run dist:desktop:artifact --help` for other
 options.

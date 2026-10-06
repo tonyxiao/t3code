@@ -3868,14 +3868,32 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
 
   const copiedArtifacts: string[] = [];
-  for (const entry of stageEntries) {
-    const from = path.join(stageDistDir, entry);
-    const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat || stat.type !== "File") continue;
+  if (options.platform === "mac" && options.target === "dir") {
+    const appName = `${resolveDesktopProductName(appVersion)}.app`;
+    for (const entry of stageEntries) {
+      const entryPath = path.join(stageDistDir, entry);
+      const stat = yield* fs.stat(entryPath).pipe(Effect.orElseSucceed(() => null));
+      if (!stat || stat.type !== "Directory") continue;
 
-    const to = path.join(options.outputDir, entry);
-    yield* fs.copyFile(from, to);
-    copiedArtifacts.push(to);
+      const from = path.join(stageDistDir, entry, appName);
+      if (!(yield* fs.exists(from))) continue;
+
+      const to = path.join(options.outputDir, appName);
+      yield* fs.remove(to, { recursive: true, force: true });
+      yield* fs.copy(from, to);
+      copiedArtifacts.push(to);
+      break;
+    }
+  } else {
+    for (const entry of stageEntries) {
+      const from = path.join(stageDistDir, entry);
+      const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
+      if (!stat || stat.type !== "File") continue;
+
+      const to = path.join(options.outputDir, entry);
+      yield* fs.copyFile(from, to);
+      copiedArtifacts.push(to);
+    }
   }
 
   if (copiedArtifacts.length === 0) {
