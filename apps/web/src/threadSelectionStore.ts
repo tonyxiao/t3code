@@ -22,6 +22,8 @@ interface ThreadSelectionStore extends ThreadSelectionState {
    * so the store can compute which threads fall between anchor and target.
    */
   rangeSelectTo: (threadKey: string, orderedThreadKeys: readonly string[]) => void;
+  /** Add a set of threads in one update, preserving the range anchor. */
+  selectThreads: (threadKeys: readonly string[]) => void;
   /** Clear all selection state. */
   clearSelection: () => void;
   /** Remove specific scoped thread keys from the selection (e.g. after deletion). */
@@ -92,6 +94,18 @@ export const useThreadSelectionStore = create<ThreadSelectionStore>((set, get) =
       }
       // Keep anchor stable so subsequent shift-clicks extend from the same point
       return { selectedThreadKeys: next, anchorThreadKey: anchor };
+    });
+  },
+
+  selectThreads: (threadKeys) => {
+    set((state) => {
+      const next = new Set(state.selectedThreadKeys);
+      for (const key of threadKeys) next.add(key);
+      if (next.size === state.selectedThreadKeys.size) return state;
+      return {
+        selectedThreadKeys: next,
+        anchorThreadKey: state.anchorThreadKey ?? threadKeys[0] ?? null,
+      };
     });
   },
 

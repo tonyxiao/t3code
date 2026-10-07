@@ -42,6 +42,8 @@ import {
 } from "@t3tools/contracts";
 import type { SidebarThreadSortOrder, TimestampFormat } from "@t3tools/contracts/settings";
 import {
+  ArchiveIcon,
+  ListChecksIcon,
   AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowUpDownIcon,
@@ -155,6 +157,7 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";
 import {
+  archiveSelectedThreadEntries,
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
   buildBulkTitleRegenerationContextMenuItem,
@@ -1008,6 +1011,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   projectDisplayName: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   timestampFormat: TimestampFormat;
+  selectionMode: boolean;
   onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
   onThreadActivate: (threadRef: ScopedThreadRef) => void;
   onStartRename: (threadRef: ScopedThreadRef, title: string) => void;
@@ -1061,6 +1065,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
+  const selectionCheckbox = props.selectionMode ? (
+    <input
+      type="checkbox"
+      aria-label={`Select ${thread.title}`}
+      checked={isSelected}
+      className="size-4 shrink-0 accent-primary"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onChange={() => useThreadSelectionStore.getState().toggleThread(threadKey)}
+    />
+  ) : null;
   const openPrLink = useOpenPrLink();
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
@@ -1259,20 +1274,28 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       if (event.target !== event.currentTarget) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      onThreadActivate(threadRef);
+      if (props.selectionMode) useThreadSelectionStore.getState().toggleThread(threadKey);
+      else onThreadActivate(threadRef);
     },
-    [onThreadActivate, threadRef],
+    [onThreadActivate, props.selectionMode, threadKey, threadRef],
   );
   const handleDoubleClick = useCallback(
     (event: ReactMouseEvent) => {
-      if (isRenaming || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      if (
+        props.selectionMode ||
+        isRenaming ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
         return;
       }
       if ((event.target as HTMLElement).closest("button, a, input")) return;
       event.preventDefault();
       onStartRename(threadRef, thread.title);
     },
-    [isRenaming, onStartRename, thread.title, threadRef],
+    [isRenaming, onStartRename, props.selectionMode, thread.title, threadRef],
   );
   const [isFileDragOver, setIsFileDragOver] = useState(false);
   const fileDropHandlers = useMemo(
@@ -1616,6 +1639,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               />
             }
           >
+            {selectionCheckbox}
             {/* Settled history recedes: dimmed favicon at rest, restored on
               hover so the tail stays scannable when you're hunting. */}
             <span
@@ -1771,6 +1795,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         >
           <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
+              {selectionCheckbox}
               {draftIndicator}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
@@ -2249,9 +2274,12 @@ export default function Sidebar() {
   );
   const { environments, isReady: environmentsReady } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const [selectionMode, setSelectionMode] = useState(false);
+  const selectedThreadKeys = useThreadSelectionStore((s) => s.selectedThreadKeys);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
+  const selectThreads = useThreadSelectionStore((s) => s.selectThreads);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
   const markThreadUnread = useUiStateStore((s) => s.markThreadUnread);
   const markThreadVisited = useUiStateStore((s) => s.markThreadVisited);
@@ -3089,7 +3117,7 @@ export default function Sidebar() {
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const threadKey = scopedThreadKey(threadRef);
-      if (isModClick) {
+      if (isModClick || (selectionMode && !event.shiftKey)) {
         event.preventDefault();
         toggleThreadSelection(threadKey);
         return;
@@ -3104,7 +3132,7 @@ export default function Sidebar() {
       }
       navigateToThread(threadRef);
     },
-    [navigateToThread, rangeSelectTo, toggleThreadSelection],
+    [navigateToThread, rangeSelectTo, selectionMode, toggleThreadSelection],
   );
 
   // A settle per thread at a time: double clicks and repeated menu picks
@@ -3851,223 +3879,292 @@ export default function Sidebar() {
     [performSnooze],
   );
 
+  const bulkActionPendingRef = useRef(false);
+  const [bulkActionPending, setBulkActionPending] = useState(false);
   const removeFromSelection = useThreadSelectionStore((s) => s.removeFromSelection);
   const handleMultiSelectContextMenu = useCallback(
-    async (position: { x: number; y: number }) => {
-      const api = readLocalApi();
-      if (!api) return;
-      // One exact actionable set: keys whose rows are actually rendered
-      // right now. Selections can outlive their rows (settled-tail paging,
-      // thread deletion elsewhere) and the menu labels must count only what
-      // the actions will touch.
-      const selectedThreadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
-      const threadKeys = selectedThreadKeys.filter((threadKey) =>
-        threadByKeyRef.current.has(threadKey),
-      );
-      if (threadKeys.length === 0) return;
-      const count = threadKeys.length;
-      // Snooze (N) is offered when every selected thread can actually take
-      // it — a mixed selection with blocked-on-you work would half-apply.
-      const selectionNow = new Date();
-      const selectedThreads = threadKeys.flatMap((threadKey) => {
-        const thread = threadByKeyRef.current.get(threadKey);
-        return thread ? [thread] : [];
-      });
-      const canSnoozeSelection = selectedThreads.every(
-        (thread) =>
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true &&
-          canSnooze(thread, { now: selectionNow.toISOString() }),
-      );
-      const titleRegenerationThreads = selectedThreads.filter(
-        (thread) =>
-          serverConfigs.get(thread.environmentId)?.environment.capabilities
-            .threadTitleRegeneration === true,
-      );
-      const regeneratableTitleThreads = titleRegenerationThreads.filter(
-        (thread) => thread.titleRegeneration == null,
-      );
-      const titleRegenerationMenuItem = buildBulkTitleRegenerationContextMenuItem({
-        supportedCount: titleRegenerationThreads.length,
-        actionableCount: regeneratableTitleThreads.length,
-      });
-      // Unpin (k) counts only the pinned rows in pin-capable environments —
-      // on a mixed selection the unpinned rows are untouched, and the item
-      // is omitted entirely when nothing selected is pinned.
-      const pinnedSelectedThreads = selectedThreads.filter(
-        (thread) =>
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning ===
-            true && thread.pinnedAt != null,
-      );
-      const unpinMenuItem = buildBulkUnpinContextMenuItem({
-        pinnedCount: pinnedSelectedThreads.length,
-      });
-      const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
-      const clicked = await settlePromise(() =>
-        api.contextMenu.show(
-          [
-            ...(unpinMenuItem ? [unpinMenuItem] : []),
-            { id: "settle", label: `Settle (${count})` },
-            ...(canSnoozeSelection
-              ? [
-                  {
-                    id: "snooze",
-                    label: `Snooze (${count})`,
-                    children: [
-                      ...snoozePresets.map((preset) => ({
-                        id: `snooze:${preset.id}`,
-                        label: `${preset.label} (${preset.whenLabel})`,
-                      })),
-                      { id: "snooze:custom", label: "Custom…", separatorBefore: true },
-                    ],
-                  },
-                ]
-              : []),
-            ...(titleRegenerationMenuItem ? [titleRegenerationMenuItem] : []),
-            { id: "mark-unread", label: `Mark unread (${count})` },
-            { id: "delete", label: `Delete (${count})`, destructive: true },
-          ],
-          position,
-        ),
-      );
-      if (clicked._tag === "Failure") return;
-      if (clicked.value?.startsWith("snooze:")) {
-        const preset =
-          clicked.value === "snooze:custom"
-            ? await requestCustomSnooze()
-            : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
-        if (preset) {
-          // Post-snooze navigation must skip threads snoozing in this same
-          // batch — they are all leaving the card block together.
-          const coSnoozingKeys = new Set(threadKeys);
-          clearSelection();
-          const outcomes = await Promise.all(
-            selectedThreads.map(async (thread) => {
-              const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-              const outcome = await performSnooze(threadRef, preset, { coSnoozingKeys });
-              return { outcome, threadRef };
-            }),
-          );
-          const snoozedThreadRefs = outcomes.flatMap(({ outcome, threadRef }) =>
-            outcome.status === "success" ? [threadRef] : [],
-          );
-          const failures = outcomes.flatMap(({ outcome }) =>
-            outcome.status === "failure" ? [outcome.error] : [],
-          );
+    async (position: { x: number; y: number }, action?: "archive" | "snooze") => {
+      if (bulkActionPendingRef.current) return;
+      bulkActionPendingRef.current = true;
+      setBulkActionPending(true);
+      try {
+        const api = readLocalApi();
+        if (!api) return;
+        // One exact actionable set: keys whose rows are actually rendered
+        // right now. Selections can outlive their rows (settled-tail paging,
+        // thread deletion elsewhere) and the menu labels must count only what
+        // the actions will touch.
+        const selectedThreadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
+        const threadKeys = selectedThreadKeys.filter((threadKey) =>
+          threadByKeyRef.current.has(threadKey),
+        );
+        if (threadKeys.length === 0) return;
+        const count = threadKeys.length;
+        // Snooze (N) is offered when every selected thread can actually take
+        // it — a mixed selection with blocked-on-you work would half-apply.
+        const selectionNow = new Date();
+        const selectedThreads = threadKeys.flatMap((threadKey) => {
+          const thread = threadByKeyRef.current.get(threadKey);
+          return thread ? [thread] : [];
+        });
+        const canSnoozeSelection = selectedThreads.every(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze ===
+              true && canSnooze(thread, { now: selectionNow.toISOString() }),
+        );
+        const titleRegenerationThreads = selectedThreads.filter(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities
+              .threadTitleRegeneration === true,
+        );
+        const regeneratableTitleThreads = titleRegenerationThreads.filter(
+          (thread) => thread.titleRegeneration == null,
+        );
+        const titleRegenerationMenuItem = buildBulkTitleRegenerationContextMenuItem({
+          supportedCount: titleRegenerationThreads.length,
+          actionableCount: regeneratableTitleThreads.length,
+        });
+        // Unpin (k) counts only the pinned rows in pin-capable environments —
+        // on a mixed selection the unpinned rows are untouched, and the item
+        // is omitted entirely when nothing selected is pinned.
+        const pinnedSelectedThreads = selectedThreads.filter(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinning ===
+              true && thread.pinnedAt != null,
+        );
+        const unpinMenuItem = buildBulkUnpinContextMenuItem({
+          pinnedCount: pinnedSelectedThreads.length,
+        });
+        const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
+        const clicked =
+          action === "archive"
+            ? { _tag: "Success" as const, value: "archive" }
+            : await settlePromise(() =>
+                api.contextMenu.show(
+                  action === "snooze"
+                    ? snoozePresets
+                        .map((preset) => ({
+                          id: `snooze:${preset.id}`,
+                          label: `${preset.label} (${preset.whenLabel})`,
+                        }))
+                        .concat([{ id: "snooze:custom", label: "Custom…" }])
+                    : [
+                        ...(unpinMenuItem ? [unpinMenuItem] : []),
+                        { id: "settle", label: `Settle (${count})` },
+                        ...(canSnoozeSelection
+                          ? [
+                              {
+                                id: "snooze",
+                                label: `Snooze (${count})`,
+                                children: [
+                                  ...snoozePresets.map((preset) => ({
+                                    id: `snooze:${preset.id}`,
+                                    label: `${preset.label} (${preset.whenLabel})`,
+                                  })),
+                                  { id: "snooze:custom", label: "Custom…", separatorBefore: true },
+                                ],
+                              },
+                            ]
+                          : []),
+                        ...(titleRegenerationMenuItem ? [titleRegenerationMenuItem] : []),
+                        {
+                          id: "archive",
+                          label: `Archive (${count})`,
+                          disabled: selectedThreads.some(
+                            (thread) =>
+                              thread.session?.status === "running" &&
+                              thread.session.activeTurnId != null,
+                          ),
+                        },
+                        { id: "mark-unread", label: `Mark unread (${count})` },
+                        { id: "delete", label: `Delete (${count})`, destructive: true },
+                      ],
+                  position,
+                ),
+              );
+        if (clicked._tag === "Failure") return;
+        if (clicked.value?.startsWith("snooze:") && canSnoozeSelection) {
+          const preset =
+            clicked.value === "snooze:custom"
+              ? await requestCustomSnooze()
+              : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
+          if (preset) {
+            // Post-snooze navigation must skip threads snoozing in this same
+            // batch — they are all leaving the card block together.
+            const coSnoozingKeys = new Set(threadKeys);
+            clearSelection();
+            const outcomes = await Promise.all(
+              selectedThreads.map(async (thread) => {
+                const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+                const outcome = await performSnooze(threadRef, preset, { coSnoozingKeys });
+                return { outcome, threadRef };
+              }),
+            );
+            const snoozedThreadRefs = outcomes.flatMap(({ outcome, threadRef }) =>
+              outcome.status === "success" ? [threadRef] : [],
+            );
+            const failures = outcomes.flatMap(({ outcome }) =>
+              outcome.status === "failure" ? [outcome.error] : [],
+            );
 
-          if (failures.length > 0) {
-            const firstError = failures[0];
+            if (failures.length > 0) {
+              const firstError = failures[0];
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title:
+                    snoozedThreadRefs.length > 0
+                      ? `Failed to snooze ${failures.length} thread${failures.length === 1 ? "" : "s"}`
+                      : "Failed to snooze threads",
+                  description:
+                    firstError instanceof Error ? firstError.message : "An error occurred.",
+                }),
+              );
+            }
+          }
+          return;
+        }
+        if (clicked.value === "archive") {
+          if (
+            selectedThreads.some(
+              (thread) =>
+                thread.session?.status === "running" && thread.session.activeTurnId != null,
+            )
+          )
+            return;
+          if (confirmThreadArchive) {
+            const confirmed = await settlePromise(() =>
+              api.dialogs.confirm(`Archive ${count} thread${count === 1 ? "" : "s"}?`),
+            );
+            if (confirmed._tag === "Failure" || !confirmed.value) return;
+          }
+          const outcome = await archiveSelectedThreadEntries({
+            entries: selectedThreads.map((thread) => ({
+              threadKey: scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+              threadRef: scopeThreadRef(thread.environmentId, thread.id),
+            })),
+            archive: ({ threadRef }, onArchived) => archiveThread(threadRef, { onArchived }),
+          });
+          removeFromSelection(outcome.archivedThreadKeys);
+          for (const failure of [outcome.mutationFailure, ...outcome.followupFailures]) {
+            if (!failure || isAtomCommandInterrupted(failure)) continue;
+            const error = squashAtomCommandFailure(failure);
             toastManager.add(
               stackedThreadToast({
                 type: "error",
                 title:
-                  snoozedThreadRefs.length > 0
-                    ? `Failed to snooze ${failures.length} thread${failures.length === 1 ? "" : "s"}`
-                    : "Failed to snooze threads",
-                description:
-                  firstError instanceof Error ? firstError.message : "An error occurred.",
-              }),
-            );
-          }
-        }
-        return;
-      }
-      if (clicked.value === "unpin") {
-        // Each unpin reports its own failure, like the single-row action.
-        for (const thread of pinnedSelectedThreads) {
-          attemptUnpin(scopeThreadRef(thread.environmentId, thread.id));
-        }
-        clearSelection();
-        return;
-      }
-      if (clicked.value === "regenerate-title") {
-        for (const thread of regeneratableTitleThreads) {
-          const result = await updateThreadMetadata({
-            environmentId: thread.environmentId,
-            input: { threadId: thread.id, regenerateTitle: true },
-          });
-          if (result._tag === "Success") continue;
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            toastManager.add(
-              stackedThreadToast({
-                type: "error",
-                title: "Failed to regenerate thread titles",
+                  failure === outcome.mutationFailure
+                    ? "Failed to archive threads"
+                    : "Thread archived, but navigation failed",
                 description: error instanceof Error ? error.message : "An error occurred.",
               }),
             );
           }
           return;
         }
-        clearSelection();
-        return;
-      }
-      if (clicked.value === "settle") {
-        // Post-settle navigation must skip threads settling in this same
-        // batch — they are all leaving the card block together. Rows that
-        // are already explicitly settled are skipped: nothing to do on a
-        // valid mixed selection. Pinned rows ARE included: the decider
-        // clears the pin as part of settling, so they park like the rest.
-        const coSettlingKeys = new Set(threadKeys);
-        for (const threadKey of threadKeys) {
-          const thread = threadByKeyRef.current.get(threadKey);
-          if (!thread || thread.settledOverride === "settled") continue;
-          attemptSettle(scopeThreadRef(thread.environmentId, thread.id), { coSettlingKeys });
+        if (clicked.value === "unpin") {
+          // Each unpin reports its own failure, like the single-row action.
+          for (const thread of pinnedSelectedThreads) {
+            attemptUnpin(scopeThreadRef(thread.environmentId, thread.id));
+          }
+          clearSelection();
+          return;
         }
-        clearSelection();
-        return;
-      }
-      if (clicked.value === "mark-unread") {
-        for (const threadKey of threadKeys) {
-          const thread = threadByKeyRef.current.get(threadKey);
-          markThreadUnread(threadKey, thread?.latestTurn?.completedAt);
+        if (clicked.value === "regenerate-title") {
+          for (const thread of regeneratableTitleThreads) {
+            const result = await updateThreadMetadata({
+              environmentId: thread.environmentId,
+              input: { threadId: thread.id, regenerateTitle: true },
+            });
+            if (result._tag === "Success") continue;
+            if (!isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to regenerate thread titles",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
+          clearSelection();
+          return;
         }
-        clearSelection();
-        return;
-      }
-      if (clicked.value !== "delete") return;
-      if (confirmThreadDelete) {
-        const confirmed = await settlePromise(() =>
-          api.dialogs.confirm(
-            [
-              `Delete ${count} thread${count === 1 ? "" : "s"}?`,
-              "This permanently clears conversation history for these threads.",
-            ].join("\n"),
-            { variant: "destructive" },
-          ),
-        );
-        if (confirmed._tag === "Failure" || !confirmed.value) return;
-      }
-      const { deletedThreadKeys, firstFailure } = await deleteSelectedThreadEntries({
-        entries: threadKeys.map((threadKey) => ({ threadKey })),
-        delete: async ({ threadKey }, deletedThreadKeys) => {
-          const thread = threadByKeyRef.current.get(threadKey);
-          if (!thread) return null;
-          return deleteThread(scopeThreadRef(thread.environmentId, thread.id), {
-            deletedThreadKeys,
-          });
-        },
-      });
-      if (firstFailure !== null) {
-        const firstError = squashAtomCommandFailure(firstFailure);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Failed to delete threads",
-            description: firstError instanceof Error ? firstError.message : "An error occurred.",
+        if (clicked.value === "settle") {
+          // Post-settle navigation must skip threads settling in this same
+          // batch — they are all leaving the card block together. Rows that
+          // are already explicitly settled are skipped: nothing to do on a
+          // valid mixed selection. Pinned rows ARE included: the decider
+          // clears the pin as part of settling, so they park like the rest.
+          const coSettlingKeys = new Set(threadKeys);
+          for (const threadKey of threadKeys) {
+            const thread = threadByKeyRef.current.get(threadKey);
+            if (!thread || thread.settledOverride === "settled") continue;
+            attemptSettle(scopeThreadRef(thread.environmentId, thread.id), { coSettlingKeys });
+          }
+          clearSelection();
+          return;
+        }
+        if (clicked.value === "mark-unread") {
+          for (const threadKey of threadKeys) {
+            const thread = threadByKeyRef.current.get(threadKey);
+            markThreadUnread(threadKey, thread?.latestTurn?.completedAt);
+          }
+          clearSelection();
+          return;
+        }
+        if (clicked.value !== "delete") return;
+        if (confirmThreadDelete) {
+          const confirmed = await settlePromise(() =>
+            api.dialogs.confirm(
+              [
+                `Delete ${count} thread${count === 1 ? "" : "s"}?`,
+                "This permanently clears conversation history for these threads.",
+              ].join("\n"),
+              { variant: "destructive" },
+            ),
+          );
+          if (confirmed._tag === "Failure" || !confirmed.value) return;
+        }
+        const { deletedThreadKeys, firstFailure } = await deleteSelectedThreadEntries({
+          entries: threadKeys.map((threadKey) => ({ threadKey })),
+          delete: async ({ threadKey }, deletedThreadKeys) => {
+            const thread = threadByKeyRef.current.get(threadKey);
+            if (!thread) return null;
+            return deleteThread(scopeThreadRef(thread.environmentId, thread.id), {
+              deletedThreadKeys,
+            });
+          },
+        });
+        if (firstFailure !== null) {
+          const firstError = squashAtomCommandFailure(firstFailure);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to delete threads",
+              description: firstError instanceof Error ? firstError.message : "An error occurred.",
+            }),
+          );
+        }
+        removeFromSelection(
+          getThreadKeysToDeselectAfterDelete(selectedThreadKeys, deletedThreadKeys, (threadKey) => {
+            const threadRef = parseScopedThreadKey(threadKey);
+            return threadRef !== null && readThreadShell(threadRef) !== null;
           }),
         );
+      } finally {
+        bulkActionPendingRef.current = false;
+        setBulkActionPending(false);
       }
-      removeFromSelection(
-        getThreadKeysToDeselectAfterDelete(selectedThreadKeys, deletedThreadKeys, (threadKey) => {
-          const threadRef = parseScopedThreadKey(threadKey);
-          return threadRef !== null && readThreadShell(threadRef) !== null;
-        }),
-      );
     },
     [
+      archiveThread,
       attemptSettle,
       attemptUnpin,
       clearSelection,
+      confirmThreadArchive,
       confirmThreadDelete,
       deleteThread,
       markThreadUnread,
@@ -4482,6 +4579,23 @@ export default function Sidebar() {
     shortcutLabelForCommand(keybindings, "chat.new") ??
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
+  const selectedVisibleThreads = orderedThreads.filter((thread) =>
+    selectedThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+  );
+  const selectedCount = selectedVisibleThreads.length;
+  const canBulkSnooze =
+    selectedCount > 0 &&
+    selectedVisibleThreads.every(
+      (thread) =>
+        serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true &&
+        canSnooze(thread, { now: snoozeNow }),
+    );
+  const canBulkArchive =
+    selectedCount > 0 &&
+    !selectedVisibleThreads.some(
+      (thread) => thread.session?.status === "running" && thread.session.activeTurnId != null,
+    );
+
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -4751,6 +4865,69 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
+            {!isSearchingThreads && (
+              <div data-thread-selection-safe className="flex items-center gap-1 px-1 pt-1">
+                {selectionMode || selectedCount > 0 ? (
+                  <>
+                    <span role="status" className="mr-auto text-xs text-sidebar-muted-foreground">
+                      {selectedCount} selected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        selectThreads(orderedThreadKeys);
+                      }}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Snooze selected threads"
+                      title="Snooze selected threads"
+                      disabled={bulkActionPending || !canBulkSnooze}
+                      onClick={(event) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        void handleMultiSelectContextMenu(
+                          { x: bounds.left, y: bounds.bottom },
+                          "snooze",
+                        );
+                      }}
+                    >
+                      <AlarmClockIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Archive selected threads"
+                      title="Archive selected threads"
+                      disabled={bulkActionPending || !canBulkArchive}
+                      onClick={() => {
+                        void handleMultiSelectContextMenu({ x: 0, y: 0 }, "archive");
+                      }}
+                    >
+                      <ArchiveIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Cancel thread selection"
+                      onClick={() => {
+                        clearSelection();
+                        setSelectionMode(false);
+                      }}
+                    >
+                      <XIcon />
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="ghost-muted" size="xs" onClick={() => setSelectionMode(true)}>
+                    <ListChecksIcon /> Select
+                  </Button>
+                )}
+              </div>
+            )}
           </SidebarGroup>
         }
       >
@@ -4941,6 +5118,7 @@ export default function Sidebar() {
                               EMPTY_PROVIDER_ENTRIES
                             }
                             timestampFormat={timestampFormat}
+                            selectionMode={selectionMode}
                             onThreadClick={handleThreadClick}
                             onThreadActivate={navigateToThread}
                             onStartRename={startThreadRename}

@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { Table2Icon, ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -191,6 +191,14 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
+          <SidebarUtilityItem
+            icon={<Table2Icon />}
+            label="Threads"
+            onClick={() => {
+              closeMobileSidebar();
+              void navigate({ to: "/threads" });
+            }}
+          />
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
             label="Usage"

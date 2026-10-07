@@ -25,6 +25,28 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Manage threads together
+
+On web and desktop, choose **Select** in the sidebar and select the threads to snooze or
+archive together. `Cmd`/`Ctrl`-click toggles individual threads; `Shift`-click selects a range.
+
+Open **Threads** from the sidebar or **Manage threads** from the command palette for a
+full-width table across connected environments, including archived conversations. Search,
+filter, and group threads to narrow the list. Click a column heading to sort; hold
+`Cmd`/`Ctrl` to add another sort. Double-click a live thread's title to edit it, then press
+Enter to save or Escape to cancel.
+
+The table has **Cells** and **Rows** modes. Cells mode navigates or edits individual cells;
+`Cmd`/`Ctrl+A` inside a title editor selects its text. Use **Rows**, a row checkbox, or
+`Shift+Space` to enter row selection. In a grouped table, `Cmd`/`Ctrl+A` first selects the
+focused group; pressing it again selects every thread matching the current filters, across
+all groups. Further presses keep that selection. Escape clears row selection and returns
+to Cells mode. Double-clicking a title also returns to Cells mode for editing.
+
+Select rows to apply actions together. Only threads matching the current filters are acted
+on. Restore archived threads before editing or opening them. Running threads cannot be
+archived, and threads waiting for your input cannot be snoozed.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

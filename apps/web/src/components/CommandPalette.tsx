@@ -2036,6 +2036,17 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:threads",
+    searchTerms: ["threads", "table", "grid", "bulk", "manage", "archive", "snooze"],
+    title: "Manage threads",
+    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/threads" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:usage",
     searchTerms: ["usage", "use", "tokens", "cost", "spend", "limits", "stats", "analytics"],
     title: "Open usage",

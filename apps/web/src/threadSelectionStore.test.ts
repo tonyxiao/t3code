@@ -19,6 +19,18 @@ describe("threadSelectionStore", () => {
     useThreadSelectionStore.getState().clearSelection();
   });
 
+  it("selects all in one update while preserving the shift-selection anchor", () => {
+    const store = useThreadSelectionStore.getState();
+    store.toggleThread(THREAD_B);
+    let updates = 0;
+    const unsubscribe = useThreadSelectionStore.subscribe(() => updates++);
+    store.selectThreads(ORDERED);
+    unsubscribe();
+    expect(updates).toBe(1);
+    expect(useThreadSelectionStore.getState().selectedThreadKeys.size).toBe(5);
+    expect(useThreadSelectionStore.getState().anchorThreadKey).toBe(THREAD_B);
+  });
+
   describe("bulk deletion cleanup", () => {
     it("clears missing selection rows and completed deletions while retaining a failed thread", () => {
       const store = useThreadSelectionStore.getState();
