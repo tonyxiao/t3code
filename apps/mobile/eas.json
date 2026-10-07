@@ -5,6 +5,23 @@
     "promptToConfigurePushNotifications": false
   },
   "build": {
+    "private": {
+      "extends": "preview",
+      "channel": "private",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "T3CODE_MOBILE_APP_ID": "com.txlforge.t3code",
+        "T3CODE_MOBILE_SCHEME": "txlforge-t3",
+        "T3CODE_MOBILE_SLUG": "t3-code-mobile",
+        "T3CODE_MOBILE_EAS_OWNER": "txlforge",
+        "T3CODE_MOBILE_EAS_PROJECT_ID": "2f5c604c-ae7f-48f4-bbdb-bdac2006d47c",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "development": {
       "corepack": true,
       "env": {

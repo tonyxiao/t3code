@@ -110,9 +110,14 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
+const privateProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim();
+const easProjectId =
+  privateProjectId ??
+  (privateAppId || isIosPersonalTeamBuild ? undefined : "d763fcb8-d37c-41ea-a773-b54a0ab4a454");
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+  : (privateAppId ?? variant.iosBundleIdentifier);
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -226,9 +231,9 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: repoEnv.T3CODE_MOBILE_SLUG?.trim() ?? "t3-code",
   platforms: ["ios", "android"],
-  scheme: variant.scheme,
+  scheme: repoEnv.T3CODE_MOBILE_SCHEME?.trim() ?? variant.scheme,
   version: "1.4.0",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
@@ -240,8 +245,11 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    // A private identity must never load updates from the upstream Expo project.
+    enabled:
+      repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0" &&
+      (!(privateAppId || isIosPersonalTeamBuild) || Boolean(privateProjectId)),
+    url: easProjectId ? `https://u.expo.dev/${easProjectId}` : undefined,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -252,16 +260,20 @@ const config: ExpoConfig = {
     // showcase capture build requires full screen (see infoPlist below).
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
-    // does not fall back to a personal team (which cannot sign app groups,
-    // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
-    associatedDomains: [
-      `applinks:${variant.relyingParty}`,
-      `webcredentials:${variant.relyingParty}`,
-    ],
+    // Official builds pin the T3 Tools team. Private builds select their own
+    // team explicitly or let the signing tool prompt for it.
+    appleTeamId:
+      repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ??
+      (privateAppId || isIosPersonalTeamBuild ? undefined : "ARK85ZXQ4Z"),
+    associatedDomains: repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS
+      ? repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS.split(",")
+          .map((domain) => domain.trim())
+          .filter(Boolean)
+      : privateAppId || isIosPersonalTeamBuild
+        ? []
+        : [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`],
     entitlements: {
-      "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
+      "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       NSAppTransportSecurity: {
@@ -290,7 +302,7 @@ const config: ExpoConfig = {
   },
   android: {
     icon: variant.assets.appIcon,
-    package: variant.androidPackage,
+    package: privateAppId ?? variant.androidPackage,
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
@@ -470,11 +482,11 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    },
+    eas: easProjectId ? { projectId: easProjectId } : {},
   },
-  owner: "pingdotgg",
+  owner:
+    repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ??
+    (privateAppId || isIosPersonalTeamBuild ? undefined : "pingdotgg"),
 };
 
 export default config;

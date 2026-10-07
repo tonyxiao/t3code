@@ -121,6 +121,37 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
+### Private distribution
+
+The `private` build profile produces a self-contained APK or ad hoc iOS build named
+**T3 Code**, using `com.txlforge.t3code` and the `txlforge-t3` URL scheme. OTA updates
+are disabled. Register iOS devices before building; adding devices requires a new
+provisioning profile or a re-signed build.
+
+The profile targets `@txlforge/t3-code-mobile`. To use another Expo project, update
+`T3CODE_MOBILE_EAS_OWNER` and `T3CODE_MOBILE_EAS_PROJECT_ID` in the profile and the
+repository-root `.env.local`. Set `T3CODE_MOBILE_APPLE_TEAM_ID` in `.env.local` and
+the project's EAS `preview` environment once your Apple membership is active.
+For Android push, set the EAS file variable
+`T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to the Firebase configuration for
+`com.txlforge.t3code`. Keep signing keys and service-account credentials outside
+the repository. The FCM service-account credential belongs on the relay, not in
+the mobile bundle; see [Android notifications](../../docs/operations/android-notifications.md).
+
+From `apps/mobile`, run `eas build --profile private --platform android` or
+`eas build --profile private --platform ios`. EAS can provision signing credentials
+interactively. If you already have a keystore, upload it with
+`eas credentials:configure-build --profile private --platform android` rather
+than generating a different one. Keep a secure backup for future updates.
+
+For local native builds, set `APP_VARIANT=production`,
+`T3CODE_MOBILE_APP_ID=com.txlforge.t3code`, `T3CODE_MOBILE_SCHEME=txlforge-t3`,
+`T3CODE_MOBILE_SLUG=t3-code-mobile`, and `T3CODE_MOBILE_UPDATES_ENABLED=0` as well.
+`T3CODE_MOBILE_ASSOCIATED_DOMAINS` accepts comma-separated entitlement entries if
+you configure your own sign-in domains. Private identities omit upstream signing
+teams and associated domains by default. Native dependencies require rebuilding
+the binary; Expo Go cannot run this app.
+
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 
 The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
