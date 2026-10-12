@@ -1,3 +1,4 @@
+import { DEFAULT_SIDEBAR_FILTER_MODES } from "@t3tools/client-runtime/state/sidebar-filters";
 import { planPinnedMove } from "@t3tools/client-runtime/state/thread-sort";
 import {
   createPendingThreadOrder,
@@ -374,6 +375,69 @@ describe("getThreadListV2OrderedSection", () => {
 });
 
 describe("buildThreadListV2Items", () => {
+  it("shows no threads for None and intersects multiple environment inclusions with project exclusions", () => {
+    const second = EnvironmentId.make("environment-2");
+    const third = EnvironmentId.make("environment-3");
+    const threads = [
+      makeThread({ id: ThreadId.make("a"), title: "A" }),
+      makeThread({ id: ThreadId.make("b"), title: "B", environmentId: second }),
+      makeThread({ id: ThreadId.make("c"), title: "C", environmentId: third }),
+    ];
+    const base = {
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      filterModes: { ...DEFAULT_SIDEBAR_FILTER_MODES, environment: "include" as const },
+    };
+    expect(buildThreadListV2Items({ ...base, environmentIds: new Set() }).items).toHaveLength(0);
+    expect(
+      buildThreadListV2Items({ ...base, environmentIds: new Set([environmentId, second]) }).items,
+    ).toHaveLength(2);
+    expect(
+      buildThreadListV2Items({
+        ...base,
+        environmentIds: new Set([environmentId, second]),
+        projectRefs: [{ environmentId, projectId: ProjectId.make("project-1") }],
+      }).items.map((item) => item.thread.id),
+    ).toEqual(["b"]);
+  });
+
+  it("combines only-environment with except-project without excluding other copies of that project", () => {
+    const otherEnvironment = EnvironmentId.make("environment-2");
+    const otherProject = ProjectId.make("project-2");
+    const threads = [
+      makeThread({ id: ThreadId.make("excluded"), title: "Excluded" }),
+      makeThread({ id: ThreadId.make("visible"), title: "Visible", projectId: otherProject }),
+      makeThread({ id: ThreadId.make("remote"), title: "Remote", environmentId: otherEnvironment }),
+    ];
+    const input = {
+      threads,
+      environmentId,
+      projectRefs: [{ environmentId, projectId: ProjectId.make("project-1") }],
+      filterModes: {
+        ...DEFAULT_SIDEBAR_FILTER_MODES,
+        environment: "include" as const,
+        project: "exclude" as const,
+      },
+      searchQuery: "",
+      now: NOW,
+    };
+    expect(buildThreadListV2Items(input).items.map((item) => item.thread.id)).toEqual(["visible"]);
+    expect(
+      buildThreadListV2Items({ ...input, environmentId: null }).items.map((item) => item.thread.id),
+    ).toEqual(["remote", "visible"]);
+    expect(
+      buildThreadListV2Items({
+        ...input,
+        filterModes: { ...input.filterModes, environment: "exclude" },
+      }).items.map((item) => item.thread.id),
+    ).toEqual(["remote"]);
+    expect(
+      buildThreadListV2Items({ ...input, environmentId: null, projectRefs: null }).items,
+    ).toHaveLength(3);
+  });
+
   it("places a persisted settled thread in the settled shelf", () => {
     const thread = makeThread({
       id: ThreadId.make("linked-merged"),
@@ -1712,6 +1776,7 @@ describe("isThreadListV2ListItem", () => {
   it("narrows the v2 kinds and rejects the legacy discriminators", () => {
     expect(isThreadListV2ListItem({ type: "v2-thread" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-pending" })).toBe(true);
+    expect(isThreadListV2ListItem({ type: "v2-environment" })).toBe(false);
     expect(isThreadListV2ListItem({ type: "v2-snoozed-shelf" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "v2-settled-shelf" })).toBe(true);
     expect(isThreadListV2ListItem({ type: "thread" })).toBe(false);

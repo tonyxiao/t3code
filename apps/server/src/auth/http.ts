@@ -26,6 +26,7 @@ import type { AuthEnvironmentScope, DpopFailureReason } from "@t3tools/contracts
 import { parseAllowedOAuthScope } from "@t3tools/shared/oauthScope";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import { identity } from "effect/Function";
 import * as Layer from "effect/Layer";
@@ -171,22 +172,33 @@ export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, 
   });
 }
 
-const appendSessionCookie = (cookieName: string, token: string, expiresAt: DateTime.DateTime) =>
-  Effect.fromResult(
-    Cookies.set(Cookies.empty, cookieName, token, {
-      expires: DateTime.toDate(expiresAt),
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    }),
-  ).pipe(
-    Effect.catch(() => failEnvironmentInternal("browser_session_cookie_failed")),
-    Effect.flatMap((cookies) =>
-      HttpEffect.appendPreResponseHandler((_request, response) =>
-        Effect.succeed(HttpServerResponse.mergeCookies(response, cookies)),
+// Browsers cap persistent cookies at about 400 days. Renew while the client is
+// present without extending the underlying session's authorization.
+const browserCookieExpiry = (expiresAt: DateTime.DateTime, now: DateTime.DateTime) =>
+  DateTime.toDate(
+    DateTime.makeUnsafe(
+      Math.min(
+        expiresAt.epochMilliseconds,
+        now.epochMilliseconds + Duration.toMillis(Duration.days(398)),
       ),
     ),
   );
+
+const appendSessionCookie = (cookieName: string, token: string, expiresAt: DateTime.DateTime) =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    const cookies = yield* Effect.fromResult(
+      Cookies.set(Cookies.empty, cookieName, token, {
+        expires: browserCookieExpiry(expiresAt, now),
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+      }),
+    ).pipe(Effect.catch(() => failEnvironmentInternal("browser_session_cookie_failed")));
+    yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+      Effect.succeed(HttpServerResponse.mergeCookies(response, cookies)),
+    );
+  });
 
 export const requireEnvironmentScope = Effect.fn("environment.auth.requireScope")(function* (
   scope: AuthEnvironmentScope,
@@ -248,7 +260,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
               sessions.legacyCookieName,
             );
             if (
-              credential?.source === "legacy-cookie" &&
+              (credential?.source === "legacy-cookie" || credential?.source === "cookie") &&
               result.authenticated &&
               result.sessionMethod === "browser-session-cookie" &&
               result.expiresAt
@@ -274,9 +286,10 @@ export const authHttpApiLayer = HttpApiBuilder.group(
               deriveAuthClientMetadata({ request }),
             );
             const cookieName = result.cookieName ?? sessions.cookieName;
+            const now = yield* DateTime.now;
             const selectedCookie = yield* Effect.fromResult(
               Cookies.set(Cookies.empty, cookieName, result.sessionToken, {
-                expires: DateTime.toDate(result.response.expiresAt),
+                expires: browserCookieExpiry(result.response.expiresAt, now),
                 httpOnly: true,
                 path: "/",
                 sameSite: "lax",

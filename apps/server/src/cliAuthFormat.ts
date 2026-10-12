@@ -124,7 +124,7 @@ export function formatIssuedSession(
         scopes: session.scopes,
         subject: session.subject,
         client: session.client,
-        expiresAt: toIsoString(session.expiresAt),
+        expiresAt: session.expiresAt ? toIsoString(session.expiresAt) : null,
       },
       null,
       2,
@@ -138,7 +138,7 @@ export function formatIssuedSession(
       `Token: ${session.token}`,
       `Subject: ${session.subject}`,
       `Client: ${formatClientMetadata(session.client)}`,
-      `Expires at: ${toIsoString(session.expiresAt)}`,
+      `Expires at: ${session.expiresAt ? toIsoString(session.expiresAt) : "until revoked"}`,
     ].join(newline) + newline
   );
 }
@@ -159,7 +159,7 @@ export function formatSessionList(
         client: session.client,
         connected: session.connected,
         issuedAt: toIsoString(session.issuedAt),
-        expiresAt: toIsoString(session.expiresAt),
+        expiresAt: session.expiresAt ? toIsoString(session.expiresAt) : null,
         lastConnectedAt: session.lastConnectedAt ? toIsoString(session.lastConnectedAt) : null,
       })),
       null,
@@ -184,7 +184,7 @@ export function formatSessionList(
           `  last connected: ${
             session.lastConnectedAt ? toIsoString(session.lastConnectedAt) : "never"
           }`,
-          `  expires: ${toIsoString(session.expiresAt)}`,
+          `  expires: ${session.expiresAt ? toIsoString(session.expiresAt) : "until revoked"}`,
         ].join(newline),
       )
       .join(`${newline}${newline}`) + newline

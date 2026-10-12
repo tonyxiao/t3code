@@ -321,6 +321,12 @@ export const make = Effect.gen(function* () {
         Effect.provideService(HttpClient.HttpClient, httpClient),
         Effect.withSpan("environment.authorization.accessToken.exchange"),
       );
+      if (access.expires_in === undefined) {
+        return yield* new ConnectionBlockedError({
+          reason: "configuration",
+          detail: "The environment did not provide an expiry for its short-lived access token.",
+        });
+      }
       const issuedAt = yield* Clock.currentTimeMillis;
       return new TokenStore.RemoteDpopAccessToken({
         environmentId: descriptor.environmentId,

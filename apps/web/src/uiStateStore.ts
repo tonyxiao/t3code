@@ -1,3 +1,10 @@
+import {
+  DEFAULT_SIDEBAR_FILTER_MODES,
+  sanitizeSidebarFilterModes,
+  type SidebarFilterModes,
+  type SidebarFilterKind,
+  type SidebarFilterMode,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
@@ -5,7 +12,14 @@ import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
-export type SidebarThreadStatusFilter = "all" | "active" | "snoozed" | "settled";
+export type SidebarThreadStatusFilter =
+  | "all"
+  | "active"
+  | "pinned"
+  | "unpinned"
+  | "none"
+  | "snoozed"
+  | "settled";
 // Version 1 stored card visibility, not folder expansion.
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
 const LEGACY_PERSISTED_STATE_KEYS = [
@@ -29,6 +43,11 @@ export interface PersistedUiState {
   expandedProjectCwds?: string[];
   projectOrderCwds?: string[];
   defaultAdvertisedEndpointKey?: string | null;
+  sidebarFilterModes?: SidebarFilterModes;
+  sidebarFilterSelectionVersion?: number;
+  sidebarEnvironmentScopeIds?: string[];
+  sidebarProjectScopeKeys?: string[];
+  // Read only for migration from the single-selection sidebar.
   sidebarEnvironmentScopeId?: string | null;
   sidebarProjectScopeKey?: string | null;
   sidebarThreadSortOrder?: string;
@@ -41,12 +60,10 @@ export interface PersistedUiState {
 export interface UiProjectState {
   projectExpandedById: Record<string, boolean>;
   projectOrder: string[];
-  // Environment the sidebar list is scoped to, or null for all environments.
-  sidebarEnvironmentScopeId: string | null;
-  // Logical project key the sidebar list is scoped to, or null for "all
-  // projects". Lives here so routes that unmount the sidebar (Settings)
-  // cannot reset the filter.
-  sidebarProjectScopeKey: string | null;
+  // Empty selections show all. These persist across routes and app restarts.
+  sidebarFilterModes: SidebarFilterModes;
+  sidebarEnvironmentScopeIds: string[];
+  sidebarProjectScopeKeys: string[];
   sidebarThreadSortOrder: SidebarThreadSortOrder;
   sidebarThreadStatusFilter: SidebarThreadStatusFilter;
 }
@@ -70,8 +87,9 @@ export interface UiState
 const initialState: UiState = {
   projectExpandedById: {},
   projectOrder: [],
-  sidebarEnvironmentScopeId: null,
-  sidebarProjectScopeKey: null,
+  sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+  sidebarEnvironmentScopeIds: [],
+  sidebarProjectScopeKeys: [],
   sidebarThreadSortOrder: "created_at",
   sidebarThreadStatusFilter: "all",
   threadLastVisitedAtById: {},
@@ -119,7 +137,14 @@ function sanitizeSidebarThreadSortOrder(value: unknown): SidebarThreadSortOrder 
 }
 
 function sanitizeSidebarThreadStatusFilter(value: unknown): SidebarThreadStatusFilter {
-  return value === "active" || value === "snoozed" || value === "settled" ? value : "all";
+  return value === "active" ||
+    value === "pinned" ||
+    value === "unpinned" ||
+    value === "none" ||
+    value === "snoozed" ||
+    value === "settled"
+    ? value
+    : "all";
 }
 
 function sanitizeTimestampRecord(value: unknown): Record<string, string> {
@@ -165,6 +190,22 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
       ? sanitizeStringArray(parsed.projectOrderCwds).map(legacyProjectCwdPreferenceKey)
       : sanitizeStringArray(parsed.projectOrder);
 
+  const environmentIds = Array.isArray(parsed.sidebarEnvironmentScopeIds)
+    ? sanitizeStringArray(parsed.sidebarEnvironmentScopeIds)
+    : sanitizeStringArray([parsed.sidebarEnvironmentScopeId]);
+  const projectKeys = Array.isArray(parsed.sidebarProjectScopeKeys)
+    ? sanitizeStringArray(parsed.sidebarProjectScopeKeys)
+    : sanitizeStringArray([parsed.sidebarProjectScopeKey]);
+  const storedModes = sanitizeSidebarFilterModes(parsed.sidebarFilterModes);
+  const modes = {
+    ...storedModes,
+    ...(parsed.sidebarFilterSelectionVersion !== 1 && environmentIds.length === 0
+      ? { environment: "exclude" as const }
+      : {}),
+    ...(parsed.sidebarFilterSelectionVersion !== 1 && projectKeys.length === 0
+      ? { project: "exclude" as const }
+      : {}),
+  };
   return {
     projectExpandedById,
     projectOrder,
@@ -174,10 +215,16 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
         ? sanitizePersistedThreadChangedFilesExpanded(parsed.threadChangedFilesExpandedById)
         : {},
     defaultAdvertisedEndpointKey: sanitizeOptionalKey(parsed.defaultAdvertisedEndpointKey),
-    sidebarEnvironmentScopeId: sanitizeOptionalKey(parsed.sidebarEnvironmentScopeId),
-    sidebarProjectScopeKey: sanitizeOptionalKey(parsed.sidebarProjectScopeKey),
+    sidebarFilterModes: modes,
+    sidebarEnvironmentScopeIds: environmentIds,
+    sidebarProjectScopeKeys: projectKeys,
     sidebarThreadSortOrder: sanitizeSidebarThreadSortOrder(parsed.sidebarThreadSortOrder),
-    sidebarThreadStatusFilter: sanitizeSidebarThreadStatusFilter(parsed.sidebarThreadStatusFilter),
+    sidebarThreadStatusFilter:
+      parsed.sidebarFilterSelectionVersion !== 1 &&
+      parsed.sidebarThreadStatusFilter === "pinned" &&
+      modes.pinned === "exclude"
+        ? "unpinned"
+        : sanitizeSidebarThreadStatusFilter(parsed.sidebarThreadStatusFilter),
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,
@@ -251,8 +298,10 @@ export function persistState(state: UiState): void {
         projectOrder: state.projectOrder,
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
-        sidebarEnvironmentScopeId: state.sidebarEnvironmentScopeId,
-        sidebarProjectScopeKey: state.sidebarProjectScopeKey,
+        sidebarFilterModes: state.sidebarFilterModes,
+        sidebarFilterSelectionVersion: 1,
+        sidebarEnvironmentScopeIds: state.sidebarEnvironmentScopeIds,
+        sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
         sidebarThreadSortOrder: state.sidebarThreadSortOrder,
         sidebarThreadStatusFilter: state.sidebarThreadStatusFilter,
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
@@ -355,28 +404,52 @@ export function setDefaultAdvertisedEndpointKey(state: UiState, key: string | nu
   };
 }
 
-export function setSidebarProjectScopeKey(state: UiState, projectKey: string | null): UiState {
-  const nextKey = sanitizeOptionalKey(projectKey);
-  if (state.sidebarProjectScopeKey === nextKey) {
+export function toggleSidebarScopeSelection(keys: readonly string[], key: string): string[] {
+  return keys.includes(key) ? keys.filter((selected) => selected !== key) : [...keys, key];
+}
+
+function sameSelection(current: readonly string[], next: readonly string[]): boolean {
+  return current.length === next.length && current.every((key, index) => key === next[index]);
+}
+
+export function setSidebarFilterMode(
+  state: UiState,
+  kind: SidebarFilterKind,
+  mode: SidebarFilterMode,
+): UiState {
+  return state.sidebarFilterModes[kind] === mode
+    ? state
+    : {
+        ...state,
+        sidebarFilterModes: { ...state.sidebarFilterModes, [kind]: mode },
+      };
+}
+
+export function setSidebarProjectScopeKeys(
+  state: UiState,
+  projectKeys: readonly string[],
+): UiState {
+  const nextKeys = sanitizeStringArray(projectKeys);
+  if (sameSelection(state.sidebarProjectScopeKeys, nextKeys)) {
     return state;
   }
   return {
     ...state,
-    sidebarProjectScopeKey: nextKey,
+    sidebarProjectScopeKeys: nextKeys,
   };
 }
 
-export function setSidebarEnvironmentScopeId(
+export function setSidebarEnvironmentScopeIds(
   state: UiState,
-  environmentId: string | null,
+  environmentIds: readonly string[],
 ): UiState {
-  const nextId = sanitizeOptionalKey(environmentId);
-  if (state.sidebarEnvironmentScopeId === nextId) {
+  const nextIds = sanitizeStringArray(environmentIds);
+  if (sameSelection(state.sidebarEnvironmentScopeIds, nextIds)) {
     return state;
   }
   return {
     ...state,
-    sidebarEnvironmentScopeId: nextId,
+    sidebarEnvironmentScopeIds: nextIds,
   };
 }
 
@@ -491,8 +564,9 @@ interface UiStateStore extends UiState {
   markThreadUnread: (threadId: string, latestTurnCompletedAt: string | null | undefined) => void;
   setThreadChangedFilesExpanded: (threadId: string, turnId: string, expanded: boolean) => void;
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
-  setSidebarEnvironmentScopeId: (environmentId: string | null) => void;
-  setSidebarProjectScopeKey: (projectKey: string | null) => void;
+  setSidebarFilterMode: (kind: SidebarFilterKind, mode: SidebarFilterMode) => void;
+  setSidebarEnvironmentScopeIds: (environmentIds: readonly string[]) => void;
+  setSidebarProjectScopeKeys: (projectKeys: readonly string[]) => void;
   setSidebarThreadSortOrder: (sortOrder: SidebarThreadSortOrder) => void;
   setSidebarThreadStatusFilter: (filter: SidebarThreadStatusFilter) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
@@ -514,10 +588,11 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     set((state) => setThreadChangedFilesExpanded(state, threadId, turnId, expanded)),
   setDefaultAdvertisedEndpointKey: (key) =>
     set((state) => setDefaultAdvertisedEndpointKey(state, key)),
-  setSidebarEnvironmentScopeId: (environmentId) =>
-    set((state) => setSidebarEnvironmentScopeId(state, environmentId)),
-  setSidebarProjectScopeKey: (projectKey) =>
-    set((state) => setSidebarProjectScopeKey(state, projectKey)),
+  setSidebarFilterMode: (kind, mode) => set((state) => setSidebarFilterMode(state, kind, mode)),
+  setSidebarEnvironmentScopeIds: (environmentIds) =>
+    set((state) => setSidebarEnvironmentScopeIds(state, environmentIds)),
+  setSidebarProjectScopeKeys: (projectKeys) =>
+    set((state) => setSidebarProjectScopeKeys(state, projectKeys)),
   setSidebarThreadSortOrder: (sortOrder) =>
     set((state) => setSidebarThreadSortOrder(state, sortOrder)),
   setSidebarThreadStatusFilter: (filter) =>

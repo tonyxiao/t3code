@@ -37,6 +37,7 @@ import { useRemoteOpenState, type RemoteOpenMode } from "../../remoteOpen";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { onRequestThreadRename } from "~/threadRenameBus";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -228,6 +229,18 @@ export const ChatHeader = memo(function ChatHeader({
     renameCommittedRef.current = false;
     setRenaming({ threadId: activeThreadId, title: activeThreadTitle });
   }, [activeThreadId, activeThreadTitle]);
+  useEffect(
+    () =>
+      onRequestThreadRename((threadRef) => {
+        if (
+          threadRef.environmentId === activeThreadEnvironmentId &&
+          threadRef.threadId === activeThreadId
+        ) {
+          startRename();
+        }
+      }),
+    [activeThreadEnvironmentId, activeThreadId, startRename],
+  );
   const commitRename = useCallback(
     (title: string) => {
       setRenaming(null);
@@ -492,9 +505,11 @@ export const ChatHeader = memo(function ChatHeader({
         data-chat-header-actions
         className={cn(
           "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
-          // Reserve two panel toggles plus their 4px gaps and 1px edge inset.
-          // The page header adds 8px more right padding at sm.
-          rightPanelOpen ? "pr-0" : "pr-18.25 sm:pr-14.25",
+          // Reserve two panel toggles (32px, 28px at sm) with their 4px gap and 1px edge inset,
+          // plus the same gap the actions keep between themselves (gap-2, gap-3 at @3xl) so the
+          // terminal toggle does not sit against the last action. The page header adds 8px more
+          // right padding at sm.
+          rightPanelOpen ? "pr-0" : "pr-19.25 sm:pr-15.25 @3xl/header-actions:pr-16.25",
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >

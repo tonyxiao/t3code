@@ -4,6 +4,7 @@ import {
   localSnoozeDate,
   localSnoozeTime,
   resolveCustomSnooze,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { Button } from "./ui/button";
@@ -56,7 +57,8 @@ export function CustomSnoozeDialogHost() {
 function CustomSnoozeDialog() {
   const id = useId();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
-  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("date");
+  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(initial);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [time, setTime] = useState(localSnoozeTime(initial));
@@ -64,7 +66,12 @@ function CustomSnoozeDialog() {
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [error, setError] = useState<string | null>(null);
   const input: CustomSnoozeInput =
-    mode === "date" ? { mode, date: localSnoozeDate(date), time } : { mode, amount, unit };
+    mode === "date"
+      ? { mode, date: localSnoozeDate(date), time }
+      : mode === "text"
+        ? { mode, text }
+        : { mode, amount, unit };
+  const preview = mode === "text" ? resolveNaturalSnooze(text, new Date()) : null;
   return (
     <Dialog
       open
@@ -80,9 +87,11 @@ function CustomSnoozeDialog() {
             const snoozedUntil = resolveCustomSnooze(input, new Date());
             if (!snoozedUntil) {
               setError(
-                mode === "date"
-                  ? "Choose a valid date and time in the future."
-                  : "Enter a positive duration.",
+                mode === "text"
+                  ? "Try 1w, 30days, or tomorrow at 9am."
+                  : mode === "date"
+                    ? "Choose a valid date and time in the future."
+                    : "Enter a positive duration.",
               );
               return;
             }
@@ -101,15 +110,36 @@ function CustomSnoozeDialog() {
                 value={[mode]}
                 onValueChange={(next) => {
                   const value = next[0];
-                  if (value === "date" || value === "duration") setMode(value);
+                  if (value === "text" || value === "date" || value === "duration") setMode(value);
                   setError(null);
                 }}
               >
+                <Toggle value="text">Type a time</Toggle>
                 <Toggle value="date">Date and time</Toggle>
                 <Toggle value="duration">Duration</Toggle>
               </ToggleGroup>
               <div className="flex flex-col gap-4">
-                {mode === "date" ? (
+                {mode === "text" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={`${id}-text`}>Snooze until</Label>
+                    <Input
+                      nativeInput
+                      id={`${id}-text`}
+                      autoFocus
+                      placeholder="1w, 30days, tomorrow at 9am"
+                      value={text}
+                      onChange={(event) => {
+                        setText(event.target.value);
+                        setError(null);
+                      }}
+                    />
+                    {preview ? (
+                      <span className="text-muted-foreground text-xs">
+                        Returns {new Date(preview).toLocaleString()}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : mode === "date" ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="flex min-w-0 flex-col gap-1.5">
                       <Label htmlFor={`${id}-date`}>Date</Label>

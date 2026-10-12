@@ -3291,13 +3291,16 @@ export const validateWindowsPackagedPayload = Effect.fn(
         ),
       );
     }
-    const requiredMembers = [
-      `${stem}/t3`,
-      `${stem}/client`,
-      `${stem}/node_modules`,
-      `${stem}/node_modules/node-pty/build/Release/pty.node`,
-    ];
+    const requiredMembers = [`${stem}/t3`, `${stem}/client`, `${stem}/node_modules`];
     const missingMembers = requiredMembers.filter((member) => !members.includes(member));
+    // node-pty can load a source build or the prebuild for the WSL target.
+    const ptyCandidates = [
+      `${stem}/node_modules/node-pty/build/Release/pty.node`,
+      `${stem}/node_modules/node-pty/prebuilds/linux-${input.targetArch}/pty.node`,
+    ];
+    if (!ptyCandidates.some((member) => members.includes(member))) {
+      missingMembers.push(...ptyCandidates);
+    }
     if (missingMembers.length > 0) {
       return yield* new WindowsPackagedPayloadValidationError({
         reason: "wsl-runtime-invalid",
@@ -3865,14 +3868,32 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
 
   const copiedArtifacts: string[] = [];
-  for (const entry of stageEntries) {
-    const from = path.join(stageDistDir, entry);
-    const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat || stat.type !== "File") continue;
+  if (options.platform === "mac" && options.target === "dir") {
+    const appName = `${resolveDesktopProductName(appVersion)}.app`;
+    for (const entry of stageEntries) {
+      const entryPath = path.join(stageDistDir, entry);
+      const stat = yield* fs.stat(entryPath).pipe(Effect.orElseSucceed(() => null));
+      if (!stat || stat.type !== "Directory") continue;
 
-    const to = path.join(options.outputDir, entry);
-    yield* fs.copyFile(from, to);
-    copiedArtifacts.push(to);
+      const from = path.join(stageDistDir, entry, appName);
+      if (!(yield* fs.exists(from))) continue;
+
+      const to = path.join(options.outputDir, appName);
+      yield* fs.remove(to, { recursive: true, force: true });
+      yield* fs.copy(from, to);
+      copiedArtifacts.push(to);
+      break;
+    }
+  } else {
+    for (const entry of stageEntries) {
+      const from = path.join(stageDistDir, entry);
+      const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
+      if (!stat || stat.type !== "File") continue;
+
+      const to = path.join(options.outputDir, entry);
+      yield* fs.copyFile(from, to);
+      copiedArtifacts.push(to);
+    }
   }
 
   if (copiedArtifacts.length === 0) {

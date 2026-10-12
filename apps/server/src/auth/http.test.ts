@@ -128,6 +128,18 @@ it.effect("sets the selected browser session cookies through the HTTP route", ()
           expect(restrictedCookies).toHaveLength(1);
           expect(restrictedCookies[0]).toMatch(/^t3_session_/);
           expect(restrictedCookies[0]).not.toContain("t3_dev_session_");
+          expect(restrictedCookies[0]).not.toContain("9999");
+          const pairedCookieHeader = restrictedCookies[0]?.split(";", 1)[0] ?? "";
+          const reconnectResponse = await environmentA.handler(
+            new Request("http://127.0.0.1/api/auth/session", {
+              headers: { cookie: pairedCookieHeader },
+            }),
+            requestContext,
+          );
+          expect(reconnectResponse.status).toBe(200);
+          expect(reconnectResponse.headers.getSetCookie()).toContainEqual(
+            expect.stringContaining(pairedCookieHeader),
+          );
         }),
       ([environmentA, environmentB]) =>
         Effect.promise(() => Promise.all([environmentA.dispose(), environmentB.dispose()])),

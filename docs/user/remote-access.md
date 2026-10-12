@@ -56,8 +56,14 @@ in the receiving app. Connection settings are under **Settings → Connections**
 on web and desktop and **Settings → Environments** on mobile. A loopback address
 such as `127.0.0.1` reaches only the device opening the link.
 
-Pairing authorizes that device for future connections. Use a fresh one-time link
-for each new device; you do not need the original token to reconnect. Links
+You can revoke a paired device under **Settings → Connections →
+Authorized clients**. This list shows connected clients by default; choose **Show
+disconnected clients** to find and revoke a device that is offline. Use a fresh
+one-time link for each new device; you do not need the original token to
+reconnect. Newly paired app credentials expire after ten years;
+previously issued credentials still follow their existing expiry. A
+browser that has already discarded its cookie must pair again. T3 Code renews a
+retained cookie when the browser checks its session. Links
 created in Settings can only be copied from the client that created them while
 its Connections page stays open. If you leave or reload that page, create
 another link to share.
@@ -156,7 +162,8 @@ expires.
 To remove an environment from T3 Connect, open your account menu's **T3 Connect**
 page, or **Settings → T3 Connect** on mobile, and choose **Deregister**. This
 revokes its cloud access and frees its host space even when the environment is
-offline or has been wiped.
+offline or has been wiped. Removing an environment from a device's connection
+settings only forgets it on that device; it stays registered to your account.
 
 When idle tunnel cleanup is enabled, T3 Connect removes a linked environment's
 tunnel after it stays offline for several minutes. The environment stays linked

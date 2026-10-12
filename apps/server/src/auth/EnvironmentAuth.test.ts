@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AuthAdministrativeScopes } from "@t3tools/contracts";
+import { AuthAccessTokenResult, AuthAdministrativeScopes } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,6 +21,9 @@ import * as SessionStore from "./SessionStore.ts";
 const TEST_SERVER_PORT = 13_773;
 const isPairingCredentialIssueError = Schema.is(PairingGrantStore.PairingCredentialIssueError);
 const isPersistenceSqlError = Schema.is(PersistenceErrors.PersistenceSqlError);
+const decodeReleasedMobileAccessToken = Schema.decodeUnknownEffect(
+  Schema.Struct({ ...AuthAccessTokenResult.fields, expires_in: Schema.Number }),
+);
 
 const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Service"]>) =>
   Layer.effect(
@@ -336,6 +339,30 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         "relay:read",
       ]);
       expect(verified.subject).toBe("one-time-token");
+    }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+  );
+
+  it.effect("keeps a directly paired client with a custom subject until revoked", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const sessions = yield* SessionStore.SessionStore;
+      const pairing = yield* serverAuth.createPairingLink({ subject: "custom-device" });
+      const access = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
+        pairing.credential,
+        undefined,
+        requestMetadata,
+      );
+      const paired = yield* sessions.verify(access.access_token);
+
+      expect(paired.subject).toBe("custom-device");
+      expect(paired.expiresAt).toBeDefined();
+      // Released mobile clients still require expires_in in the token response.
+      yield* decodeReleasedMobileAccessToken(access);
+      expect(access.expires_in).toBe(10 * 365 * 24 * 60 * 60);
+      expect(yield* sessions.revoke(paired.sessionId)).toBe(true);
+      expect((yield* Effect.flip(sessions.verify(access.access_token)))._tag).toBe(
+        "SessionTokenRevokedError",
+      );
     }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
   );
 

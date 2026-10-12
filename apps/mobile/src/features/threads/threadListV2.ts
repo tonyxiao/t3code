@@ -1,3 +1,7 @@
+import {
+  matchesSidebarFilter,
+  type SidebarFilterModes,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import {
   canSnooze,
@@ -14,6 +18,7 @@ import {
   sortActiveThreadsByOrderKey,
   resolveSettledThreadTimestamp,
   sortPinnedThreadsByOrderKey,
+  sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
@@ -303,7 +308,7 @@ export function isThreadListV2ListItem(value: {
   );
 }
 
-/** Recycled-list equality for the flat v2 list (Home + iPad sidebar).
+/** Recycled-list equality for the v2 list (Home + iPad sidebar).
     Item objects are rebuilt on every minute tick and every partition run;
     without this the lists would consider every mounted row changed and
     re-render all of them (each carrying a swipeable + a PR subscription).
@@ -494,6 +499,8 @@ export function buildThreadListV2ListItems(input: {
  * the settled recency tail, matching the web v2 list.
  */
 export function buildThreadListV2Items(input: {
+  readonly environmentIds?: ReadonlySet<EnvironmentId>;
+  readonly filterModes?: SidebarFilterModes;
   readonly pendingOrder?: PendingThreadOrder | null;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly environmentId: EnvironmentId | null;
@@ -550,8 +557,23 @@ export function buildThreadListV2Items(input: {
   let nextSnoozeWakeAt: string | null = null;
   for (const thread of input.threads) {
     // Callers pass live shells. The server stamps settledOverride for the tail.
-    if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
-    if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
+    if (
+      !matchesSidebarFilter(
+        input.environmentIds
+          ? input.environmentIds.has(thread.environmentId)
+          : input.environmentId === null
+            ? null
+            : thread.environmentId === input.environmentId,
+        input.filterModes?.environment,
+      )
+    )
+      continue;
+    if (
+      !matchesSidebarFilter(
+        projectKeys?.has(`${thread.environmentId}:${thread.projectId}`) ?? null,
+        input.filterModes?.project,
+      )
+    ) {
       continue;
     }
     if (
@@ -606,11 +628,7 @@ export function buildThreadListV2Items(input: {
       : orderedSnoozed.filter(
           (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
         );
-  const orderedSettled = [...settled].sort(
-    (left, right) =>
-      parseTimestampMs(resolveSettledThreadTimestamp(right) ?? "") -
-      parseTimestampMs(resolveSettledThreadTimestamp(left) ?? ""),
-  );
+  const orderedSettled = sortSettledThreads(settled);
   const settledLimit = input.settledLimit ?? Number.POSITIVE_INFINITY;
   const pagedSettled =
     orderedSettled.length > settledLimit ? orderedSettled.slice(0, settledLimit) : orderedSettled;

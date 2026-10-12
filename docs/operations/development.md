@@ -21,6 +21,13 @@ Use `vp run dev` for server and web, or `vp run dev:desktop` for the Electron cl
 `dev:server` and `dev:web` start those processes separately.
 See the [mobile README](../../apps/mobile/README.md) for native builds and Metro.
 
+To use Vite's UI with the production desktop app's connections, run only `dev:web` and point
+its `--port` at the desktop app's existing backend port. Then set **Settings → General → Desktop UI**
+to the Vite URL. The desktop app reloads its renderer and keeps its production data and backend.
+The sidebar footer can switch between built-in and the last configured local UI. **View → Use
+Built-in UI** restores the bundled renderer if Vite is unavailable. Do not start a second server
+against `~/.t3/userdata`.
+
 Flags go directly after the task name, for example `vp run dev --home-dir /tmp/t3code-dev`.
 Add `--browser` to open a browser automatically.
 
@@ -138,6 +145,9 @@ vp run dist:desktop:dmg
 vp run dist:desktop:linux
 vp run dist:desktop:win
 ```
+
+On macOS, `vp run dist:desktop:app` writes the unpacked `.app` to `build/`. Quit a
+running copy before rebuilding it.
 
 DMGs default to the host architecture. Use `--arch` to choose another target and `--keep-stage`
 to retain packaging files for inspection. Run `vp run dist:desktop:artifact --help` for other

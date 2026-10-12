@@ -13,6 +13,22 @@ an existing worktree, use **New thread in this worktree** from the branch toolba
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
+### Start without a project
+
+A thread does not need a project. To start one without a project, click **or
+start without a project** under a new thread's heading, pick **No project** from
+the project menu in that heading or from **New thread in...** in the command
+palette, or press `mod+alt+n`. On mobile, pick **No project** from the project
+list. To move a draft into a project, pick the project in the heading.
+
+Each thread without a project works in its own folder under `~/.t3/scratch` (the
+`scratch` folder of your T3 data directory), named after its date, the first words
+of its first message, and a short id, like
+`2026-09-25-convert-these-pngs-to-webp-a1b2c3d4`. Deleting a thread keeps its
+folder, so the files the agent wrote stay until you delete them. Branch, worktree, and diff controls stay hidden because
+these folders are not Git repositories. This is unavailable when the data
+directory itself sits inside a Git checkout.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
@@ -106,6 +122,16 @@ If dragging is unavailable for one environment, update the T3 Code server runnin
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
+### Fold working threads (beta)
+
+On web and desktop, turn on **Settings → General → Working section (beta)** to move threads that
+are working or monitoring into a collapsed **Working** section at the bottom of the sidebar. A
+thread returns to the active list when it finishes, fails, or needs an approval or
+answer. Pinned threads stay in the pinned section.
+
+The active list keeps your chosen sort order, including **Last action time**. You cannot drag to
+reorder it while the Working section is on.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list
@@ -149,9 +175,20 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
+Use the thread list's environment and project filters to focus your work. **All** starts with
+every entry checked. Uncheck entries to hide them, or use a row's **Only** shortcut to show just
+that entry. On mobile, these shortcuts are in the **Only…** submenu. Selecting All restores every
+entry; unchecking every entry shows no matches. Projects that exist on several computers have
+individual environment rows on web and desktop, plus a project-wide Only shortcut.
+
+Active filters combine, so a thread must match each one. The pin filter works the same way:
+**Pinned** and **Unpinned** are both checked by default. Uncheck either category to hide it, or
+choose Only to show that category.
+
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and
-includes your messages and final agent responses.
+includes your messages and final agent responses. While viewing a thread, search its
+actions there too, including snooze, title regeneration, and copy options.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -168,7 +205,8 @@ finishes; the call's own result shows its status.
 
 ## Snooze until later
 
-Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
-local time zone, or a duration in minutes, hours, or days. Durations start when
+Choose **Snooze → Custom…** from a thread's menu to type a time such as `1w`,
+`30days`, or `tomorrow at 9am`. You can also pick a date and time in your local
+time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.

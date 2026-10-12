@@ -5,11 +5,13 @@ import {
   DateTimePicker,
   Host,
   FilledTonalIconButton,
+  OutlinedTextField,
   Row,
   Shape,
   Surface,
   Text,
   TextButton,
+  useNativeState,
 } from "@expo/ui/jetpack-compose";
 import {
   padding,
@@ -44,6 +46,7 @@ type Props = Parameters<typeof SharedCustomSnoozeSheet>[0];
 const roundedCorner = Shape.RoundedCorner;
 
 const modes = [
+  { value: "text", label: "Type a time" },
   { value: "date", label: "Date and time" },
   { value: "duration", label: "Duration" },
 ] as const;
@@ -69,7 +72,8 @@ export function CustomSnoozeSheet(props: Props) {
   const titleTypography = useScaledTextRole("title");
   const bodyTypography = useScaledTextRole("footnote");
   const { width: windowWidth } = useWindowDimensions();
-  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("date");
+  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
+  const text = useNativeState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [picker, setPicker] = useState<"date" | "time">("date");
   const [amount, setAmount] = useState(2);
@@ -77,13 +81,19 @@ export function CustomSnoozeSheet(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const submit = () => {
     const input: CustomSnoozeInput =
-      mode === "date"
-        ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
-        : { mode, amount: String(amount), unit };
+      mode === "text"
+        ? { mode, text: text.get() }
+        : mode === "date"
+          ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+          : { mode, amount: String(amount), unit };
     const snoozedUntil = resolveCustomSnooze(input, new Date());
     if (!snoozedUntil) {
       setError(
-        mode === "date" ? "Choose a date and time in the future." : "Enter a positive duration.",
+        mode === "text"
+          ? "Try 1w, 30days, or tomorrow at 9am."
+          : mode === "date"
+            ? "Choose a date and time in the future."
+            : "Enter a positive duration.",
       );
       return;
     }
@@ -170,7 +180,16 @@ export function CustomSnoozeSheet(props: Props) {
                   />
                 ) : null}
               </Column>
-              {mode === "date" ? (
+              {mode === "text" ? (
+                <Column modifiers={[fillMaxWidth(), padding(24, 8, 24, 16)]}>
+                  <OutlinedTextField value={text} singleLine onValueChange={() => setError(null)}>
+                    <OutlinedTextField.Label>
+                      <Text>Snooze until</Text>
+                    </OutlinedTextField.Label>
+                  </OutlinedTextField>
+                  <Text style={bodyTypography}>Try 1w, 30days, or tomorrow at 9am</Text>
+                </Column>
+              ) : mode === "date" ? (
                 <Column horizontalAlignment="center" modifiers={[fillMaxWidth()]}>
                   <SnoozeDateTimePicker
                     key={picker}

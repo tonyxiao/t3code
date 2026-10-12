@@ -44,7 +44,7 @@ export interface IssuedSession {
   readonly token: string;
   readonly method: ServerAuthSessionMethod;
   readonly client: AuthClientMetadata;
-  readonly expiresAt: DateTime.DateTime;
+  readonly expiresAt: DateTime.DateTime | null;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly proofKeyThumbprint?: string;
 }
@@ -374,6 +374,7 @@ export class SessionStore extends Context.Service<
       readonly scopes?: ReadonlyArray<AuthEnvironmentScope>;
       readonly client?: AuthClientMetadata;
       readonly proofKeyThumbprint?: string;
+      readonly persistUntilRevoked?: boolean;
       /**
        * Atomically revoke active sessions with the same subject and method
        * before storing this session.
@@ -422,6 +423,21 @@ export class SessionStore extends Context.Service<
 const SIGNING_SECRET_NAME = "server-signing-key";
 const DEFAULT_SESSION_TTL = Duration.days(30);
 const DEFAULT_WEBSOCKET_TOKEN_TTL = Duration.minutes(5);
+// Browser cookies need a finite expiry even when their paired session is
+// authorized until revoked. Paired device bearer credentials last ten years.
+const PAIRED_SESSION_EXPIRES_AT = Schema.decodeSync(Schema.DateTimeUtcFromString)(
+  "9999-12-31T23:59:59.000Z",
+);
+const isPairedBrowserSession = (subject: string, method: ServerAuthSessionMethod) =>
+  method === "browser-session-cookie" &&
+  (subject === "one-time-token" || subject === "administrative-bootstrap");
+const effectiveExpiry = (
+  subject: string,
+  method: ServerAuthSessionMethod,
+  expiresAt: DateTime.Utc | null,
+): DateTime.Utc | null => {
+  return isPairedBrowserSession(subject, method) ? PAIRED_SESSION_EXPIRES_AT : expiresAt;
+};
 const SessionClaims = Schema.Struct({
   v: Schema.Literal(1),
   kind: Schema.Literal("session"),
@@ -431,7 +447,7 @@ const SessionClaims = Schema.Struct({
   method: Schema.Literals(["browser-session-cookie", "bearer-access-token", "dpop-access-token"]),
   jkt: Schema.optionalKey(Schema.String),
   iat: Schema.Number,
-  exp: Schema.Number,
+  exp: Schema.optionalKey(Schema.Number),
 });
 type SessionClaims = typeof SessionClaims.Type;
 
@@ -545,7 +561,12 @@ export const make = Effect.gen(function* () {
       const connectedSessions = yield* Ref.get(connectedSessionsRef);
       const connected = connectedSessions.has(row.value.sessionId);
       const now = yield* DateTime.now;
-      if (!connected && row.value.expiresAt.epochMilliseconds <= now.epochMilliseconds) {
+      if (
+        !connected &&
+        !isPairedBrowserSession(row.value.subject, row.value.method) &&
+        row.value.expiresAt !== null &&
+        row.value.expiresAt.epochMilliseconds <= now.epochMilliseconds
+      ) {
         return Option.none<AuthClientSession>();
       }
       return Option.some(
@@ -556,7 +577,7 @@ export const make = Effect.gen(function* () {
           method: row.value.method,
           client: toClientMetadata(row.value.client),
           issuedAt: row.value.issuedAt,
-          expiresAt: row.value.expiresAt,
+          expiresAt: effectiveExpiry(row.value.subject, row.value.method, row.value.expiresAt),
           lastConnectedAt: row.value.lastConnectedAt,
           connected,
         }),
@@ -654,19 +675,27 @@ export const make = Effect.gen(function* () {
         ),
       );
       const issuedAt = yield* DateTime.now;
-      const expiresAt = DateTime.add(issuedAt, {
-        milliseconds: Duration.toMillis(input?.ttl ?? DEFAULT_SESSION_TTL),
-      });
+      const subject = input?.subject ?? "browser";
+      const method = input?.method ?? "browser-session-cookie";
+      const persistent = input?.persistUntilRevoked || isPairedBrowserSession(subject, method);
+      const expiresAt =
+        persistent && method === "bearer-access-token"
+          ? DateTime.add(issuedAt, { milliseconds: Duration.toMillis(Duration.days(10 * 365)) })
+          : persistent && method === "browser-session-cookie"
+            ? PAIRED_SESSION_EXPIRES_AT
+            : DateTime.add(issuedAt, {
+                milliseconds: Duration.toMillis(input?.ttl ?? DEFAULT_SESSION_TTL),
+              });
       const claims: SessionClaims = {
         v: 1,
         kind: "session",
         sid: sessionId,
-        sub: input?.subject ?? "browser",
+        sub: subject,
         scopes: input?.scopes ?? AuthStandardClientScopes,
-        method: input?.method ?? "browser-session-cookie",
+        method,
         ...(input?.proofKeyThumbprint ? { jkt: input.proofKeyThumbprint } : {}),
         iat: issuedAt.epochMilliseconds,
-        exp: expiresAt.epochMilliseconds,
+        ...(expiresAt === null ? {} : { exp: expiresAt.epochMilliseconds }),
       };
 
       const encodedPayload = yield* encodeClaims(claims).pipe(
@@ -766,10 +795,16 @@ export const make = Effect.gen(function* () {
           });
         }
         const observedAt = yield* DateTime.now;
-        if (row.value.expiresAt.epochMilliseconds <= observedAt.epochMilliseconds) {
+        const devExpiresAt = row.value.expiresAt;
+        if (devExpiresAt === null) {
+          return yield* new InvalidSessionTokenPayloadError({
+            cause: "Missing dev session expiry",
+          });
+        }
+        if (devExpiresAt.epochMilliseconds <= observedAt.epochMilliseconds) {
           return yield* new SessionTokenExpiredError({
             sessionId: devAuth.sessionId,
-            expiresAt: row.value.expiresAt,
+            expiresAt: devExpiresAt,
             observedAt,
           });
         }
@@ -778,7 +813,7 @@ export const make = Effect.gen(function* () {
           token,
           method: row.value.method,
           client: toClientMetadata(row.value.client),
-          expiresAt: row.value.expiresAt,
+          expiresAt: devExpiresAt,
           subject: row.value.subject,
           scopes: row.value.scopes,
         } satisfies VerifiedSession;
@@ -798,21 +833,13 @@ export const make = Effect.gen(function* () {
       );
 
       const observedAt = yield* DateTime.now;
-      const expiresAt = DateTime.make(claims.exp);
-      if (Option.isNone(expiresAt)) {
+      const expiresAt = claims.exp === undefined ? null : DateTime.make(claims.exp);
+      if (expiresAt !== null && Option.isNone(expiresAt)) {
         return yield* new InvalidSessionExpirationClaimError({
           sessionId: claims.sid,
-          expirationClaim: claims.exp,
+          expirationClaim: claims.exp ?? 0,
         });
       }
-      if (claims.exp <= observedAt.epochMilliseconds) {
-        return yield* new SessionTokenExpiredError({
-          sessionId: claims.sid,
-          expiresAt: expiresAt.value,
-          observedAt,
-        });
-      }
-
       const row = yield* authSessions
         .getById({ sessionId: claims.sid })
         .pipe(
@@ -829,14 +856,51 @@ export const make = Effect.gen(function* () {
           revokedAt: row.value.revokedAt,
         });
       }
+      if (
+        claims.exp === undefined &&
+        !(row.value.expiresAt === null && row.value.method === "bearer-access-token")
+      ) {
+        return yield* new InvalidSessionTokenPayloadError({ cause: "Missing session expiry" });
+      }
+      if (
+        claims.exp !== undefined &&
+        claims.exp <= observedAt.epochMilliseconds &&
+        !isPairedBrowserSession(row.value.subject, row.value.method)
+      ) {
+        return yield* new SessionTokenExpiredError({
+          sessionId: claims.sid,
+          expiresAt: DateTime.toUtc(DateTime.makeUnsafe(claims.exp)),
+          observedAt,
+        });
+      }
+      if (
+        row.value.expiresAt !== null &&
+        row.value.expiresAt.epochMilliseconds <= observedAt.epochMilliseconds &&
+        !isPairedBrowserSession(row.value.subject, row.value.method)
+      ) {
+        return yield* new SessionTokenExpiredError({
+          sessionId: claims.sid,
+          expiresAt: row.value.expiresAt,
+          observedAt,
+        });
+      }
+      // A signed claim cannot turn a non-paired session into a paired one.
+      if (claims.sub !== row.value.subject || claims.method !== row.value.method) {
+        return yield* new InvalidSessionTokenPayloadError({ cause: "Session claims mismatch" });
+      }
 
+      const sessionExpiresAt = effectiveExpiry(
+        row.value.subject,
+        row.value.method,
+        row.value.expiresAt,
+      );
       return {
         sessionId: claims.sid,
         token,
         method: claims.method,
         client: toClientMetadata(row.value.client),
-        expiresAt: expiresAt.value,
-        subject: claims.sub,
+        ...(sessionExpiresAt === null ? {} : { expiresAt: sessionExpiresAt }),
+        subject: row.value.subject,
         scopes: claims.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
       } satisfies VerifiedSession;
@@ -925,7 +989,11 @@ export const make = Effect.gen(function* () {
     if (Option.isNone(row)) {
       return yield* new UnknownWebSocketSessionError({ sessionId: claims.sid });
     }
-    if (row.value.expiresAt.epochMilliseconds <= observedAt.epochMilliseconds) {
+    if (
+      !isPairedBrowserSession(row.value.subject, row.value.method) &&
+      row.value.expiresAt !== null &&
+      row.value.expiresAt.epochMilliseconds <= observedAt.epochMilliseconds
+    ) {
       return yield* new WebSocketSessionExpiredError({
         sessionId: claims.sid,
         expiresAt: row.value.expiresAt,
@@ -939,12 +1007,17 @@ export const make = Effect.gen(function* () {
       });
     }
 
+    const sessionExpiresAt = effectiveExpiry(
+      row.value.subject,
+      row.value.method,
+      row.value.expiresAt,
+    );
     return {
       sessionId: row.value.sessionId,
       token,
       method: row.value.method,
       client: toClientMetadata(row.value.client),
-      expiresAt: row.value.expiresAt,
+      ...(sessionExpiresAt === null ? {} : { expiresAt: sessionExpiresAt }),
       subject: row.value.subject,
       scopes: row.value.scopes,
     } satisfies VerifiedSession;
@@ -967,7 +1040,7 @@ export const make = Effect.gen(function* () {
           method: row.method,
           client: toClientMetadata(row.client),
           issuedAt: row.issuedAt,
-          expiresAt: row.expiresAt,
+          expiresAt: effectiveExpiry(row.subject, row.method, row.expiresAt),
           lastConnectedAt: row.lastConnectedAt,
           connected: connectedSessions.has(row.sessionId),
         }),
