@@ -1,3 +1,5 @@
+import { SnoozeTimeResolveInput, SnoozeTimeResolveResult } from "./server.ts";
+import { TextGenerationError } from "./git.ts";
 import {
   ChatGptReconnectProfileInput,
   ChatGptReconnectProfile,
@@ -379,6 +381,7 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   // Server meta
+  serverResolveSnoozeTime: "server.resolveSnoozeTime",
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
@@ -479,6 +482,12 @@ const WsServerProbeRpc = Rpc.make(WS_METHODS.serverProbe, {
   payload: Schema.Struct({}),
   success: Schema.Struct({}),
   error: EnvironmentAuthorizationError,
+});
+
+const WsServerResolveSnoozeTimeRpc = Rpc.make(WS_METHODS.serverResolveSnoozeTime, {
+  payload: SnoozeTimeResolveInput,
+  success: SnoozeTimeResolveResult,
+  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
 });
 
 const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
@@ -1451,6 +1460,7 @@ const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTel
 
 export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
+  WsServerResolveSnoozeTimeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,

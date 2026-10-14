@@ -178,7 +178,7 @@ export function useThreadActionMenu(input: {
         if (action.startsWith("snooze:")) {
           const preset =
             action === "snooze:custom"
-              ? await requestCustomSnooze()
+              ? await requestCustomSnooze(threadRef.environmentId)
               : snoozePresets.find((candidate) => `snooze:${candidate.id}` === action);
           if (!preset) return;
           const result = await snoozeThread(threadRef, preset.snoozedUntil);

@@ -1,7 +1,12 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
+import type {
+  ChatAttachment,
+  ModelSelection,
+  ProviderInstanceId,
+  SnoozeTimeResolveInput,
+} from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
@@ -9,6 +14,11 @@ import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
+
+export interface SnoozeTimeGenerationInput extends SnoozeTimeResolveInput {
+  cwd: string;
+  modelSelection: ModelSelection;
+}
 
 export interface CommitMessageGenerationInput {
   cwd: string;
@@ -81,6 +91,11 @@ export interface ThreadTitleGenerationResult {
 export class TextGeneration extends Context.Service<
   TextGeneration,
   {
+    /** Supported by Codex for natural-language snooze resolution with Luna. */
+    readonly generateSnoozeTime?: (
+      input: SnoozeTimeGenerationInput,
+    ) => Effect.Effect<{ snoozedUntil: string | null }, TextGenerationError>;
+
     /**
      * Generate a commit message from staged change context.
      */

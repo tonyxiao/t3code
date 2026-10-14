@@ -49,6 +49,7 @@ import {
 import {
   resolveEnvironmentMachineKind,
   type EnvironmentMachineKind,
+  type EnvironmentId,
   type ProjectIconOverride,
   type ScopedThreadRef,
   type ThreadId,
@@ -494,6 +495,7 @@ function SidebarThreadTooltip({
  * actions while the menu is up).
  */
 function SnoozeMenuButton(props: {
+  environmentId: EnvironmentId;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSnooze: (preset: Pick<SnoozePreset, "snoozedUntil">) => void;
@@ -545,7 +547,7 @@ function SnoozeMenuButton(props: {
         <MenuItem
           onClick={async (event) => {
             event.stopPropagation();
-            const choice = await requestCustomSnooze();
+            const choice = await requestCustomSnooze(props.environmentId);
             if (choice) onSnooze(choice);
           }}
         >
@@ -2009,6 +2011,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       ) : null}
                       {showSnoozeButton ? (
                         <SnoozeMenuButton
+                          environmentId={thread.environmentId}
                           open={snoozeMenuOpen}
                           onOpenChange={setSnoozeMenuOpen}
                           onSnooze={handleSnoozePreset}
@@ -4219,10 +4222,11 @@ export default function Sidebar() {
                 ),
               );
         if (clicked._tag === "Failure") return;
-        if (clicked.value?.startsWith("snooze:") && canSnoozeSelection) {
+        const snoozeEnvironmentId = selectedThreads[0]?.environmentId;
+        if (clicked.value?.startsWith("snooze:") && canSnoozeSelection && snoozeEnvironmentId) {
           const preset =
             clicked.value === "snooze:custom"
-              ? await requestCustomSnooze()
+              ? await requestCustomSnooze(snoozeEnvironmentId)
               : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
           if (preset) {
             // Post-snooze navigation must skip threads snoozing in this same
@@ -4500,7 +4504,7 @@ export default function Sidebar() {
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
-              ? await requestCustomSnooze()
+              ? await requestCustomSnooze(threadRef.environmentId)
               : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
           if (preset) attemptSnooze(threadRef, preset);
           return;

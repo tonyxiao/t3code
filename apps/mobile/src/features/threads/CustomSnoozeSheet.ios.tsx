@@ -1,3 +1,5 @@
+import { useSnoozeResolver } from "./useSnoozeResolver";
+import type { EnvironmentId } from "@t3tools/contracts";
 import {
   DatePicker,
   Host,
@@ -26,7 +28,6 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
-  resolveCustomSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState, type ReactNode } from "react";
@@ -52,6 +53,7 @@ const units = [
 ] as const;
 
 export function CustomSnoozeSheet(props: {
+  readonly environmentId: EnvironmentId;
   readonly onClose: () => void;
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
@@ -61,33 +63,24 @@ export function CustomSnoozeSheet(props: {
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
-  const [error, setError] = useState<string | null>(null);
+  const { resolve, error, pending, clearError } = useSnoozeResolver(props.environmentId);
   const { themeVariables: colors, themeAppearance } = useAppearancePreferences();
   const popoverWidth = Math.min(360, width - 32);
   const popoverHeight = Math.min(error ? 364 : 324, height - 96);
   const updateDate = (value: Date) => {
     setDate(value);
-    setError(null);
+    clearError();
   };
 
-  const submit = () => {
+  const submit = async () => {
     const input: CustomSnoozeInput =
       mode === "text"
         ? { mode, text: text.get() }
         : mode === "date"
           ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
           : { mode, amount: String(amount), unit };
-    const snoozedUntil = resolveCustomSnooze(input, new Date());
-    if (!snoozedUntil) {
-      setError(
-        mode === "text"
-          ? "Try 1w, 30days, or tomorrow at 9am."
-          : mode === "date"
-            ? "Choose a date and time in the future."
-            : "Enter a positive duration.",
-      );
-      return;
-    }
+    const snoozedUntil = await resolve(input);
+    if (!snoozedUntil) return;
     props.onSnooze(snoozedUntil);
     props.onClose();
   };
@@ -114,7 +107,10 @@ export function CustomSnoozeSheet(props: {
             width={popoverWidth}
             height={popoverHeight}
             onClose={props.onClose}
-            onSubmit={submit}
+            onSubmit={() => {
+              void submit();
+            }}
+            pending={pending}
           >
             <Host
               matchContents={{ vertical: true }}
@@ -130,7 +126,7 @@ export function CustomSnoozeSheet(props: {
                   selection={mode}
                   onSelectionChange={(value: CustomSnoozeInput["mode"]) => {
                     setMode(value);
-                    setError(null);
+                    clearError();
                   }}
                   modifiers={[pickerStyle("segmented")]}
                 >
@@ -149,7 +145,7 @@ export function CustomSnoozeSheet(props: {
                     <TextField
                       text={text}
                       placeholder="1w, 30days, tomorrow at 9am"
-                      onTextChange={() => setError(null)}
+                      onTextChange={clearError}
                     />
                   </VStack>
                 ) : mode === "date" ? (
@@ -171,7 +167,7 @@ export function CustomSnoozeSheet(props: {
                       selection={amount}
                       onSelectionChange={(value: number) => {
                         setAmount(value);
-                        setError(null);
+                        clearError();
                       }}
                       modifiers={[
                         pickerStyle("wheel"),
@@ -194,7 +190,7 @@ export function CustomSnoozeSheet(props: {
                       selection={unit}
                       onSelectionChange={(value: typeof unit) => {
                         setUnit(value);
-                        setError(null);
+                        clearError();
                       }}
                       modifiers={[
                         pickerStyle("wheel"),
@@ -242,6 +238,7 @@ function SnoozePopoverNavigation(props: {
   readonly height: number;
   readonly onClose: () => void;
   readonly onSubmit: () => void;
+  readonly pending: boolean;
   readonly children: ReactNode;
 }) {
   const navigationTheme = useMobileNavigationTheme();
@@ -279,7 +276,11 @@ function SnoozePopoverNavigation(props: {
                         />
                       </NativeHeaderToolbar>
                       <NativeHeaderToolbar placement="right">
-                        <NativeHeaderToolbar.Button label="Snooze" onPress={props.onSubmit} />
+                        <NativeHeaderToolbar.Button
+                          label={props.pending ? "Interpreting…" : "Snooze"}
+                          disabled={props.pending}
+                          onPress={props.onSubmit}
+                        />
                       </NativeHeaderToolbar>
                       <ScrollView
                         contentInsetAdjustmentBehavior="automatic"

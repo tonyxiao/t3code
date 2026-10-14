@@ -209,5 +209,6 @@ finishes; the call's own result shows its status.
 Choose **Snooze → Custom…** from a thread's menu to type a time such as `1w`,
 `30days`, or `tomorrow at 9am`. You can also pick a date and time in your local
 time zone, or a duration in minutes, hours, or days. Durations start when
-you confirm; one day means 24 hours. On web and desktop, you can also snooze
-several selected threads together. Choose **Wake thread** to bring a thread back early.
+you confirm; one day means 24 hours. If a typed date cannot be understood locally, a connected
+Codex account interprets it with Luna using your local timezone. On web and desktop, you can
+also snooze several selected threads together. Choose **Wake thread** to bring a thread back early.

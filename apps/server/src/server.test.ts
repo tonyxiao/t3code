@@ -1,3 +1,4 @@
+import * as SnoozeTime from "./textGeneration/SnoozeTime.ts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -782,6 +783,7 @@ const buildAppUnderTest = (options?: {
     ).pipe(
       Layer.provide(
         Layer.mergeAll(
+          SnoozeTime.layer,
           Layer.mock(Keybindings.Keybindings)({
             loadConfigState: Effect.succeed({
               keybindings: [],
@@ -5308,6 +5310,48 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.equal(first.response.status, 200);
       assert.equal(second.response.status, 200);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("resolves custom snooze text through authenticated websocket RPC", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("codex-snooze");
+      const driverKind = ProviderDriverKind.make("codex");
+      const instance: ProviderInstance = {
+        instanceId,
+        driverKind,
+        enabled: true,
+        displayName: undefined,
+        continuationIdentity: { driverKind, continuationKey: instanceId },
+        snapshot: {} as ProviderInstance["snapshot"],
+        adapter: {} as ProviderInstance["adapter"],
+        textGeneration: {
+          generateCommitMessage: () => Effect.die("unused"),
+          generatePrContent: () => Effect.die("unused"),
+          generateBranchName: () => Effect.die("unused"),
+          generateThreadTitle: () => Effect.die("unused"),
+          generateSnoozeTime: (input) => {
+            assert.equal(input.text, "oct 23");
+            assert.equal(input.timeZone, "Asia/Hong_Kong");
+            assert.equal(input.modelSelection.model, "gpt-6-luna");
+            return Effect.succeed({ snoozedUntil: "2026-10-23T09:00:00+08:00" });
+          },
+        },
+      };
+      yield* buildAppUnderTest({
+        layers: { providerInstanceRegistry: { listInstances: Effect.succeed([instance]) } },
+      });
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.serverResolveSnoozeTime]({
+            text: "oct 23",
+            now: "2026-10-14T10:00:00.000Z",
+            timeZone: "Asia/Hong_Kong",
+          }),
+        ),
+      );
+      assert.equal(response.snoozedUntil, "2026-10-23T01:00:00.000Z");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

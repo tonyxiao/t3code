@@ -1,3 +1,4 @@
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import { MaterialSegmentedButtons } from "../../components/MaterialSegmentedButtons.android";
 import {
   BasicAlertDialog,
@@ -24,7 +25,6 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
-  resolveCustomSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { requireNativeModule } from "expo";
@@ -78,25 +78,16 @@ export function CustomSnoozeSheet(props: Props) {
   const [picker, setPicker] = useState<"date" | "time">("date");
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
-  const [error, setError] = useState<string | null>(null);
-  const submit = () => {
+  const { resolve, error, pending, clearError } = useSnoozeResolver(props.environmentId);
+  const submit = async () => {
     const input: CustomSnoozeInput =
       mode === "text"
         ? { mode, text: text.get() }
         : mode === "date"
           ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
           : { mode, amount: String(amount), unit };
-    const snoozedUntil = resolveCustomSnooze(input, new Date());
-    if (!snoozedUntil) {
-      setError(
-        mode === "text"
-          ? "Try 1w, 30days, or tomorrow at 9am."
-          : mode === "date"
-            ? "Choose a date and time in the future."
-            : "Enter a positive duration.",
-      );
-      return;
-    }
+    const snoozedUntil = await resolve(input);
+    if (!snoozedUntil) return;
     props.onSnooze(snoozedUntil);
     props.onClose();
   };
@@ -156,7 +147,7 @@ export function CustomSnoozeSheet(props: Props) {
                   selected={mode}
                   onSelect={(value) => {
                     setMode(value);
-                    setError(null);
+                    clearError();
                   }}
                 />
                 {mode === "date" ? (
@@ -182,7 +173,7 @@ export function CustomSnoozeSheet(props: Props) {
               </Column>
               {mode === "text" ? (
                 <Column modifiers={[fillMaxWidth(), padding(24, 8, 24, 16)]}>
-                  <OutlinedTextField value={text} singleLine onValueChange={() => setError(null)}>
+                  <OutlinedTextField value={text} singleLine onValueChange={clearError}>
                     <OutlinedTextField.Label>
                       <Text>Snooze until</Text>
                     </OutlinedTextField.Label>
@@ -203,7 +194,7 @@ export function CustomSnoozeSheet(props: Props) {
                           ? applySnoozePickerDate(current, selected)
                           : applySnoozePickerTime(current, selected),
                       );
-                      setError(null);
+                      clearError();
                     }}
                   />
                 </Column>
@@ -263,10 +254,13 @@ export function CustomSnoozeSheet(props: Props) {
                     <Text style={bodyTypography}>Cancel</Text>
                   </TextButton>
                   <TextButton
-                    onClick={submit}
+                    onClick={() => {
+                      void submit();
+                    }}
+                    enabled={!pending}
                     colors={{ contentColor: colors["--color-foreground"] }}
                   >
-                    <Text style={bodyTypography}>Snooze</Text>
+                    <Text style={bodyTypography}>{pending ? "Interpreting…" : "Snooze"}</Text>
                   </TextButton>
                 </Row>
               </Column>

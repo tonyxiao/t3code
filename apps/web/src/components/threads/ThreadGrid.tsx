@@ -793,7 +793,9 @@ export function ThreadGrid() {
                 <MenuItem
                   onClick={() => {
                     void (async () => {
-                      const preset = await requestCustomSnooze();
+                      const environmentId = selectedRows[0]?.thread.environmentId;
+                      if (!environmentId) return;
+                      const preset = await requestCustomSnooze(environmentId);
                       if (preset) await runAction("snooze", preset.snoozedUntil);
                     })();
                   }}

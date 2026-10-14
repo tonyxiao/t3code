@@ -1133,6 +1133,10 @@ export function createServerEnvironmentAtoms<R, E>(
       scheduler: configScheduler,
       concurrency: configConcurrency,
     }),
+    resolveSnoozeTime: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:resolve-snooze-time",
+      tag: WS_METHODS.serverResolveSnoozeTime,
+    }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,

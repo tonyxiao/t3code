@@ -908,3 +908,13 @@ export class ServerSelfUpdateError extends Schema.TaggedError<ServerSelfUpdateEr
     return `Server update failed: ${this.reason}`;
   }
 }
+
+/** Resolve a typed snooze phrase in the requesting client's timezone. */
+export const SnoozeTimeResolveInput = Schema.Struct({
+  text: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(1000))),
+  now: IsoDateTime,
+  timeZone: TrimmedNonEmptyString,
+});
+export type SnoozeTimeResolveInput = typeof SnoozeTimeResolveInput.Type;
+export const SnoozeTimeResolveResult = Schema.Struct({ snoozedUntil: IsoDateTime });
+export type SnoozeTimeResolveResult = typeof SnoozeTimeResolveResult.Type;
