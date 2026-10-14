@@ -43,8 +43,9 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 
 ## Manage threads together
 
-On web and desktop, choose **Select** in the sidebar and select the threads to snooze or
-archive together. `Cmd`/`Ctrl`-click toggles individual threads; `Shift`-click selects a range.
+On web and desktop, hold `Cmd`/`Ctrl` to reveal sidebar selection controls, then select threads
+to act on together. The controls stay visible while threads are selected. `Cmd`/`Ctrl`-click
+toggles individual threads; `Shift`-click selects a range.
 
 Open **Threads** from the sidebar or **Manage threads** from the command palette for a
 full-width table across connected environments, including archived conversations. Search,

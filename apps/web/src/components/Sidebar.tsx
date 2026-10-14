@@ -56,7 +56,6 @@ import {
 import type { SidebarThreadSortOrder, TimestampFormat } from "@t3tools/contracts/settings";
 import {
   ArchiveIcon,
-  ListChecksIcon,
   AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowUpDownIcon,
@@ -2373,8 +2372,11 @@ export default function Sidebar() {
   );
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const [selectionMode, setSelectionMode] = useState(false);
+  const shortcutModifiers = useShortcutModifierState();
   const selectedThreadKeys = useThreadSelectionStore((s) => s.selectedThreadKeys);
+  const selectionMode =
+    (isMacPlatform(navigator.platform) ? shortcutModifiers.metaKey : shortcutModifiers.ctrlKey) ||
+    selectedThreadKeys.size > 0;
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
@@ -4768,7 +4770,6 @@ export default function Sidebar() {
   // Same predicate as v1: hints show only while the held modifiers exactly
   // match a thread-jump binding. Adding Shift (screenshots) or Alt no
   // longer matches ⌘1..9, so the overlay hides for chords like ⌘⇧4.
-  const shortcutModifiers = useShortcutModifierState();
   const terminalFocused = useTerminalFocus();
   const shouldShowJumpHintsNow = shouldShowThreadJumpHintsForModifiers(
     shortcutModifiers,
@@ -5333,67 +5334,58 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
-            {!isSearchingThreads && (
+            {!isSearchingThreads && selectionMode && (
               <div data-thread-selection-safe className="flex items-center gap-1 px-1 pt-1">
-                {selectionMode || selectedCount > 0 ? (
-                  <>
-                    <span role="status" className="mr-auto text-xs text-sidebar-muted-foreground">
-                      {selectedCount} selected
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => {
-                        selectThreads(orderedThreadKeys);
-                      }}
-                    >
-                      All
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Snooze selected threads"
-                      title="Snooze selected threads"
-                      disabled={bulkActionPending || !canBulkSnooze}
-                      onClick={(event) => {
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        void handleMultiSelectContextMenu(
-                          { x: bounds.left, y: bounds.bottom },
-                          "snooze",
-                        );
-                      }}
-                    >
-                      <AlarmClockIcon />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Archive selected threads"
-                      title="Archive selected threads"
-                      disabled={bulkActionPending || !canBulkArchive}
-                      onClick={() => {
-                        void handleMultiSelectContextMenu({ x: 0, y: 0 }, "archive");
-                      }}
-                    >
-                      <ArchiveIcon />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Cancel thread selection"
-                      onClick={() => {
-                        clearSelection();
-                        setSelectionMode(false);
-                      }}
-                    >
-                      <XIcon />
-                    </Button>
-                  </>
-                ) : (
-                  <Button variant="ghost-muted" size="xs" onClick={() => setSelectionMode(true)}>
-                    <ListChecksIcon /> Select
-                  </Button>
-                )}
+                <span role="status" className="mr-auto text-xs text-sidebar-muted-foreground">
+                  {selectedCount} selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    selectThreads(orderedThreadKeys);
+                  }}
+                >
+                  All
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Snooze selected threads"
+                  title="Snooze selected threads"
+                  disabled={bulkActionPending || !canBulkSnooze}
+                  onClick={(event) => {
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    void handleMultiSelectContextMenu(
+                      { x: bounds.left, y: bounds.bottom },
+                      "snooze",
+                    );
+                  }}
+                >
+                  <AlarmClockIcon />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Archive selected threads"
+                  title="Archive selected threads"
+                  disabled={bulkActionPending || !canBulkArchive}
+                  onClick={() => {
+                    void handleMultiSelectContextMenu({ x: 0, y: 0 }, "archive");
+                  }}
+                >
+                  <ArchiveIcon />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Cancel thread selection"
+                  onClick={() => {
+                    clearSelection();
+                  }}
+                >
+                  <XIcon />
+                </Button>
               </div>
             )}
           </SidebarGroup>
