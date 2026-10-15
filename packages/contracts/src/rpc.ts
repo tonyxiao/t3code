@@ -1,3 +1,12 @@
+import {
+  ThreadRoutingHost,
+  ThreadRoutingEvent,
+  ThreadRoutingResponse,
+  ThreadRoutingError,
+  ProjectThreadCreationInput,
+  ThreadCreationResult,
+  ThreadCreationProjects,
+} from "./threadCreation.ts";
 import { SnoozeTimeResolveInput, SnoozeTimeResolveResult } from "./server.ts";
 import { TextGenerationError } from "./git.ts";
 import {
@@ -366,6 +375,10 @@ export const WS_METHODS = {
   previewClose: "preview.close",
   previewList: "preview.list",
   previewReportStatus: "preview.reportStatus",
+  threadRoutingConnect: "threadRouting.connect",
+  threadRoutingRespond: "threadRouting.respond",
+  threadCreationProjects: "threadCreation.projects",
+  threadCreationCreate: "threadCreation.create",
   previewAutomationConnect: "previewAutomation.connect",
   previewAutomationRespond: "previewAutomation.respond",
   previewAutomationFocusHost: "previewAutomation.focusHost",
@@ -1253,6 +1266,27 @@ const WsPreviewReportStatusRpc = Rpc.make(WS_METHODS.previewReportStatus, {
   error: Schema.Union([PreviewError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadRoutingConnectRpc = Rpc.make(WS_METHODS.threadRoutingConnect, {
+  payload: ThreadRoutingHost,
+  success: ThreadRoutingEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+const WsThreadRoutingRespondRpc = Rpc.make(WS_METHODS.threadRoutingRespond, {
+  payload: ThreadRoutingResponse,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+const WsThreadCreationProjectsRpc = Rpc.make(WS_METHODS.threadCreationProjects, {
+  payload: Schema.Struct({}),
+  success: ThreadCreationProjects,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+const WsThreadCreationCreateRpc = Rpc.make(WS_METHODS.threadCreationCreate, {
+  payload: ProjectThreadCreationInput,
+  success: ThreadCreationResult,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+
 const WsPreviewAutomationConnectRpc = Rpc.make(WS_METHODS.previewAutomationConnect, {
   payload: PreviewAutomationHost,
   success: PreviewAutomationStreamEvent,
@@ -1583,6 +1617,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewCloseRpc,
   WsPreviewListRpc,
   WsPreviewReportStatusRpc,
+  WsThreadRoutingConnectRpc,
+  WsThreadRoutingRespondRpc,
+  WsThreadCreationProjectsRpc,
+  WsThreadCreationCreateRpc,
   WsPreviewAutomationConnectRpc,
   WsPreviewAutomationRespondRpc,
   WsPreviewAutomationFocusHostRpc,

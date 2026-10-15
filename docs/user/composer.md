@@ -162,6 +162,21 @@ Provider commands must start the message to run. T3 Code commands such as
 Send `/compact` in an existing conversation to reduce context usage when the
 provider supports it. Web and desktop also offer compaction from the context meter.
 
+## Creating threads through an agent
+
+Ask an agent to create a related thread. It can create an empty thread or send
+an initial message to start work. By default, the new thread uses the current
+thread's project and workspace.
+
+To create work on another connection, keep a web, desktop, or mobile client open
+with both connections online. Ask the agent to list the available connections
+and projects, then name the target. The target project supplies the model and
+workspace defaults; conversation history is not copied. Both servers and the
+routing client need a version that supports this feature.
+
+If routing disconnects or times out, check the reported target thread id before
+trying again: the target may already have created it.
+
 ## Context in your message
 
 Context you attach lands where your cursor is, as a chip inside your text: a terminal excerpt,

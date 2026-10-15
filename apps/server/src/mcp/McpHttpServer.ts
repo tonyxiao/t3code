@@ -16,6 +16,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstab
 import { PreviewAutomationError } from "@t3tools/contracts";
 
 import packageJson from "../../package.json" with { type: "json" };
+import * as AgentThreadRouting from "../orchestration/AgentThreadRouting.ts";
 import * as ThreadCreation from "../orchestration/ThreadCreation.ts";
 import { ThreadsToolkit } from "./toolkits/threads/tools.ts";
 import { ThreadsToolkitHandlersLive } from "./toolkits/threads/handlers.ts";
@@ -652,6 +653,7 @@ export const PullRequestsToolkitRegistrationLive = McpServer.toolkit(PullRequest
 
 export const ThreadsToolkitRegistrationLive = McpServer.toolkit(ThreadsToolkit).pipe(
   Layer.provide(ThreadsToolkitHandlersLive),
+  Layer.provide(AgentThreadRouting.layer),
   Layer.provide(ThreadCreation.layer),
 );
 

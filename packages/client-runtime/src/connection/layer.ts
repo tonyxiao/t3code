@@ -1,3 +1,4 @@
+import { watchThreadRouting } from "./threadRouting.ts";
 import type { RelayEnvironmentStatusResponse } from "@t3tools/contracts/relay";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -82,6 +83,7 @@ export function layerWithOptions(options: RpcSession.RpcSessionOptions) {
       const platformSource = yield* PlatformConnectionSource.PlatformConnectionSource;
       yield* watchDiscoveredCompatibility().pipe(Effect.forkScoped);
       yield* registry.start;
+      yield* watchThreadRouting().pipe(Effect.forkScoped);
       yield* platformSource.registrations.pipe(
         Stream.runForEach(registry.reconcilePlatform),
         Effect.forkScoped,

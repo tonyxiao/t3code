@@ -1,4 +1,15 @@
-import { CommandId, MessageId, ThreadId, TrimmedNonEmptyString } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  ThreadId,
+  ThreadCreationInput,
+  ThreadCreationResult,
+  ThreadCreationProjects,
+  ProjectThreadCreationInput,
+  ThreadRoutingError,
+  DEFAULT_RUNTIME_MODE,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -10,15 +21,8 @@ import * as Schema from "effect/Schema";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./Services/ProjectionSnapshotQuery.ts";
 
-export const CreateThreadInput = Schema.Struct({
-  title: TrimmedNonEmptyString,
-  message: Schema.optional(TrimmedNonEmptyString),
-});
-
-export const CreateThreadResult = Schema.Struct({
-  threadId: ThreadId,
-  turnStarted: Schema.Boolean,
-});
+export const CreateThreadInput = ThreadCreationInput;
+export const CreateThreadResult = ThreadCreationResult;
 
 export class ThreadCreationError extends Schema.TaggedError<ThreadCreationError>()(
   "ThreadCreationError",
@@ -36,6 +40,10 @@ const isThreadCreationError = Schema.is(ThreadCreationError);
 export class ThreadCreation extends Context.Service<
   ThreadCreation,
   {
+    readonly projects: Effect.Effect<typeof ThreadCreationProjects.Type, ThreadRoutingError>;
+    readonly createInProject: (
+      input: typeof ProjectThreadCreationInput.Type,
+    ) => Effect.Effect<typeof ThreadCreationResult.Type, ThreadRoutingError>;
     readonly create: (
       sourceThreadId: ThreadId,
       input: typeof CreateThreadInput.Type,
@@ -69,7 +77,7 @@ const make = Effect.gen(function* () {
         threadId,
         projectId: thread.projectId,
         title: input.title,
-        modelSelection: thread.modelSelection,
+        modelSelection: input.modelSelection ?? thread.modelSelection,
         runtimeMode: thread.runtimeMode,
         interactionMode: thread.interactionMode,
         branch: thread.branch,
@@ -88,7 +96,7 @@ const make = Effect.gen(function* () {
               text: input.message,
               attachments: [],
             },
-            modelSelection: thread.modelSelection,
+            modelSelection: input.modelSelection ?? thread.modelSelection,
             runtimeMode: thread.runtimeMode,
             interactionMode: thread.interactionMode,
             createdAt,
@@ -108,7 +116,85 @@ const make = Effect.gen(function* () {
     );
   });
 
-  return ThreadCreation.of({ create });
+  const projects = snapshots.getShellSnapshot().pipe(
+    Effect.map((snapshot) => {
+      const recentModels = new Map(
+        snapshot.threads
+          .filter((thread) => thread.archivedAt === null)
+          .toSorted((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+          .map((thread) => [thread.projectId, thread.modelSelection]),
+      );
+      return snapshot.projects.map((project) => ({
+        projectId: project.id,
+        title: project.title,
+        workspaceRoot: project.workspaceRoot,
+        modelSelection: project.defaultModelSelection ?? recentModels.get(project.id) ?? null,
+      }));
+    }),
+    Effect.mapError(
+      () =>
+        new ThreadRoutingError({ message: "Could not read projects in the target environment." }),
+    ),
+  );
+  const createInProject = Effect.fn("ThreadCreation.createInProject")(function* (
+    input: typeof ProjectThreadCreationInput.Type,
+  ) {
+    const project = (yield* projects).find((entry) => entry.projectId === input.projectId);
+    if (!project)
+      return yield* new ThreadRoutingError({ message: "The target project does not exist." });
+    const modelSelection = input.modelSelection ?? project.modelSelection;
+    if (!modelSelection)
+      return yield* new ThreadRoutingError({
+        message: "The target project has no default or recent model. Supply modelSelection.",
+      });
+    const createdAt = DateTime.formatIso(yield* DateTime.now);
+    const fail = () =>
+      new ThreadRoutingError({
+        message: "Thread creation failed. Check the returned thread id before retrying.",
+        threadId: input.threadId,
+      });
+    yield* engine
+      .dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`agent-create:${input.threadId}`),
+        threadId: input.threadId,
+        projectId: input.projectId,
+        title: input.title,
+        modelSelection,
+        runtimeMode: DEFAULT_RUNTIME_MODE,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      })
+      .pipe(Effect.mapError(fail));
+    if (input.message !== undefined) {
+      yield* engine
+        .dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`agent-start:${input.threadId}`),
+          threadId: input.threadId,
+          message: {
+            messageId: MessageId.make(`agent-message:${input.threadId}`),
+            role: "user",
+            text: input.message,
+            attachments: [],
+          },
+          modelSelection,
+          runtimeMode: DEFAULT_RUNTIME_MODE,
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          createdAt,
+        })
+        .pipe(Effect.mapError(fail));
+    }
+    return {
+      threadId: input.threadId,
+      projectId: input.projectId,
+      turnStarted: input.message !== undefined,
+    };
+  });
+
+  return ThreadCreation.of({ create, projects, createInProject });
 });
 
 export const layer = Layer.effect(ThreadCreation, make);

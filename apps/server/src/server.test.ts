@@ -2164,6 +2164,55 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("creates a project thread through the authenticated routing RPC", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationCommand[] = [];
+      const model = makeDefaultOrchestrationReadModel();
+      const project = { ...model.projects[0]!, repositoryIdentity: null };
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getShellSnapshot: () =>
+              Effect.succeed({
+                snapshotSequence: 0,
+                projects: [project],
+                threads: [],
+                updatedAt: model.updatedAt,
+              }),
+          },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                commands.push(command);
+                return { sequence: commands.length };
+              }),
+          },
+        },
+      });
+      yield* Effect.scoped(
+        withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+          Effect.gen(function* () {
+            const projects = yield* client[WS_METHODS.threadCreationProjects]({});
+            assert.equal(projects[0]?.projectId, project.id);
+            const threadId = ThreadId.make("routing-rpc-thread");
+            const result = yield* client[WS_METHODS.threadCreationCreate]({
+              threadId,
+              projectId: project.id,
+              title: "Remote task",
+              message: "Start the work",
+            });
+            assert.equal(result.threadId, threadId);
+            assert.equal(result.turnStarted, true);
+          }),
+        ),
+      );
+      assert.deepEqual(
+        commands.map((command) => command.type),
+        ["thread.create", "thread.turn.start"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("serves the public environment descriptor without requiring auth", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();

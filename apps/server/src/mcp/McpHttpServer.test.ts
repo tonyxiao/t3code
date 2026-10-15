@@ -1,3 +1,5 @@
+import * as ThreadRoutingBroker from "../orchestration/ThreadRoutingBroker.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -889,11 +891,15 @@ it.effect("exposes thread creation over MCP and checks the caller capability", (
   }).pipe(
     Effect.provide(
       McpHttpServer.ThreadsToolkitRegistrationLive.pipe(
+        Layer.provide(ThreadRoutingBroker.layer),
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(
           Layer.mergeAll(
             Layer.mock(OrchestrationEngineService)({}),
             Layer.mock(ProjectionSnapshotQuery)({}),
+            Layer.mock(ServerEnvironment.ServerEnvironment)({
+              getEnvironmentId: Effect.succeed(environmentId),
+            }),
             NodeServices.layer,
           ),
         ),

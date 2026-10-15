@@ -1,3 +1,5 @@
+import * as ThreadRoutingBroker from "./orchestration/ThreadRoutingBroker.ts";
+import * as ThreadCreation from "./orchestration/ThreadCreation.ts";
 import * as SnoozeTime from "./textGeneration/SnoozeTime.ts";
 import {
   sameUsageLimitCommandCoverage,
@@ -505,6 +507,8 @@ const makeWsRpcLayer = (
   clientOrigin: OrchestrationClientOrigin,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  threadRoutingBroker: ThreadRoutingBroker.ThreadRoutingBroker["Service"],
+  threadCreation: ThreadCreation.ThreadCreation["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -3798,6 +3802,16 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.previewReportStatus, previewManager.reportStatus(input), {
             "rpc.aggregate": "preview",
           }),
+        [WS_METHODS.threadRoutingConnect]: (input) =>
+          observeRpcStreamEffect(
+            WS_METHODS.threadRoutingConnect,
+            threadRoutingBroker.connect(currentSessionId, input),
+            { "rpc.aggregate": "thread-routing" },
+          ),
+        [WS_METHODS.threadRoutingRespond]: (input) =>
+          threadRoutingBroker.respond(currentSessionId, input),
+        [WS_METHODS.threadCreationProjects]: () => threadCreation.projects,
+        [WS_METHODS.threadCreationCreate]: (input) => threadCreation.createInProject(input),
         [WS_METHODS.previewAutomationConnect]: (input) =>
           observeRpcStreamEffect(
             WS_METHODS.previewAutomationConnect,
@@ -4087,6 +4101,8 @@ const makeWsRpcLayer = (
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const threadRoutingBroker = yield* ThreadRoutingBroker.ThreadRoutingBroker;
+    const threadCreation = yield* ThreadCreation.ThreadCreation;
     const baseServerSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const config = yield* ServerConfig.ServerConfig;
     const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
@@ -4154,6 +4170,8 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               clientOrigin,
               clientAnalyticsProps,
               previewAutomationBroker,
+              threadRoutingBroker,
+              threadCreation,
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),

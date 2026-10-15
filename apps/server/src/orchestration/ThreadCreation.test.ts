@@ -1,3 +1,6 @@
+import * as AgentThreadRouting from "./AgentThreadRouting.ts";
+import * as ThreadRoutingBroker from "./ThreadRoutingBroker.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -49,6 +52,9 @@ const harness = Effect.fn("threadCreationHarness")(function* (
   const commands: OrchestrationCommand[] = [];
   let counter = 0;
   const dependencies = Layer.mergeAll(
+    Layer.mock(ServerEnvironment.ServerEnvironment)({
+      getEnvironmentId: Effect.succeed(EnvironmentId.make("environment")),
+    }),
     Layer.mock(ProjectionSnapshotQuery)({
       getThreadShellById: () =>
         Effect.succeed(
@@ -85,7 +91,9 @@ const harness = Effect.fn("threadCreationHarness")(function* (
   const toolkit = yield* ThreadsToolkit.pipe(
     Effect.provide(
       ThreadsToolkitHandlersLive.pipe(
+        Layer.provide(AgentThreadRouting.layer),
         Layer.provide(ThreadCreation.layer),
+        Layer.provide(ThreadRoutingBroker.layer),
         Layer.provide(dependencies),
       ),
     ),
@@ -103,7 +111,13 @@ const harness = Effect.fn("threadCreationHarness")(function* (
         capabilities: new Set<McpInvocationContext.McpCapability>(options.deny ? [] : ["threads"]),
         issuedAt: 0,
       }),
-      Effect.provide(ThreadCreation.layer.pipe(Layer.provide(dependencies))),
+      Effect.provide(
+        AgentThreadRouting.layer.pipe(
+          Layer.provide(ThreadCreation.layer),
+          Layer.provide(ThreadRoutingBroker.layer),
+          Layer.provide(dependencies),
+        ),
+      ),
     );
   return { commands, call };
 });
