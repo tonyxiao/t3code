@@ -870,3 +870,34 @@ it.effect("registers annotated tools and preserves authenticated request context
     }),
   ).pipe(Effect.provide(TestLayer)),
 );
+
+it.effect("exposes thread creation over MCP and checks the caller capability", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const tool = server.tools.find(({ tool }) => tool.name === "create_thread");
+    expect(tool?.tool.annotations?.idempotentHint).toBe(false);
+    const denied = yield* server
+      .callTool({ name: "create_thread", arguments: { title: "Related work" } })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(denied.isError).toBe(true);
+    expect(denied.content).toEqual([
+      { type: "text", text: "MCP credential does not grant the threads capability." },
+    ]);
+  }).pipe(
+    Effect.provide(
+      McpHttpServer.ThreadsToolkitRegistrationLive.pipe(
+        Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(OrchestrationEngineService)({}),
+            Layer.mock(ProjectionSnapshotQuery)({}),
+            NodeServices.layer,
+          ),
+        ),
+      ),
+    ),
+  ),
+);
