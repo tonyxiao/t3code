@@ -16,6 +16,9 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstab
 import { PreviewAutomationError } from "@t3tools/contracts";
 
 import packageJson from "../../package.json" with { type: "json" };
+import * as ThreadCreation from "../orchestration/ThreadCreation.ts";
+import { ThreadsToolkit } from "./toolkits/threads/tools.ts";
+import { ThreadsToolkitHandlersLive } from "./toolkits/threads/handlers.ts";
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
@@ -647,6 +650,11 @@ export const PullRequestsToolkitRegistrationLive = McpServer.toolkit(PullRequest
   Layer.provide(PullRequestsToolkitHandlersLive),
 );
 
+export const ThreadsToolkitRegistrationLive = McpServer.toolkit(ThreadsToolkit).pipe(
+  Layer.provide(ThreadsToolkitHandlersLive),
+  Layer.provide(ThreadCreation.layer),
+);
+
 const DeviceStandardToolkitRegistrationLive = McpServer.toolkit(DeviceStandardToolkit).pipe(
   Layer.provide(DeviceStandardToolkitHandlersLive),
 );
@@ -670,5 +678,6 @@ const McpTransportLive = McpServer.layerHttp({
 export const layer = Layer.mergeAll(
   PreviewToolkitRegistrationLive,
   PullRequestsToolkitRegistrationLive,
+  ThreadsToolkitRegistrationLive,
   DeviceToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));
