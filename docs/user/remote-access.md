@@ -211,3 +211,16 @@ history, and saved connections are kept, and you keep working through pairing, T
 
 Switch **Local environment** back on in the same place to restart with your previous local
 settings.
+
+## Returning to the mobile app
+
+The mobile app proactively syncs recent history for unsettled, unarchived threads
+in enabled environments, so you do not have to open each chat to refresh it.
+Settling or archiving a thread stops its proactive sync.
+
+When you leave the app, iOS grants a limited background execution window. Android
+keeps syncing for up to six hours with a background-sync notification. This can
+use additional battery while the app is out of view.
+The operating system can stop background work sooner; force-quitting stops it.
+Returning to the app checks the existing connection and automatically reconnects
+when necessary. Longer absences can still require catching up with the server.
