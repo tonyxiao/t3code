@@ -36,6 +36,10 @@ describe("private mobile builds", () => {
 
     expect(config.name).toBe("T3 Code");
     expect(config.ios?.bundleIdentifier).toBe("com.example.private");
+    expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
+      "com.example.private.background-sync",
+    ]);
+    expect(config.ios?.infoPlist?.UIBackgroundModes).toContain("processing");
     expect(config.android?.package).toBe("com.example.private");
     expect(config.scheme).toBe("example-t3");
     expect(config.ios?.appleTeamId).toBeUndefined();
