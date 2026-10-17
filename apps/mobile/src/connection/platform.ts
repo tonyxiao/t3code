@@ -31,7 +31,6 @@ import * as MobileStorage from "../persistence/mobile-storage";
 import { appAtomRegistry } from "../state/atom-registry";
 import { clearThreadOutboxEnvironment } from "../state/thread-outbox-removal";
 import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
-import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
 import { connectionStorageLayer } from "./storage";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
@@ -88,18 +87,14 @@ const connectivityLayer = Connectivity.layer({
 
 const wakeupsLayer = Wakeups.layer({
   changes: Stream.merge(
-    Stream.callback<"application-active-probe" | "application-active-reconnect">((queue) =>
+    Stream.callback<"application-active-probe">((queue) =>
       Effect.acquireRelease(
         Effect.sync(() => {
-          let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
           return AppState.addEventListener("change", (state) => {
-            if (state === "background") {
-              backgroundedAtMs = Date.now();
-              return;
-            }
             if (state === "active") {
-              Queue.offerUnsafe(queue, mobileApplicationActiveWakeup(backgroundedAtMs, Date.now()));
-              backgroundedAtMs = null;
+              // A native background task may have kept the socket healthy.
+              // The supervisor replaces it only if its bounded probe fails.
+              Queue.offerUnsafe(queue, "application-active-probe");
             }
           });
         }),

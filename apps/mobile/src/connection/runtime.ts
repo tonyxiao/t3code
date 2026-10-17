@@ -1,7 +1,12 @@
 import { Connection } from "@t3tools/client-runtime/connection";
 import { shellSnapshotLoaderLayer } from "@t3tools/client-runtime/state/shell";
-import { threadSnapshotLoaderLayer } from "@t3tools/client-runtime/state/threads";
+import {
+  ThreadSnapshotLoader,
+  threadSnapshotLoaderLayer,
+} from "@t3tools/client-runtime/state/threads";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Semaphore from "effect/Semaphore";
 import { Atom } from "effect/unstable/reactivity";
 
 import type { FoundationHotModule } from "../lib/foundation-fast-refresh";
@@ -20,7 +25,20 @@ const providedConnectionPlatformLayer = connectionPlatformLayer.pipe(
   Layer.provide(runtimeContextLayer),
 );
 
-const snapshotLoaderLayer = Layer.merge(threadSnapshotLoaderLayer, shellSnapshotLoaderLayer);
+// Proactive subscriptions share a small hydration budget instead of issuing a
+// snapshot request for every open thread simultaneously on launch/reconnect.
+const mobileThreadSnapshotLoaderLayer = Layer.effect(
+  ThreadSnapshotLoader,
+  Effect.gen(function* () {
+    const loader = yield* ThreadSnapshotLoader;
+    const hydration = yield* Semaphore.make(4);
+    return ThreadSnapshotLoader.of({
+      load: (...args) => loader.load(...args).pipe(hydration.withPermits(1)),
+    });
+  }),
+).pipe(Layer.provide(threadSnapshotLoaderLayer));
+
+const snapshotLoaderLayer = Layer.merge(mobileThreadSnapshotLoaderLayer, shellSnapshotLoaderLayer);
 
 type ConnectionLayerSource =
   | typeof Connection.layer

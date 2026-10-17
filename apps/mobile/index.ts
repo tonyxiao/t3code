@@ -1,6 +1,6 @@
-import { registerRootComponent } from "expo";
+import { registerRootComponent, requireOptionalNativeModule } from "expo";
 import "react-native-gesture-handler";
-import { LogBox } from "react-native";
+import { AppRegistry, LogBox } from "react-native";
 import { featureFlags } from "react-native-screens";
 
 import App from "./src/App";
@@ -12,5 +12,11 @@ featureFlags.experiment.synchronousScreenUpdatesEnabled = true;
 if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
   LogBox.ignoreAllLogs();
 }
+
+AppRegistry.registerHeadlessTask("T3BackgroundSync", () => async () => {
+  await requireOptionalNativeModule<{
+    waitUntilStopped(): Promise<void>;
+  }>("T3BackgroundSync")?.waitUntilStopped();
+});
 
 registerRootComponent(App);

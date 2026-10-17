@@ -16,10 +16,11 @@ unchanged conditions.
 
 Foregrounding needs different treatment depending on the connection's state.
 It wakes a retry immediately, leaves an ordinary in-flight attempt alone, and
-probes an established session before replacing it. A long mobile background
-suspension forces replacement because the OS can kill a socket without reporting
-closure. Treating every foreground event as a reconnect delays healthy attempts;
-treating every resume as harmless leaves suspended sockets stuck.
+probes an established session before replacing it. Mobile uses a bounded
+three-second probe even after a long background interval: a native background
+task may have kept the socket alive. Failed or timed-out probes trigger immediate
+replacement without backoff. The bound matters because the OS can suspend a socket
+without reporting closure; preserving it without a health check can leave resume stuck.
 
 The [registry](../../packages/client-runtime/src/connection/registry.ts) scopes
 connections by environment. An involuntary disconnect retains the registration
@@ -68,7 +69,14 @@ thread then needs no replay. The shell and detail streams are independent, so
 the shell can report a stop before the detail loads or catches up. A stopped
 thread stays mounted until its own stream is live and shows the stop, and the
 stream then closes and saves the settled state.
-Web and mobile do not keep threads alive.
+Mobile adds a consumer for every unsettled, unarchived thread in enabled
+environments, independent of the visible route. iOS 26+ can run an explicitly
+started ten-minute continued-processing session with elapsed-time progress; the
+ordinary grace period remains the fallback. Android caps its foreground data-sync
+service at ten minutes. OS suspension still requires catching up on return. HTTP
+snapshot hydration is limited to four concurrent requests, but the resulting
+live subscriptions and retained histories scale with the number of open threads.
+Web does not add a keep-alive consumer.
 
 Retain state and cursor together only after an update finishes. Cancellation must
 not advance the cached cursor beyond the applied data, and an old scope must not

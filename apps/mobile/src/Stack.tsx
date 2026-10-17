@@ -1,3 +1,4 @@
+import { useOpenThreadSync } from "./state/use-open-thread-sync";
 import {
   createPathConfigForStaticNavigation,
   getPathFromState,
@@ -508,6 +509,7 @@ function workspaceLocationFromState(state: NavigationState) {
 // updates from re-rendering RootStackLayout (and with it every screen) on
 // each enqueue, shell change, or reconnect.
 function ThreadOutboxDrainWorker() {
+  useOpenThreadSync();
   useThreadOutboxDrain();
   useComposerAttachmentUploadWorker();
   return null;
