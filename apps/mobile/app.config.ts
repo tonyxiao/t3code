@@ -276,6 +276,8 @@ const config: ExpoConfig = {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
+      BGTaskSchedulerPermittedIdentifiers: [`${iosBundleIdentifier}.background-sync`],
+      UIBackgroundModes: ["processing"],
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },

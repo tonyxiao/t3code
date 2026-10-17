@@ -108,8 +108,8 @@ class BackgroundSyncService : HeadlessJsTaskService() {
     private const val CHANNEL = "t3-background-sync"
     private const val NOTIFICATION_ID = 73631
 
-    // Android 15+ also enforces a shared six-hour data-sync budget and may
-    // invoke onTimeout earlier. Older versions use the same finite ceiling.
-    private const val WINDOW_MS = 6 * 60 * 60 * 1_000L
+    // Stop after ten minutes even when the OS would permit a longer session.
+    // Android can invoke onTimeout earlier if its shared data-sync quota is spent.
+    private const val WINDOW_MS = 10 * 60 * 1_000L
   }
 }

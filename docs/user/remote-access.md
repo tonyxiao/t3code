@@ -218,9 +218,16 @@ The mobile app proactively syncs recent history for unsettled, unarchived thread
 in enabled environments, so you do not have to open each chat to refresh it.
 Settling or archiving a thread stops its proactive sync.
 
-When you leave the app, iOS grants a limited background execution window. Android
-keeps syncing for up to six hours with a background-sync notification. This can
-use additional battery while the app is out of view.
-The operating system can stop background work sooner; force-quitting stops it.
-Returning to the app checks the existing connection and automatically reconnects
-when necessary. Longer absences can still require catching up with the server.
+On iOS 26 or later, open **Settings → Background sync → Sync for up to 10 minutes**
+to start an extended sync session. The ten minutes start when you tap the action,
+including time spent in the foreground. System progress shows elapsed session time,
+not how much history has downloaded. Stop the session from Settings or the system
+progress display. iOS can refuse a session or end it early. Without an extended
+session, leaving the app uses iOS's limited background grace period.
+
+Android automatically keeps syncing for up to ten minutes after you leave the app,
+with a background-sync notification. Returning to the app stops that background session.
+Both platforms stop the session when no open threads remain. Background syncing
+can use additional battery; the operating system can stop work sooner, and
+force-quitting stops it. Returning checks the existing connection and automatically
+reconnects when necessary. Longer absences can still require catching up with the server.

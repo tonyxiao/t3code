@@ -70,8 +70,10 @@ the shell can report a stop before the detail loads or catches up. A stopped
 thread stays mounted until its own stream is live and shows the stop, and the
 stream then closes and saves the settled state.
 Mobile adds a consumer for every unsettled, unarchived thread in enabled
-environments, independent of the visible route. Its native background execution
-allowance is finite; OS suspension still requires catching up on return. HTTP
+environments, independent of the visible route. iOS 26+ can run an explicitly
+started ten-minute continued-processing session with elapsed-time progress; the
+ordinary grace period remains the fallback. Android caps its foreground data-sync
+service at ten minutes. OS suspension still requires catching up on return. HTTP
 snapshot hydration is limited to four concurrent requests, but the resulting
 live subscriptions and retained histories scale with the number of open threads.
 Web does not add a keep-alive consumer.
