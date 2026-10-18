@@ -111,6 +111,8 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
 const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
+const privateAppName = repoEnv.T3CODE_MOBILE_APP_NAME?.trim();
+const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
 const privateProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim();
 const easProjectId =
   privateProjectId ??
@@ -230,7 +232,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 // family names without waiting for runtime font loading.
 
 const config: ExpoConfig = {
-  name: variant.appName,
+  name: privateAppName || variant.appName,
   slug: repoEnv.T3CODE_MOBILE_SLUG?.trim() ?? "t3-code",
   platforms: ["ios", "android"],
   scheme: repoEnv.T3CODE_MOBILE_SCHEME?.trim() ?? variant.scheme,
@@ -325,6 +327,15 @@ const config: ExpoConfig = {
     favicon: variant.assets.appIcon,
   },
   plugins: [
+    ...(remoteJsEnabled
+      ? ([
+          [
+            "expo-dev-client",
+            { launchMode: "launcher", embeddedBundle: true, skipOnboarding: true },
+          ],
+          "./plugins/withPrivateRemoteJs.cjs",
+        ] satisfies NonNullable<ExpoConfig["plugins"]>)
+      : []),
     "expo-asset",
     [
       "expo-font",
