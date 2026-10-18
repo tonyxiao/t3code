@@ -7,6 +7,20 @@ const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
+if (process.env.T3CODE_MOBILE_REMOTE_JS === "1") {
+  const enhanceMiddleware = config.server.enhanceMiddleware;
+  config.server.enhanceMiddleware = (middleware, server) => {
+    const nextMiddleware = enhanceMiddleware?.(middleware, server) ?? middleware;
+    return (request, response, next) => {
+      // React Native supports ordinary bundle responses too. Multipart progress
+      // responses bypass gzip, making the first cellular/Tailscale load costly.
+      if (request.url?.split("?")[0]?.endsWith(".bundle")) {
+        request.headers.accept = "application/javascript";
+      }
+      return nextMiddleware(request, response, next);
+    };
+  };
+}
 const workspaceRoot = path.resolve(__dirname, "../..");
 const generatedLicenseModuleRoot = path.join(__dirname, ".generated", "third-party-licenses");
 const licenseGeneratorSource = path.join(
