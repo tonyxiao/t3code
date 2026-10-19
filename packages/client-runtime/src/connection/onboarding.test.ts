@@ -20,6 +20,7 @@ import {
   BearerConnectionProfile,
   BearerConnectionRegistration,
   PrimaryConnectionRegistration,
+  type ConnectionCatalogEntry,
 } from "./catalog.ts";
 import * as Connectivity from "./connectivity.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
@@ -33,6 +34,7 @@ import * as Onboarding from "./onboarding.ts";
 import {
   prepareBearerConnectionUpdate,
   preparePairingRegistration,
+  pairingCatalogConflict,
   prepareSshRegistration,
 } from "./onboarding.ts";
 import * as EnvironmentRegistry from "./registry.ts";
@@ -49,6 +51,86 @@ const layerClientPresentation = Layer.succeed(
     },
   }),
 );
+
+describe("pairing catalog identity", () => {
+  const remoteId = EnvironmentId.make("remote-a");
+  const otherId = EnvironmentId.make("remote-b");
+  const remote: ConnectionCatalogEntry = {
+    target: new BearerConnectionTarget({
+      environmentId: remoteId,
+      label: "A",
+      connectionId: "bearer:remote-a",
+    }),
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: "bearer:remote-a",
+        environmentId: remoteId,
+        label: "A",
+        httpBaseUrl: "https://a.example/",
+        wsBaseUrl: "wss://a.example/",
+      }),
+    ),
+    enabled: false,
+  };
+  const local: ConnectionCatalogEntry = {
+    target: new PrimaryConnectionTarget({
+      environmentId: otherId,
+      label: "Local",
+      httpBaseUrl: "http://localhost/",
+      wsBaseUrl: "ws://localhost/",
+    }),
+    profile: Option.none(),
+    enabled: true,
+  };
+
+  it("accepts re-pairing the same trusted identity, even after an address change", () => {
+    const entries = new Map([
+      [remoteId, remote],
+      [otherId, local],
+    ]);
+    expect(pairingCatalogConflict(entries, remoteId, "https://a.example/")).toBeNull();
+    expect(pairingCatalogConflict(entries, remoteId, "https://moved.example/")).toBeNull();
+    expect(entries.get(otherId)).toBe(local);
+    expect(entries.get(remoteId)?.enabled).toBe(false);
+  });
+
+  it("rejects a different identity on a saved URL and refuses to replace local state", () => {
+    const entries = new Map([
+      [remoteId, remote],
+      [otherId, local],
+    ]);
+    expect(pairingCatalogConflict(entries, otherId, "https://a.example/")?.detail).toContain(
+      "different connection type",
+    );
+    expect(
+      pairingCatalogConflict(entries, EnvironmentId.make("intruder"), "https://a.example")?.detail,
+    ).toContain("different environment identity");
+    expect(entries.size).toBe(2);
+  });
+
+  it("checks alternate bearer routes in a multi-route environment", () => {
+    const entries = new Map([
+      [
+        remoteId,
+        {
+          ...local,
+          target: new PrimaryConnectionTarget({
+            environmentId: remoteId,
+            label: "Local route",
+            httpBaseUrl: "http://127.0.0.1:3773/",
+            wsBaseUrl: "ws://127.0.0.1:3773/",
+          }),
+          alternateRoutes: [{ target: remote.target, profile: remote.profile }],
+        },
+      ],
+    ]);
+
+    expect(pairingCatalogConflict(entries, remoteId, "https://moved.example/")).toBeNull();
+    expect(
+      pairingCatalogConflict(entries, EnvironmentId.make("intruder"), "https://a.example/"),
+    ).not.toBeNull();
+  });
+});
 
 function layerPairingHttp(
   calls: Array<{ readonly url: string; readonly init: RequestInit }>,
@@ -224,6 +306,26 @@ const registerSwitchedOffEnvironment = Effect.gen(function* () {
 });
 
 describe("connection onboarding", () => {
+  it.effect("rejects a descriptor identity conflict before consuming the one-time token", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+      const error = yield* preparePairingRegistration(
+        { pairingUrl: "http://tailnet.example:3773/pair#token=one-time-secret" },
+        () =>
+          Effect.fail(
+            new ConnectionBlockedError({ reason: "configuration", detail: "identity conflict" }),
+          ),
+      ).pipe(
+        Effect.provide(Layer.mergeAll(layerClientPresentation, layerPairingHttp(calls))),
+        Effect.flip,
+      );
+      expect(error).toMatchObject({ reason: "configuration", detail: "identity conflict" });
+      expect(calls.map((call) => call.url)).toEqual([
+        "http://tailnet.example:3773/.well-known/t3/environment",
+      ]);
+    }),
+  );
+
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
       const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
@@ -352,7 +454,7 @@ describe("connection onboarding", () => {
     }).pipe(Effect.provide(layerPairingOnboarding())),
   );
 
-  it.effect("leaves a platform-managed environment untouched when its id is paired", () =>
+  it.effect("rejects pairing over a platform-managed environment", () =>
     Effect.gen(function* () {
       const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
       const onboarding = yield* Onboarding.ConnectionOnboarding;
@@ -370,9 +472,12 @@ describe("connection onboarding", () => {
       const before = yield* SubscriptionRef.get(registry.entries);
       expect(before.get(PAIRED_ENVIRONMENT_ID)?.enabled).toBe(false);
 
-      const environmentId = yield* onboarding.registerPairing(PAIRING_INPUT);
+      const error = yield* onboarding.registerPairing(PAIRING_INPUT).pipe(Effect.flip);
 
-      expect(environmentId).toBe(PAIRED_ENVIRONMENT_ID);
+      expect(error).toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "configuration",
+      });
       const after = yield* SubscriptionRef.get(registry.entries);
       expect(after).toEqual(before);
       expect(after.get(PAIRED_ENVIRONMENT_ID)?.unsupportedReason).toBe(UNSUPPORTED_ERROR.message);

@@ -17,7 +17,7 @@ import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
 
 import type {
-  DesktopAppActivationRequest,
+  DesktopAppControlRequest,
   DesktopAppActivationResponse,
 } from "./desktopAppActivation.ts";
 
@@ -1146,7 +1146,7 @@ export interface DesktopBridge {
   appActivation?: {
     setReady: (ready: boolean) => Promise<void>;
     complete: (response: DesktopAppActivationResponse) => Promise<void>;
-    onRequest: (listener: (request: DesktopAppActivationRequest) => void) => () => void;
+    onRequest: (listener: (request: DesktopAppControlRequest) => void) => () => void;
   };
   preview?: DesktopPreviewBridge;
 }

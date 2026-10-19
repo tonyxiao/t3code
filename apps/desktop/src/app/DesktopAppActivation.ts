@@ -8,7 +8,7 @@ import * as NodePath from "node:path";
 
 import {
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-  DesktopAppActivationRequest,
+  DesktopAppControlRequest,
   type DesktopAppActivationResponse,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
@@ -32,7 +32,8 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
-const isDesktopAppActivationRequest = Schema.is(DesktopAppActivationRequest);
+const PAIRING_REQUEST_TIMEOUT_MS = 35_000;
+const isDesktopAppActivationRequest = Schema.is(DesktopAppControlRequest);
 
 export class DesktopAppActivationStartError extends Schema.TaggedError<DesktopAppActivationStartError>()(
   "DesktopAppActivationStartError",
@@ -108,7 +109,7 @@ export async function startDesktopAppControlServer(input: {
   readonly address: string;
   readonly directory: string | null;
   readonly userId: number | undefined;
-  readonly handle: (request: DesktopAppActivationRequest) => Promise<DesktopAppActivationResponse>;
+  readonly handle: (request: DesktopAppControlRequest) => Promise<DesktopAppActivationResponse>;
   readonly cancel: (requestId: string) => void;
   readonly onReclaimError: (error: unknown) => void;
 }): Promise<RunningControlServer> {
@@ -315,6 +316,7 @@ export const make = Effect.gen(function* () {
 
   const broker = new DesktopAppActivationBroker({
     requestTimeoutMs: REQUEST_TIMEOUT_MS,
+    pairingRequestTimeoutMs: PAIRING_REQUEST_TIMEOUT_MS,
     activate: () => {
       void runPromise(
         desktopWindow.activate.pipe(

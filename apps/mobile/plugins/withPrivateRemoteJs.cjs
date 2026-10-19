@@ -9,9 +9,8 @@ const {
 // client to load Metro. The native launcher remains available if JS fails.
 module.exports = function withPrivateRemoteJs(config) {
   config = withXcodeProject(config, (nextConfig) => {
-    const phases = Object.values(
-      nextConfig.modResults.hash.project.objects.PBXShellScriptBuildPhase ?? {},
-    );
+    const objects = nextConfig.modResults.hash.project.objects;
+    const phases = Object.values(objects.PBXShellScriptBuildPhase ?? {});
     const bundlePhase = phases.find(
       (phase) =>
         typeof phase === "object" && phase.name === '"Bundle React Native code and images"',
@@ -25,6 +24,34 @@ module.exports = function withPrivateRemoteJs(config) {
     bundlePhase.shellScript = JSON.stringify(
       script.replace("export SKIP_BUNDLING=1", "unset SKIP_BUNDLING"),
     );
+
+    // Expo marks its launcher module as debug-only. Its generated module
+    // provider is compiled in the app target, so include that provider's
+    // launcher registration in this private Release build as well.
+    const targets = Object.values(objects.PBXNativeTarget ?? {}).filter(
+      (target) => target?.productType === '"com.apple.product-type.application"',
+    );
+    if (targets.length !== 1) {
+      throw new Error("withPrivateRemoteJs: expected one iOS app target.");
+    }
+    const configurations = objects.XCConfigurationList?.[targets[0].buildConfigurationList];
+    const release = configurations?.buildConfigurations
+      ?.map((reference) => objects.XCBuildConfiguration?.[reference.value])
+      .find((entry) => entry?.name === "Release");
+    if (!release?.buildSettings) {
+      throw new Error("withPrivateRemoteJs: could not find Release build settings.");
+    }
+    const flags =
+      release.buildSettings.OTHER_SWIFT_FLAGS ?? '"$(inherited) -D EXPO_CONFIGURATION_RELEASE"';
+    if (typeof flags !== "string" || !flags.endsWith('"')) {
+      throw new Error("withPrivateRemoteJs: unexpected Release Swift flags.");
+    }
+    if (!flags.includes("EXPO_CONFIGURATION_DEBUG")) {
+      release.buildSettings.OTHER_SWIFT_FLAGS = flags.replace(
+        /"$/,
+        ' -D EXPO_CONFIGURATION_DEBUG"',
+      );
+    }
     return nextConfig;
   });
   config = withMainApplication(config, (nextConfig) => {

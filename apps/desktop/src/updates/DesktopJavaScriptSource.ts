@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- The Electron settings path is a Node filesystem boundary.
 import type { JavaScriptSource, JavaScriptSourceClient } from "@tonyxiao/javascript-source";
 import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/electron-updates";
 import * as NodeFSP from "node:fs/promises";
@@ -9,6 +10,11 @@ import * as Schema from "effect/Schema";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
+
+const LegacyDesktopSettings = Schema.fromJsonString(
+  Schema.Struct({ localRendererUrl: Schema.optional(Schema.String) }),
+);
+const decodeLegacyDesktopSettings = Schema.decodeUnknownEffect(LegacyDesktopSettings);
 
 export class JavaScriptSourceError extends Schema.TaggedError<JavaScriptSourceError>()(
   "JavaScriptSourceError",
@@ -43,19 +49,18 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const defaultUrl = Option.getOrUndefined(environment.devServerUrl)?.href;
-    const legacyUrl = yield* Effect.promise(async () => {
-      try {
-        const contents = await NodeFSP.readFile(environment.desktopSettingsPath, "utf8");
-        const value: unknown = JSON.parse(contents);
-        if (typeof value !== "object" || value === null || !("localRendererUrl" in value))
-          return null;
-        const url = value.localRendererUrl;
-        if (typeof url !== "string") return null;
-        const parsed = new URL(url);
-        return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
-      } catch {
-        return null;
-      }
+    const legacyUrl = yield* Effect.gen(function* () {
+      const contents = yield* Effect.promise(() =>
+        NodeFSP.readFile(environment.desktopSettingsPath, "utf8").catch(() => null),
+      );
+      if (contents === null) return null;
+      const value = yield* decodeLegacyDesktopSettings(contents).pipe(
+        Effect.catch(() => Effect.succeed(null)),
+      );
+      const url = value?.localRendererUrl;
+      if (typeof url !== "string" || !URL.canParse(url)) return null;
+      const parsed = new URL(url);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
     });
     const store = new ElectronUpdates({
       directory: environment.path.join(environment.stateDir, "javascript-source-updates"),

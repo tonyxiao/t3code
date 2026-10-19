@@ -43,6 +43,7 @@ import {
 } from "../startupAccess.ts";
 import { authScopesFlag } from "./authScopes.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
+import { pairImportCommand } from "./app.ts";
 
 const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
@@ -511,4 +512,5 @@ export const pairCommand = Command.make("pair", {
       );
     }).pipe(Effect.provide(FetchHttpClient.layer)),
   ),
+  Command.withSubcommands([pairImportCommand]),
 );

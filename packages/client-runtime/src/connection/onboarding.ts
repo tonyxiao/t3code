@@ -32,7 +32,7 @@ import {
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
-import { connectionRoutes, routeEntry, sshTargetKey } from "./routes.ts";
+import { connectionRoutes, routeEntry, routeHttpBaseUrl, sshTargetKey } from "./routes.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -98,9 +98,48 @@ function differentMachineError(label: string) {
   });
 }
 
+export function pairingCatalogConflict(
+  entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
+  environmentId: EnvironmentId,
+  httpBaseUrl: string,
+): ConnectionBlockedError | null {
+  const origin = new URL(httpBaseUrl).origin;
+  const existing = entries.get(environmentId);
+  if (
+    existing !== undefined &&
+    !connectionRoutes(existing).some((route) => route.target._tag === "BearerConnectionTarget")
+  ) {
+    return new ConnectionBlockedError({
+      reason: "configuration",
+      detail: "The remote identity already belongs to a different connection type.",
+    });
+  }
+  for (const entry of entries.values()) {
+    if (entry.target.environmentId === environmentId) continue;
+    if (
+      connectionRoutes(entry).some((route) => {
+        const url = routeHttpBaseUrl(route);
+        return url !== null && URL.canParse(url) && new URL(url).origin === origin;
+      })
+    ) {
+      return new ConnectionBlockedError({
+        reason: "configuration",
+        detail: "This address is already saved for a different environment identity.",
+      });
+    }
+  }
+  return null;
+}
+
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
-)(function* (input: PairingConnectionInput) {
+)(function* (
+  input: PairingConnectionInput,
+  validateDescriptor?: (
+    environmentId: EnvironmentId,
+    httpBaseUrl: string,
+  ) => Effect.Effect<void, ConnectionBlockedError>,
+) {
   const target = yield* resolvePairingTarget(input);
   const presentation = yield* ClientCapabilities.ClientPresentation;
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
@@ -117,6 +156,9 @@ export const preparePairingRegistration = Effect.fn(
   // An outdated server is still saved so it can be updated from this client.
   if (compatibilityError !== null && compatibilityError.serverUpdateRequired !== true) {
     return yield* compatibilityError;
+  }
+  if (validateDescriptor !== undefined) {
+    yield* validateDescriptor(descriptor.environmentId, target.httpBaseUrl);
   }
   const access = yield* bootstrapRemoteBearerSession({
     httpBaseUrl: target.httpBaseUrl,
@@ -147,9 +189,18 @@ export const preparePairingRegistration = Effect.fn(
 const registerPairingConnection = Effect.fn(
   "clientRuntime.connection.onboarding.registerPairingConnection",
 )(function* (input: PairingConnectionInput) {
-  const registration = yield* preparePairingRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-  if (!(yield* registry.register(registration))) return registration.target.environmentId;
+  const entries = yield* SubscriptionRef.get(registry.entries);
+  const registration = yield* preparePairingRegistration(input, (environmentId, httpBaseUrl) => {
+    const conflict = pairingCatalogConflict(entries, environmentId, httpBaseUrl);
+    return conflict === null ? Effect.void : Effect.fail(conflict);
+  });
+  if (!(yield* registry.register(registration))) {
+    return yield* new ConnectionBlockedError({
+      reason: "configuration",
+      detail: "The environment is managed by this app and cannot be replaced by a pairing link.",
+    });
+  }
   yield* registry.setCompatibility(registration.target.environmentId, null);
   yield* registry
     .setEnabled(registration.target.environmentId, true)

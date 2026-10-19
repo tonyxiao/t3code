@@ -12,6 +12,31 @@ const request: DesktopAppActivationRequest = {
 };
 
 describe("DesktopAppActivationBroker", () => {
+  it("passes pairing to the renderer without focusing the desktop window", async () => {
+    const activate = vi.fn();
+    const broker = new DesktopAppActivationBroker({ requestTimeoutMs: 1_000, activate });
+    const send = vi.fn();
+    broker.registerRenderer(send);
+    const pairing = {
+      version: 1,
+      requestId: "pairing-1",
+      type: "import-pairing",
+      pairingUrl: "https://remote.test/#token=one-time-secret",
+    } as const;
+    const response = broker.request(pairing);
+    expect(activate).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(pairing);
+    broker.complete({
+      version: 1,
+      requestId: pairing.requestId,
+      ok: true,
+      environmentId: "remote-id",
+      action: "added",
+    });
+    await expect(response).resolves.toMatchObject({ ok: true, environmentId: "remote-id" });
+    broker.close();
+  });
+
   it("focuses immediately and waits for renderer readiness", async () => {
     const activate = vi.fn();
     const send = vi.fn();
