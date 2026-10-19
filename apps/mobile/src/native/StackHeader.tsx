@@ -5,6 +5,7 @@ import type {
 } from "@react-navigation/native-stack";
 import { use, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { NativeWorkspaceTabActivityContext } from "./v5-workspace-context";
+import { optionsSignature } from "./optionsSignature";
 import type { ColorValue } from "react-native";
 
 export {
@@ -51,46 +52,6 @@ function normalizeScreenOptions(
   }
 
   return normalized as NativeStackNavigationOptions;
-}
-
-function optionsSignature(value: unknown, seen = new WeakSet<object>()): string {
-  if (value === null) return "null";
-  switch (typeof value) {
-    case "boolean":
-    case "number":
-    case "string":
-      return JSON.stringify(value);
-    case "undefined":
-      return "undefined";
-    case "function":
-      // Header factories are frequently recreated inline. Their source is
-      // stable across equivalent renders, while a reference comparison would
-      // make navigation.setOptions re-enter the navigator indefinitely.
-      return `function:${Function.prototype.toString.call(value)}`;
-    case "symbol":
-      return `symbol:${String(value)}`;
-    case "bigint":
-      return `bigint:${String(value)}`;
-    case "object": {
-      const object = value as object;
-      if (seen.has(object)) return "[circular]";
-      seen.add(object);
-      if (Array.isArray(value)) {
-        return `[${value.map((entry) => optionsSignature(entry, seen)).join(",")}]`;
-      }
-      // React refs carry mutable native instances that must not make static
-      // screen options appear different after every render.
-      if ("current" in object) return "[ref]";
-      return `{${Object.keys(value as Record<string, unknown>)
-        .sort()
-        .map(
-          (key) =>
-            `${JSON.stringify(key)}:${optionsSignature((value as Record<string, unknown>)[key], seen)}`,
-        )
-        .join(",")}}`;
-    }
-  }
-  return String(value);
 }
 
 function stabilizeOptionFunctions(
