@@ -40,6 +40,7 @@ interface ComposerPrimaryActionsProps {
   sendDisabledReason: string | null;
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
+  offlineQueue?: boolean | undefined;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   canResume?: boolean;
@@ -95,6 +96,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   sendDisabledReason,
   isConnecting,
   isEnvironmentUnavailable,
+  offlineQueue = false,
   isPreparingWorktree,
   hasSendableContent,
   canResume = false,
@@ -275,15 +277,17 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 
   const submitLabel = showResume
     ? "Resume thread"
-    : isEditingQueuedMessage
-      ? "Update queued message"
-      : compactsBeforeSend
-        ? "Compact and send"
-        : isQueuing
-          ? "Queue message"
-          : isRunning
-            ? "Steer message"
-            : "Submit message";
+    : offlineQueue
+      ? "Save for reconnect"
+      : isEditingQueuedMessage
+        ? "Update queued message"
+        : compactsBeforeSend
+          ? "Compact and send"
+          : isQueuing
+            ? "Queue message"
+            : isRunning
+              ? "Steer message"
+              : "Submit message";
   const submitStatus = isEnvironmentUnavailable
     ? "Environment disconnected"
     : (sendDisabledReason ??

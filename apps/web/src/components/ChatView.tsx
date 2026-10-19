@@ -333,6 +333,7 @@ import {
   useComposerDraftStore,
   DraftId,
 } from "../composerDraftStore";
+import { useOfflineOutbox, type OfflineOutboxTurn } from "../offlineOutbox";
 import {
   formatTerminalContextLabel,
   type TerminalContextDraft,
@@ -961,7 +962,6 @@ function chatActionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "An error occurred.";
 }
 
-const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 const EMPTY_HELD_TURN_DIFF_SUMMARIES: readonly never[] = [];
 const noopHeldTurnDiff = (_turnId: RunId, _filePath?: string) => {};
 const noopHeldRevert = (_targetTurnCount: number) => {};
@@ -1056,6 +1056,13 @@ export default function ChatView(props: ChatViewProps) {
   const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
   const routeThreadRef = scopeThreadRef(environmentId, threadId);
   const routeThreadKey = scopedThreadKey(routeThreadRef);
+  const offlineQueuedTurns = useOfflineOutbox(
+    useShallow((state) =>
+      state.turns.filter(
+        (turn) => turn.environmentId === environmentId && turn.threadId === threadId,
+      ),
+    ),
+  );
   const currentRouteThreadKeyRef = useRef<string | null>(routeThreadKey);
   useLayoutEffect(() => {
     currentRouteThreadKeyRef.current = routeThreadKey;
@@ -1385,7 +1392,6 @@ export default function ChatView(props: ChatViewProps) {
   };
   const setMultipleModelSelectionsStable = useStableCallback(setMultipleModelSelections);
   const readMultipleModelSelections = () => appAtomRegistry.get(fanoutSelectionsAtom);
-  const environmentUnavailableSendToastSlotRef = useRef(0);
   const feedbackUploadsInFlightRef = useRef(new Set<string>());
   const terminalUiOpenByThreadRef = useRef<Record<string, boolean>>({});
 
@@ -5377,6 +5383,112 @@ export default function ChatView(props: ChatViewProps) {
         })
       : null;
   const composerBannerItems = (() => {
+    const queuedOffline = offlineQueuedTurns[0];
+    const offlineOutboxItems = queuedOffline
+      ? [
+          {
+            id: `offline-outbox:${routeThreadKey}`,
+            variant:
+              queuedOffline.blockedReason &&
+              queuedOffline.blockedReason !== "Waiting for connection"
+                ? ("warning" as const)
+                : ("info" as const),
+            icon: <WifiOffIcon />,
+            title: `${offlineQueuedTurns.length} message${offlineQueuedTurns.length === 1 ? "" : "s"} saved for reconnect`,
+            description:
+              queuedOffline.blockedReason &&
+              queuedOffline.blockedReason !== "Waiting for connection"
+                ? queuedOffline.blockedReason
+                : undefined,
+            actions: (
+              <>
+                {queuedOffline.blockedReason ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => void useOfflineOutbox.getState().retry(queuedOffline.id)}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    void (async () => {
+                      if (
+                        composerDraftHasUserContent(
+                          useComposerDraftStore.getState().getComposerDraft(composerDraftTarget),
+                        )
+                      ) {
+                        toastManager.add(
+                          stackedThreadToast({
+                            type: "warning",
+                            title: "Clear the current draft before restoring a queued message",
+                          }),
+                        );
+                        return;
+                      }
+                      const restored = await useOfflineOutbox.getState().remove(queuedOffline.id);
+                      if (!restored) return;
+                      const images = restored.images.map(cloneComposerImageForRetry);
+                      promptRef.current = restored.draftPrompt;
+                      composerImagesRef.current = images;
+                      composerFilesRef.current = restored.files;
+                      composerTerminalContextsRef.current = restored.terminalContexts;
+                      setComposerDraftPrompt(composerDraftTarget, restored.draftPrompt);
+                      addComposerDraftImages(composerDraftTarget, images);
+                      addComposerDraftFiles(composerDraftTarget, restored.files);
+                      setComposerDraftTerminalContexts(
+                        composerDraftTarget,
+                        restored.terminalContexts,
+                      );
+                      setComposerDraftPreviewAnnotations(
+                        composerDraftTarget,
+                        restored.previewAnnotations,
+                      );
+                      setComposerDraftReviewComments(composerDraftTarget, restored.reviewComments);
+                      setComposerDraftThreadContexts(composerDraftTarget, restored.threadContexts);
+                      setComposerDraftModelSelection(composerDraftTarget, restored.modelSelection, {
+                        explicit: true,
+                        replaceOptions: true,
+                      });
+                      setComposerDraftRuntimeMode(composerDraftTarget, restored.runtimeMode);
+                      setComposerDraftInteractionMode(
+                        composerDraftTarget,
+                        restored.interactionMode,
+                      );
+                      if (isLocalDraftThread) {
+                        setDraftThreadContext(composerDraftTarget, {
+                          runtimeMode: restored.runtimeMode,
+                          interactionMode: restored.interactionMode,
+                        });
+                      }
+                      composerRef.current?.resetCursorState({
+                        cursor: collapseExpandedComposerCursor(
+                          restored.draftPrompt,
+                          restored.draftPrompt.length,
+                        ),
+                        prompt: restored.draftPrompt,
+                        detectTrigger: true,
+                      });
+                    })().catch((error: unknown) =>
+                      setThreadError(
+                        threadId,
+                        error instanceof Error
+                          ? error.message
+                          : "Could not restore queued message.",
+                      ),
+                    );
+                  }}
+                >
+                  Restore
+                </Button>
+              </>
+            ),
+          },
+        ]
+      : [];
     const limitRecoveryItems = limitRecoveryBanner === null ? [] : [limitRecoveryBanner];
     const backgroundWorkItems = [
       childInputBannerItem,
@@ -5392,6 +5504,7 @@ export default function ChatView(props: ChatViewProps) {
         ...usageLimitsItems,
         ...projectCloneItems,
         ...systemComposerBannerItems,
+        ...offlineOutboxItems,
         ...backgroundWorkItems,
       ];
     }
@@ -5401,6 +5514,7 @@ export default function ChatView(props: ChatViewProps) {
       ...usageLimitsItems,
       ...projectCloneItems,
       ...systemComposerBannerItems,
+      ...offlineOutboxItems,
       ...backgroundWorkItems,
       {
         id: `branch-mismatch:${activeBranchMismatchKey}`,
@@ -5998,13 +6112,14 @@ export default function ChatView(props: ChatViewProps) {
       );
     };
     if (
-      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
+      (!activeEnvironmentUnavailable &&
+        !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) ||
       !activeThread ||
       (isSendBusy && !sendQueuesBehindSetup) ||
-      isConnecting ||
+      (isConnecting && !activeEnvironmentUnavailable) ||
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
-      threadDetailLoading ||
+      (threadDetailLoading && !activeEnvironmentUnavailable) ||
       readPendingEnvironmentChange() !== null ||
       sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
@@ -6012,7 +6127,7 @@ export default function ChatView(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
-    if (needsLoadBalancing) {
+    if (needsLoadBalancing && !activeEnvironmentUnavailable) {
       toastManager.add({
         type: "warning",
         title: loadBalancing.pending
@@ -6021,20 +6136,6 @@ export default function ChatView(props: ChatViewProps) {
         description: loadBalancing.pending
           ? "Resource checks are still running. You can choose a machine in the composer."
           : "No eligible machine has available resources. Choose a machine in the composer to override.",
-      });
-      return;
-    }
-    if (activeEnvironmentUnavailable) {
-      const toastSlot = environmentUnavailableSendToastSlotRef.current;
-      environmentUnavailableSendToastSlotRef.current =
-        (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
-      toastManager.add({
-        ...stackedThreadToast({
-          type: "warning",
-          title: "Not connected: message not sent",
-          description: "Reconnecting to the environment. Try again once it is connected.",
-        }),
-        id: `chat-send-environment-unavailable:${toastSlot}`,
       });
       return;
     }
@@ -6047,7 +6148,7 @@ export default function ChatView(props: ChatViewProps) {
       onAdvanceActivePendingUserInput();
       return;
     }
-    if (!sendCtx?.providerAvailable) {
+    if (!sendCtx || (!sendCtx.providerAvailable && !activeEnvironmentUnavailable)) {
       notifyDirectAnnotationAttached();
       return;
     }
@@ -6393,6 +6494,106 @@ export default function ChatView(props: ChatViewProps) {
         }),
       };
     };
+
+    if (activeEnvironmentUnavailable) {
+      if (multipleModelSelections !== null) {
+        setThreadError(
+          threadIdForSend,
+          "Connect to the environment before starting multiple models.",
+        );
+        return;
+      }
+      if (composerFilesSnapshot.some((file) => file.file === null)) {
+        setThreadError(threadIdForSend, "Reattach the file before queuing this message offline.");
+        return;
+      }
+      const earlierQueued = useOfflineOutbox
+        .getState()
+        .turns.some(
+          (turn) => turn.environmentId === environmentId && turn.threadId === threadIdForSend,
+        );
+      let titleSeed = assistantCitationsToPlainText(stripInlineContextReferences(trimmed)).trim();
+      if (!titleSeed) titleSeed = composerAttachmentsSnapshot[0]?.name ?? "New thread";
+      const title = truncate(titleSeed);
+      const threadCreateModelSelection = createModelSelection(
+        ctxSelectedModelSelection.instanceId,
+        ctxSelectedModel || activeProjectDefaultModelSelection?.model || DEFAULT_MODEL,
+        ctxSelectedModelSelection.options,
+      );
+      const bootstrap: OfflineOutboxTurn["bootstrap"] =
+        (isLocalDraftThread && !earlierQueued) || (baseBranchForWorktree && !earlierQueued)
+          ? {
+              ...(isLocalDraftThread && !earlierQueued
+                ? {
+                    createThread: {
+                      projectId: activeProject.id,
+                      title,
+                      modelSelection: threadCreateModelSelection,
+                      runtimeMode,
+                      interactionMode: sendInteractionMode,
+                      branch: activeThreadBranch,
+                      worktreePath: activeThread.worktreePath,
+                      createdAt: activeThread.createdAt,
+                    },
+                  }
+                : {}),
+              ...(baseBranchForWorktree && !earlierQueued
+                ? {
+                    prepareWorktree: {
+                      projectCwd: activeProject.workspaceRoot,
+                      baseBranch: baseBranchForWorktree,
+                      ...(startFromOrigin ? { startFromOrigin: true } : {}),
+                    },
+                    runSetupScript: true,
+                  }
+                : {}),
+            }
+          : undefined;
+      sendInFlightRef.current = true;
+      try {
+        await useOfflineOutbox.getState().enqueue({
+          id: messageIdForSend,
+          environmentId,
+          projectId: activeProject.id,
+          threadId: threadIdForSend,
+          createdAt: messageCreatedAt,
+          text: outgoingMessageText,
+          draftPrompt: messageTextForSend,
+          titleSeed: title,
+          modelSelection: ctxSelectedModelSelection,
+          runtimeMode,
+          interactionMode: sendInteractionMode,
+          dispatchMode: "queue",
+          compactBeforeSend,
+          images: composerImagesSnapshot,
+          files: composerFilesSnapshot,
+          terminalContexts: composerTerminalContextsSnapshot,
+          previewAnnotations: composerPreviewAnnotationsSnapshot,
+          reviewComments: composerReviewCommentsSnapshot,
+          threadContexts: composerThreadContextsSnapshot,
+          ...(bootstrap ? { bootstrap } : {}),
+        });
+        promptRef.current = "";
+        clearComposerDraftContent(composerDraftTarget);
+        composerRef.current?.resetCursorState();
+        setThreadError(threadIdForSend, null);
+        toastManager.add(
+          stackedThreadToast({
+            type: "success",
+            title: "Message saved for reconnect",
+            description: "It will send when this environment reconnects.",
+          }),
+        );
+      } catch (error) {
+        setThreadError(
+          threadIdForSend,
+          error instanceof Error ? error.message : "Could not save the offline message.",
+        );
+      } finally {
+        sendInFlightRef.current = false;
+      }
+      return;
+    }
 
     const multipleTargets: Array<{
       readonly selection: ModelSelection;
@@ -8166,7 +8367,7 @@ export default function ChatView(props: ChatViewProps) {
                           ) : null}
                           {!composerMounted ? null : (
                             <ChatComposer
-                              canOperateThread={canOperateThread}
+                              canOperateThread={canOperateThread || activeEnvironmentUnavailable}
                               reportedModelSelection={reportedModelSelection}
                               multipleModelSelections={multipleModelSelections}
                               supportsMultipleModels={
@@ -8211,7 +8412,7 @@ export default function ChatView(props: ChatViewProps) {
                               canResume={resumableRunId !== null || hasHeldQueuedRuns}
                               isRevertingCheckpoint={isRevertingCheckpoint}
                               sendDisabledReason={
-                                !canOperateThread
+                                !canOperateThread && !activeEnvironmentUnavailable
                                   ? "This connection cannot change threads."
                                   : isEnvironmentChanging
                                     ? "Preparing machine"
@@ -8219,7 +8420,7 @@ export default function ChatView(props: ChatViewProps) {
                                       ? "Rewinding conversation"
                                       : feedbackUploading
                                         ? "Sending feedback"
-                                        : threadDetailLoading
+                                        : threadDetailLoading && !activeEnvironmentUnavailable
                                           ? "Messages loading"
                                           : worktreeSetupBlocksSend
                                             ? "Preparing worktree"

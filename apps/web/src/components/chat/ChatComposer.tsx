@@ -1364,6 +1364,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   sendDisabledReason: string | null;
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
+  offlineQueue?: boolean;
   hasSendableContent: boolean;
   canResume: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
@@ -1408,6 +1409,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         sendDisabledReason={props.sendDisabledReason}
         isConnecting={props.isConnecting}
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
+        offlineQueue={props.offlineQueue}
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
         canResume={props.canResume}
@@ -2319,13 +2321,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderEntry?.snapshot,
     selectedModel,
   );
+  const canQueueOffline =
+    environmentUnavailable !== null &&
+    activePendingProgress === null &&
+    !showPlanFollowUpPrompt &&
+    !isEditingQueuedMessage;
   const sendDisabledReason =
     externalSendDisabledReason ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
-    (activePendingProgress
-      ? attachmentBlockReason
-      : (attachmentBlockReason ??
-        (multipleModelSelections === null ? providerSendBlockReason : null)));
+    (canQueueOffline && multipleModelSelections !== null
+      ? "Connect before starting multiple models."
+      : null) ??
+    (canQueueOffline && needsReattachFileCount > 0
+      ? "Reattach the file before saving it offline."
+      : null) ??
+    (canQueueOffline
+      ? null
+      : activePendingProgress
+        ? attachmentBlockReason
+        : (attachmentBlockReason ??
+          (multipleModelSelections === null ? providerSendBlockReason : null)));
   const isSendDisabled = sendDisabledReason !== null;
   const selectedProviderStatus = selectedProviderEntry?.snapshot ?? null;
   const compactCommandAvailable = providerSupportsManualCompaction(selectedProviderEntry);
@@ -2912,13 +2927,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const showResumeAction =
     canResume && !composerDraftHasUserContent(composerDraft) && !isEditingQueuedMessage;
   const collapsedComposerPrimaryActionDisabled =
-    phase === "running" ||
+    (phase === "running" && !canQueueOffline) ||
     isSendBusy ||
     isSendDisabled ||
-    isConnecting ||
-    noProviderAvailable ||
+    (isConnecting && !canQueueOffline) ||
+    (noProviderAvailable && !canQueueOffline) ||
     projectSelectionRequired ||
-    environmentUnavailable !== null ||
+    (environmentUnavailable !== null && !canQueueOffline) ||
     (!composerSendState.hasSendableContent && !showResumeAction);
   const collapsedComposerPrimaryActionLabel = showResumeAction
     ? "Resume thread"
@@ -3934,10 +3949,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (
       isSendBusy ||
       isSendDisabled ||
-      isConnecting ||
-      noProviderAvailable ||
-      environmentUnavailable !== null ||
-      phase === "running"
+      (isConnecting && !canQueueOffline) ||
+      (noProviderAvailable && !canQueueOffline) ||
+      (environmentUnavailable !== null && !canQueueOffline) ||
+      (phase === "running" && !canQueueOffline)
     ) {
       return false;
     }
@@ -3953,9 +3968,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
     if (
-      noProviderAvailable ||
+      (noProviderAvailable && !canQueueOffline) ||
       isSendDisabled ||
-      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
+      (!canQueueOffline && !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
     ) {
       event?.preventDefault();
       return;
@@ -7147,12 +7162,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       promptHasText={false}
                       isSendBusy={isSendBusy}
                       sendDisabledReason={sendDisabledReason}
-                      isConnecting={isConnecting}
+                      isConnecting={isConnecting && !canQueueOffline}
                       isEnvironmentUnavailable={
-                        environmentUnavailable !== null ||
-                        noProviderAvailable ||
+                        (environmentUnavailable !== null && !canQueueOffline) ||
+                        (noProviderAvailable && !canQueueOffline) ||
                         projectSelectionRequired
                       }
+                      offlineQueue={canQueueOffline}
                       isPreparingWorktree={false}
                       hasSendableContent={false}
                       preserveComposerFocusOnPointerDown
@@ -7276,12 +7292,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     promptHasText={prompt.trim().length > 0}
                     isSendBusy={isSendBusy}
                     sendDisabledReason={sendDisabledReason}
-                    isConnecting={isConnecting}
+                    isConnecting={isConnecting && !canQueueOffline}
                     isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
-                      noProviderAvailable ||
+                      (environmentUnavailable !== null && !canQueueOffline) ||
+                      (noProviderAvailable && !canQueueOffline) ||
                       projectSelectionRequired
                     }
+                    offlineQueue={canQueueOffline}
                     isPreparingWorktree={isPreparingWorktree}
                     hasSendableContent={composerSendState.hasSendableContent}
                     canResume={showResumeAction}
