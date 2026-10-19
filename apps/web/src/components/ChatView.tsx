@@ -1455,7 +1455,6 @@ function chatActionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "An error occurred.";
 }
 
-const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 const EMPTY_HELD_TURN_DIFF_SUMMARIES: readonly never[] = [];
 const noopHeldTurnDiff = (_turnId: TurnId, _filePath?: string) => {};
 const noopHeldRevert = (_targetTurnCount: number) => {};
@@ -1732,6 +1731,7 @@ export default function ChatView(props: ChatViewProps) {
     Record<string, LocalThreadErrorEntry>
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
+  const [isSavingQueuedMessage, setIsSavingQueuedMessage] = useState(false);
   const isRevertingCheckpoint = useComposerDraftStore((store) =>
     store.rewindingThreadKeys.has(routeThreadKey),
   );
@@ -1823,7 +1823,6 @@ export default function ChatView(props: ChatViewProps) {
   const multipleModelSelectionsRef = useRef(multipleModelSelections);
   multipleModelSelectionsRef.current = multipleModelSelections;
   const uncertainMultipleSubmissionsRef = fanoutState.uncertainSubmissions;
-  const environmentUnavailableSendToastSlotRef = useRef(0);
   const feedbackUploadsInFlightRef = useRef(new Set<string>());
   const terminalUiOpenByThreadRef = useRef<Record<string, boolean>>({});
 
@@ -2625,9 +2624,14 @@ export default function ChatView(props: ChatViewProps) {
     advertisedFileAttachmentBytes === null
       ? null
       : clampFileAttachmentUploadBytes(advertisedFileAttachmentBytes);
+  const hasQueuedThreadMessages = useQueuedMessageStore(
+    (store) =>
+      activeThreadKey !== null && (store.queuesByThreadKey[activeThreadKey]?.length ?? 0) > 0,
+  );
   const envLocked = Boolean(
     activeThread &&
-    (activeThread.messages.length > 0 ||
+    (hasQueuedThreadMessages ||
+      activeThread.messages.length > 0 ||
       (activeThread.session !== null && activeThread.session.status !== "stopped")),
   );
 
@@ -2718,6 +2722,7 @@ export default function ChatView(props: ChatViewProps) {
         variant: unavailableConnection.phase === "error" ? "error" : "warning",
         icon: <WifiOffIcon />,
         title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
+        description: "Messages are saved on this device and sent when the host reconnects.",
         actions: (
           <>
             {!environmentReconnecting ? (
@@ -3185,7 +3190,7 @@ export default function ChatView(props: ChatViewProps) {
     localDispatchStartedAt,
     latestUserMessageAt,
     isPreparingWorktree: isLocallyPreparingWorktree,
-    isSendBusy,
+    isSendBusy: isDispatchBusy,
     backgroundSubmissionPending,
   } = useLocalDispatchState({
     activeThread,
@@ -3195,6 +3200,7 @@ export default function ChatView(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError,
   });
+  const isSendBusy = isDispatchBusy || isSavingQueuedMessage;
   const optimisticCompactionMessage = optimisticUserMessages.at(-1);
   const pendingCompactionMessage =
     isSendBusy &&
@@ -3604,9 +3610,10 @@ export default function ChatView(props: ChatViewProps) {
   const [dockedDraftHeroThreadKey, setDockedDraftHeroThreadKey] = useState<string | null>(null);
   const draftHeroDockRequested =
     activeThreadKey !== null && dockedDraftHeroThreadKey === activeThreadKey;
+  const queuedMessages = useQueuedMessages(activeThreadKey ?? "");
   const isDraftHeroState = resolveDraftHeroState({
     isLocalDraftThread,
-    hasTimelineEntries: timelineEntries.length > 0,
+    hasTimelineEntries: timelineEntries.length > 0 || queuedMessages.length > 0,
     isWorking,
     draftHeroDockRequested,
     backgroundSubmissionPending,
@@ -7235,7 +7242,6 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
-  const queuedMessages = useQueuedMessages(activeThreadKey ?? "");
   // The composer's model and modes, as a queued message keeps them for its send.
   const readComposerSendSettings = (
     sendCtx: ReturnType<ChatComposerHandle["getSendContext"]>,
@@ -7367,11 +7373,12 @@ export default function ChatView(props: ChatViewProps) {
     };
     if (
       !activeThread ||
-      isSendBusy ||
+      isSavingQueuedMessage ||
+      (isDispatchBusy && !activeEnvironmentUnavailable) ||
       isConnecting ||
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
-      threadDetailLoading ||
+      (threadDetailLoading && !activeEnvironmentUnavailable) ||
       sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
     ) {
@@ -7390,21 +7397,12 @@ export default function ChatView(props: ChatViewProps) {
       });
       return;
     }
-    if (activeEnvironmentUnavailable) {
-      const toastSlot = environmentUnavailableSendToastSlotRef.current;
-      environmentUnavailableSendToastSlotRef.current =
-        (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
-      toastManager.add({
-        ...stackedThreadToast({
-          type: "warning",
-          title: "Not connected: message not sent",
-          description: "Reconnecting to the environment. Try again once it is connected.",
-        }),
-        id: `chat-send-environment-unavailable:${toastSlot}`,
-      });
+    if (activeEnvironment?.connection.phase === "unsupported") {
+      notifyDirectAnnotationAttached();
       return;
     }
     if (activePendingProgress) {
+      if (activeEnvironmentUnavailable) return;
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
@@ -7418,6 +7416,10 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const multipleModelSelections = sendCtx.multipleModelSelections;
+    if (activeEnvironmentUnavailable && multipleModelSelections !== null) {
+      setThreadError(activeThread.id, "Choose a single model to queue a message while offline.");
+      return;
+    }
     if (
       multipleModelSelections !== null &&
       serverConfig?.environment.capabilities.requiredWorktreeBootstrap !== true
@@ -7516,6 +7518,10 @@ export default function ChatView(props: ChatViewProps) {
         ? parseCodexFeedbackCommand(trimmed)
         : null;
     if (feedbackCommand && multipleModelSelections === null) {
+      if (activeEnvironmentUnavailable) {
+        setThreadError(activeThread.id, "Reconnect to the host before submitting feedback.");
+        return;
+      }
       if (!isServerThread || activeThread.session === null) {
         toastManager.add(
           stackedThreadToast({
@@ -7572,6 +7578,10 @@ export default function ChatView(props: ChatViewProps) {
       composerImages.length === 0 &&
       composerFiles.length === 0
     ) {
+      if (activeEnvironmentUnavailable) {
+        setThreadError(activeThread.id, "Reconnect to the host before responding to a plan.");
+        return;
+      }
       const followUp = resolvePlanFollowUpSubmission({
         draftText: promptForSend,
         planMarkdown: activeProposedPlan.planMarkdown,
@@ -7678,9 +7688,10 @@ export default function ChatView(props: ChatViewProps) {
         (message) => message.sending !== undefined || !message.holdUntilUserAction,
       );
     if (
-      !directAnnotation &&
+      (!directAnnotation || activeEnvironmentUnavailable) &&
       activeThreadKey &&
-      (queueStillSending ||
+      (activeEnvironmentUnavailable ||
+        queueStillSending ||
         (phase === "running" &&
           (settings.followUpBehavior === "queue") !== (submissionIntent === "alternate")))
     ) {
@@ -7692,7 +7703,27 @@ export default function ChatView(props: ChatViewProps) {
       ) {
         return;
       }
-      useQueuedMessageStore.getState().enqueue(activeThreadKey, {
+      const queue = useQueuedMessageStore.getState();
+      const existingQueue = queue.queuesByThreadKey[activeThreadKey] ?? [];
+      const durable =
+        activeEnvironmentUnavailable || existingQueue.some((message) => message.durable);
+      const shouldBootstrap =
+        durable &&
+        !existingQueue.some((message) => message.bootstrap) &&
+        (isLocalDraftThread ||
+          (activeThread.messages.length === 0 &&
+            sendEnvMode === "worktree" &&
+            !activeThread.worktreePath));
+      const prepareWorktree =
+        shouldBootstrap && sendEnvMode === "worktree" && !activeThread.worktreePath;
+      if (prepareWorktree && !activeThreadBranch) {
+        setThreadError(
+          activeThread.id,
+          "Select a base branch before sending in New worktree mode.",
+        );
+        return;
+      }
+      const message = {
         prompt: promptForSend,
         images: [...composerImages],
         files: [...composerFiles],
@@ -7702,7 +7733,82 @@ export default function ChatView(props: ChatViewProps) {
         sendSettings,
         queuedAfterToolActivityId: latestCompletedToolActivityId(threadActivities),
         createdAt: new Date().toISOString(),
-      });
+        ...(durable
+          ? {
+              sendImmediately:
+                (settings.followUpBehavior !== "queue") !== (submissionIntent === "alternate"),
+            }
+          : {}),
+        ...(shouldBootstrap
+          ? {
+              bootstrap: {
+                ...(isLocalDraftThread
+                  ? {
+                      createThread: {
+                        projectId: activeProject.id,
+                        title: truncate(
+                          assistantCitationsToPlainText(
+                            stripInlineContextReferences(promptForSend),
+                          ).trim() || "New thread",
+                        ),
+                        modelSelection: sendSettings.modelSelection,
+                        runtimeMode: sendSettings.runtimeMode,
+                        interactionMode: sendSettings.interactionMode,
+                        branch: activeThreadBranch,
+                        worktreePath: activeThread.worktreePath,
+                        createdAt: activeThread.createdAt,
+                      },
+                    }
+                  : {}),
+                ...(prepareWorktree
+                  ? {
+                      prepareWorktree: {
+                        projectCwd: activeProject.workspaceRoot,
+                        baseBranch: activeThreadBranch!,
+                        branch: buildTemporaryWorktreeBranchName(randomHex),
+                        ...(startFromOrigin ? { startFromOrigin: true } : {}),
+                      },
+                      runSetupScript: true,
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+      if (durable) {
+        const draftBeforeSaving = useComposerDraftStore
+          .getState()
+          .getComposerDraft(composerDraftTarget);
+        sendInFlightRef.current = true;
+        setIsSavingQueuedMessage(true);
+        try {
+          await queue.enqueueDurable(activeThreadKey, message);
+        } catch (error) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Message could not be queued",
+              description:
+                error instanceof Error ? error.message : "Your draft has been kept. Try again.",
+            }),
+          );
+          return;
+        } finally {
+          sendInFlightRef.current = false;
+          setIsSavingQueuedMessage(false);
+        }
+        if (
+          useComposerDraftStore.getState().getComposerDraft(composerDraftTarget) !==
+          draftBeforeSaving
+        )
+          return;
+        if (currentRouteThreadKeyRef.current !== routeThreadKey) {
+          clearComposerDraftContent(composerDraftTarget);
+          return;
+        }
+      } else {
+        queue.enqueue(activeThreadKey, message);
+      }
       promptRef.current = "";
       // Attachments move with the message; their uploads stay pending. The
       // refs clear now too, so a Stop before the composer's sync effect runs
@@ -10028,14 +10134,17 @@ export default function ChatView(props: ChatViewProps) {
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}
                             phase={phase}
                             isConnecting={isConnecting}
-                            isSendBusy={isSendBusy}
+                            isSendBusy={
+                              isSavingQueuedMessage ||
+                              (isDispatchBusy && !activeEnvironmentUnavailable)
+                            }
                             isRevertingCheckpoint={isRevertingCheckpoint}
                             sendDisabledReason={
                               isRevertingCheckpoint
                                 ? "Rewinding conversation"
                                 : feedbackUploading
                                   ? "Sending feedback"
-                                  : threadDetailLoading
+                                  : threadDetailLoading && !activeEnvironmentUnavailable
                                     ? "Messages loading"
                                     : worktreeSetupBlocksSend
                                       ? "Preparing worktree"

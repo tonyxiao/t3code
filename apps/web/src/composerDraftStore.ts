@@ -71,6 +71,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
+import { hasQueuedMessagesForThread, useQueuedMessageStore } from "./queuedMessageStore";
 import { getDefaultServerModel } from "./providerModels";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
@@ -2105,6 +2106,10 @@ export function partializeComposerDraftStoreState(
         ([threadKey, draftThread]) =>
           mappedDraftKeys.has(threadKey) ||
           isDraftThreadPromoting(draftThread) ||
+          !useQueuedMessageStore.getState().hydrated ||
+          hasQueuedMessagesForThread(
+            scopeThreadRef(draftThread.environmentId, draftThread.threadId),
+          ) ||
           composerDraftHasUserContent(state.draftsByThreadKey[threadKey]),
       )
       .map(([threadKey]) => threadKey),
@@ -2694,6 +2699,12 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 previousThreadKeyForLogicalProject,
               ) &&
               !isDraftThreadPromoting(previousDraftThread) &&
+              !(
+                previousDraftThread &&
+                hasQueuedMessagesForThread(
+                  scopeThreadRef(previousDraftThread.environmentId, previousDraftThread.threadId),
+                )
+              ) &&
               !composerDraftHasUserContent(
                 state.draftsByThreadKey[previousThreadKeyForLogicalProject],
               )

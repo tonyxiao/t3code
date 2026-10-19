@@ -1,16 +1,20 @@
 import type {
+  ClientOrchestrationCommand,
   ModelSelection,
   PreviewAnnotationPayload,
   ProviderInteractionMode,
   RuntimeMode,
 } from "@t3tools/contracts";
 import { create } from "zustand";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import type { LocalDispatchSnapshot } from "./components/ChatView.logic";
 import type { ComposerFileAttachment, ComposerImageAttachment } from "./composerDraftStore";
 import type { TerminalContextDraft } from "./lib/terminalContext";
 import { randomUUID } from "./lib/utils";
 import type { ReviewCommentContext } from "./reviewCommentContext";
+import { createQueuedMessageStorage, type QueuedMessageStorage } from "./queuedMessageStorage";
 
 /**
  * The composer's model and modes when the message was queued. The send uses
@@ -57,6 +61,10 @@ export interface QueuedComposerMessage {
    */
   sending?: "preparing" | "dispatching";
   createdAt: string;
+  durable?: boolean;
+  sendImmediately?: boolean;
+  waitingForConnection?: boolean;
+  bootstrap?: Extract<ClientOrchestrationCommand, { type: "thread.turn.start" }>["bootstrap"];
 }
 
 /**
@@ -75,6 +83,14 @@ interface QueuedDispatch {
 interface QueuedMessageStoreState {
   queuesByThreadKey: Record<string, QueuedComposerMessage[]>;
   lastDispatchByThreadKey: Record<string, QueuedDispatch>;
+  hydrated: boolean;
+  persistenceError: unknown;
+  hydrate: () => Promise<void>;
+  flush: () => Promise<void>;
+  enqueueDurable: (
+    threadKey: string,
+    message: Omit<QueuedComposerMessage, "id">,
+  ) => Promise<QueuedComposerMessage>;
   enqueue: (threadKey: string, message: Omit<QueuedComposerMessage, "id">) => QueuedComposerMessage;
   /**
    * Marks one message as sending and returns it, or null when it is gone or
@@ -95,7 +111,8 @@ interface QueuedMessageStoreState {
    * The queue keeps its order and nothing behind it overtakes. False when
    * Stop already took the message back.
    */
-  failSend: (threadKey: string, id: string) => boolean;
+  failSend: (threadKey: string, id: string, retryOnReconnect?: boolean) => boolean;
+  resumeAfterDisconnect: (threadKey: string) => void;
   /** Removes one message without touching the others' anchors. Null when gone or sending. */
   remove: (threadKey: string, id: string) => QueuedComposerMessage | null;
   /** Removes and returns every message for the thread that is not already on the wire. */
@@ -121,101 +138,209 @@ function withQueue(
   return { queuesByThreadKey, lastDispatchByThreadKey };
 }
 
-/** In-memory only: a queued message is a live intent, not a draft worth persisting. */
-export const useQueuedMessageStore = create<QueuedMessageStoreState>()((set, get) => {
-  const queueOf = (threadKey: string) => get().queuesByThreadKey[threadKey] ?? EMPTY_QUEUE;
-  const update = (
-    threadKey: string,
-    queue: QueuedComposerMessage[],
-    lastDispatch?: QueuedDispatch | null,
-  ) => set((state) => withQueue(state, threadKey, queue, lastDispatch));
-  return {
-    queuesByThreadKey: {},
-    lastDispatchByThreadKey: {},
-    enqueue: (threadKey, message) => {
-      const entry: QueuedComposerMessage = { ...message, id: randomUUID() };
-      update(threadKey, [...queueOf(threadKey), entry]);
-      return entry;
-    },
-    beginSend: (threadKey, id, toolActivityId) => {
-      const queue = queueOf(threadKey);
-      const entry = queue.find((message) => message.id === id);
-      if (!entry || queue.some((message) => message.sending)) return null;
-      update(
-        threadKey,
-        queue.map((message) =>
-          message.id === id
-            ? { ...message, sending: "preparing" }
-            : message.queuedAfterToolActivityId === toolActivityId
-              ? message
-              : { ...message, queuedAfterToolActivityId: toolActivityId },
-        ),
+export function createQueuedMessageStore(storage?: QueuedMessageStorage) {
+  return create<QueuedMessageStoreState>()((set, get) => {
+    let pending: Promise<void> = Promise.resolve();
+    let hydration: Promise<void> | null = null;
+    const serialize = (operation: () => Promise<void>) => {
+      const result = pending.then(operation, operation);
+      pending = result;
+      void result.catch((persistenceError: unknown) => set({ persistenceError }));
+      return result;
+    };
+    const durableQueues = (queues: Record<string, QueuedComposerMessage[]>) =>
+      Object.fromEntries(
+        Object.entries(queues).flatMap(([threadKey, messages]) => {
+          const durable = messages.filter((message) => message.durable);
+          return durable.length > 0 ? [[threadKey, durable]] : [];
+        }),
       );
-      return entry;
-    },
-    markDispatching: (threadKey, id, thread) => {
-      const queue = queueOf(threadKey);
-      if (!queue.some((message) => message.id === id && message.sending)) return false;
-      update(
-        threadKey,
-        queue.map((message) =>
-          message.id === id ? { ...message, sending: "dispatching" } : message,
-        ),
-        {
-          messageId: id,
-          thread,
-          previous: get().lastDispatchByThreadKey[threadKey]?.thread ?? null,
-        },
-      );
-      return true;
-    },
-    finishSend: (threadKey, id) => {
-      const queue = queueOf(threadKey);
-      if (!queue.some((message) => message.id === id)) return;
-      update(
-        threadKey,
-        queue.filter((message) => message.id !== id),
-      );
-    },
-    failSend: (threadKey, id) => {
-      const queue = queueOf(threadKey);
-      const entry = queue.find((message) => message.id === id);
-      if (!entry) return false;
-      const { sending: _sending, ...rest } = entry;
-      // This send never reached the server, so only an earlier one is worth
-      // waiting for.
-      const dispatch = get().lastDispatchByThreadKey[threadKey];
-      update(
-        threadKey,
-        [{ ...rest, holdUntilUserAction: true }, ...queue.filter((message) => message.id !== id)],
-        dispatch?.messageId !== id
-          ? undefined
-          : dispatch.previous && { messageId: null, thread: dispatch.previous, previous: null },
-      );
-      return true;
-    },
-    remove: (threadKey, id) => {
-      const queue = queueOf(threadKey);
-      const entry = queue.find((message) => message.id === id);
-      if (!entry || entry.sending) return null;
-      update(
-        threadKey,
-        queue.filter((message) => message.id !== id),
-      );
-      return entry;
-    },
-    drain: (threadKey) => {
-      const queue = queueOf(threadKey);
-      const drained = queue.filter((message) => message.sending !== "dispatching");
-      if (drained.length === 0) return EMPTY_QUEUE;
-      update(
-        threadKey,
-        queue.filter((message) => message.sending === "dispatching"),
-      );
-      return drained;
-    },
-  };
-});
+    const queueOf = (threadKey: string) => get().queuesByThreadKey[threadKey] ?? EMPTY_QUEUE;
+    const update = (
+      threadKey: string,
+      queue: QueuedComposerMessage[],
+      lastDispatch?: QueuedDispatch | null,
+    ) => {
+      set((state) => withQueue(state, threadKey, queue, lastDispatch));
+      if (storage && get().hydrated) {
+        void serialize(async () => {
+          await storage.write(durableQueues(get().queuesByThreadKey));
+          set({ persistenceError: null });
+        });
+      }
+    };
+    return {
+      queuesByThreadKey: {},
+      lastDispatchByThreadKey: {},
+      hydrated: storage === undefined,
+      persistenceError: null,
+      flush: () => pending,
+      hydrate: () => {
+        hydration ??= serialize(async () => {
+          const recovered = storage ? await storage.read() : {};
+          set((state) => {
+            const queuesByThreadKey = { ...state.queuesByThreadKey };
+            for (const [threadKey, messages] of Object.entries(recovered)) {
+              const existing = queuesByThreadKey[threadKey] ?? [];
+              const ids = new Set(existing.map((message) => message.id));
+              queuesByThreadKey[threadKey] = [
+                ...messages
+                  .filter((message) => !ids.has(message.id))
+                  .map((message) => {
+                    const { sending: _sending, waitingForConnection: _waiting, ...rest } = message;
+                    return rest;
+                  }),
+                ...existing,
+              ];
+            }
+            return { queuesByThreadKey, hydrated: true, persistenceError: null };
+          });
+        }).catch((error: unknown) => {
+          hydration = null;
+          throw error;
+        });
+        return hydration;
+      },
+      enqueueDurable: async (threadKey, message) => {
+        if (!storage) throw new Error("Offline message storage is unavailable.");
+        await get().hydrate();
+        const entry: QueuedComposerMessage = { ...message, id: randomUUID(), durable: true };
+        await serialize(async () => {
+          const durableQueue = () =>
+            queueOf(threadKey).map((message) =>
+              message.durable ? message : { ...message, durable: true },
+            );
+          await storage.write(
+            durableQueues({
+              ...get().queuesByThreadKey,
+              [threadKey]: [...durableQueue(), entry],
+            }),
+          );
+          set((state) => ({
+            ...withQueue(state, threadKey, [...durableQueue(), entry]),
+            persistenceError: null,
+          }));
+        });
+        return entry;
+      },
+      enqueue: (threadKey, message) => {
+        const entry: QueuedComposerMessage = { ...message, id: randomUUID() };
+        update(threadKey, [...queueOf(threadKey), entry]);
+        return entry;
+      },
+      beginSend: (threadKey, id, toolActivityId) => {
+        const queue = queueOf(threadKey);
+        const entry = queue.find((message) => message.id === id);
+        if (!entry || queue.some((message) => message.sending)) return null;
+        update(
+          threadKey,
+          queue.map((message) =>
+            message.id === id
+              ? { ...message, sending: "preparing" }
+              : message.queuedAfterToolActivityId === toolActivityId
+                ? message
+                : { ...message, queuedAfterToolActivityId: toolActivityId },
+          ),
+        );
+        return entry;
+      },
+      markDispatching: (threadKey, id, thread) => {
+        const queue = queueOf(threadKey);
+        if (!queue.some((message) => message.id === id && message.sending)) return false;
+        update(
+          threadKey,
+          queue.map((message) =>
+            message.id === id ? { ...message, sending: "dispatching" } : message,
+          ),
+          {
+            messageId: id,
+            thread,
+            previous: get().lastDispatchByThreadKey[threadKey]?.thread ?? null,
+          },
+        );
+        return true;
+      },
+      finishSend: (threadKey, id) => {
+        const queue = queueOf(threadKey);
+        if (!queue.some((message) => message.id === id)) return;
+        update(
+          threadKey,
+          queue.filter((message) => message.id !== id),
+        );
+      },
+      failSend: (threadKey, id, retryOnReconnect = false) => {
+        const queue = queueOf(threadKey);
+        const entry = queue.find((message) => message.id === id);
+        if (!entry) return false;
+        const { sending: _sending, ...rest } = entry;
+        // This send never reached the server, so only an earlier one is worth
+        // waiting for.
+        const dispatch = get().lastDispatchByThreadKey[threadKey];
+        update(
+          threadKey,
+          [
+            {
+              ...rest,
+              holdUntilUserAction: !retryOnReconnect,
+              waitingForConnection: retryOnReconnect,
+            },
+            ...queue.filter((message) => message.id !== id),
+          ],
+          dispatch?.messageId !== id
+            ? undefined
+            : dispatch.previous && { messageId: null, thread: dispatch.previous, previous: null },
+        );
+        return true;
+      },
+      resumeAfterDisconnect: (threadKey) => {
+        const queue = queueOf(threadKey);
+        if (!queue.some((message) => message.waitingForConnection)) return;
+        update(
+          threadKey,
+          queue.map((message) =>
+            message.waitingForConnection ? { ...message, waitingForConnection: false } : message,
+          ),
+        );
+      },
+      remove: (threadKey, id) => {
+        const queue = queueOf(threadKey);
+        const entry = queue.find((message) => message.id === id);
+        if (!entry || entry.sending) return null;
+        const remaining = queue.filter((message) => message.id !== id);
+        update(
+          threadKey,
+          remaining.map((message, index) =>
+            index === 0 && entry.bootstrap && !message.bootstrap
+              ? { ...message, bootstrap: entry.bootstrap }
+              : message,
+          ),
+        );
+        return entry;
+      },
+      drain: (threadKey) => {
+        const queue = queueOf(threadKey);
+        const drained = queue.filter((message) => message.sending !== "dispatching");
+        if (drained.length === 0) return EMPTY_QUEUE;
+        update(
+          threadKey,
+          queue.filter((message) => message.sending === "dispatching"),
+        );
+        return drained;
+      },
+    };
+  });
+}
+
+export const useQueuedMessageStore = createQueuedMessageStore(
+  typeof indexedDB === "undefined" ? undefined : createQueuedMessageStorage(),
+);
+
+export function hasQueuedMessagesForThread(threadRef: ScopedThreadRef): boolean {
+  return (
+    (useQueuedMessageStore.getState().queuesByThreadKey[scopedThreadKey(threadRef)]?.length ?? 0) >
+    0
+  );
+}
 
 /**
  * The newest finished tool call. Its id changing is the boundary a queued
@@ -251,12 +376,16 @@ export function latestCompletedToolActivityId(
  * between a send and the provider picking it up, so nothing is due there.
  */
 export function isQueuedMessageDue(input: {
-  message: Pick<QueuedComposerMessage, "queuedAfterToolActivityId" | "holdUntilUserAction">;
+  message: Pick<
+    QueuedComposerMessage,
+    "queuedAfterToolActivityId" | "holdUntilUserAction" | "sendImmediately"
+  >;
   phase: "connecting" | "running" | "ready" | "disconnected";
   latestToolActivityId: string | null;
 }): boolean {
   if (input.message.holdUntilUserAction) return false;
   if (input.phase === "connecting") return false;
+  if (input.message.sendImmediately) return true;
   if (input.phase !== "running") return true;
   return input.latestToolActivityId !== input.message.queuedAfterToolActivityId;
 }

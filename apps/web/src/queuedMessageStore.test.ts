@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createLocalDispatchSnapshot } from "./components/ChatView.logic";
 import {
+  createQueuedMessageStore,
   isQueuedMessageDue,
   latestCompletedToolActivityId,
   useQueuedMessageStore,
   type QueuedComposerMessage,
 } from "./queuedMessageStore";
+import type { QueuedMessageStorage } from "./queuedMessageStorage";
 
 function makeMessage(prompt: string): Omit<QueuedComposerMessage, "id"> {
   return {
@@ -30,6 +32,130 @@ function makeMessage(prompt: string): Omit<QueuedComposerMessage, "id"> {
 
 const queue = (threadKey: string) =>
   useQueuedMessageStore.getState().queuesByThreadKey[threadKey] ?? [];
+
+describe("offline message durability", () => {
+  function storage() {
+    let saved: Record<string, QueuedComposerMessage[]> = {};
+    return {
+      read: async () => saved,
+      write: async (messages: Record<string, QueuedComposerMessage[]>) => {
+        saved = structuredClone(messages);
+      },
+    } satisfies QueuedMessageStorage;
+  }
+
+  it("restores offline messages in order, with their delivery identities", async () => {
+    const disk = storage();
+    const original = createQueuedMessageStore(disk);
+    const first = await original.getState().enqueueDurable("thread-a", makeMessage("first"));
+    await original.getState().enqueueDurable("thread-a", makeMessage("second"));
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+
+    expect(
+      restored.getState().queuesByThreadKey["thread-a"]?.map((message) => message.prompt),
+    ).toEqual(["first", "second"]);
+    expect(restored.getState().queuesByThreadKey["thread-a"]?.[0]?.id).toBe(first.id);
+  });
+
+  it("does not accept an offline message when saving fails", async () => {
+    const store = createQueuedMessageStore({
+      read: async () => ({}),
+      write: async () => {
+        throw new Error("Disk full");
+      },
+    });
+    await expect(
+      store.getState().enqueueDurable("thread-a", makeMessage("keep draft")),
+    ).rejects.toThrow("Disk full");
+    expect(store.getState().queuesByThreadKey).toEqual({});
+  });
+
+  it("keeps a recoverable send after restart without resending with a new ID", async () => {
+    const disk = storage();
+    const store = createQueuedMessageStore(disk);
+    const message = await store.getState().enqueueDurable("thread-a", makeMessage("follow up"));
+    store.getState().beginSend("thread-a", message.id, null);
+    store
+      .getState()
+      .markDispatching("thread-a", message.id, createLocalDispatchSnapshot(undefined));
+    await store.getState().flush();
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+
+    expect(restored.getState().queuesByThreadKey["thread-a"]?.[0]).toMatchObject({
+      id: message.id,
+    });
+    expect(restored.getState().queuesByThreadKey["thread-a"]?.[0]?.sending).toBeUndefined();
+  });
+
+  it("does not resurrect a canceled offline message", async () => {
+    const disk = storage();
+    const store = createQueuedMessageStore(disk);
+    const message = await store.getState().enqueueDurable("thread-a", makeMessage("cancel me"));
+    store.getState().remove("thread-a", message.id);
+    await store.getState().flush();
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+    expect(restored.getState().queuesByThreadKey).toEqual({});
+  });
+
+  it("keeps bootstrap work on the next message when the first message is canceled", async () => {
+    const disk = storage();
+    const store = createQueuedMessageStore(disk);
+    const bootstrap = {
+      prepareWorktree: { projectCwd: "/repo", baseBranch: "main", branch: "queued-branch" },
+      runSetupScript: true,
+    };
+    const first = await store.getState().enqueueDurable("thread-a", {
+      ...makeMessage("first"),
+      bootstrap,
+    });
+    const second = await store.getState().enqueueDurable("thread-a", makeMessage("second"));
+    store.getState().remove("thread-a", first.id);
+    await store.getState().flush();
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+    expect(restored.getState().queuesByThreadKey["thread-a"]).toEqual([
+      expect.objectContaining({ id: second.id, bootstrap }),
+    ]);
+  });
+
+  it("persists earlier busy-turn messages ahead of a newly queued offline message", async () => {
+    const disk = storage();
+    const store = createQueuedMessageStore(disk);
+    store.getState().enqueue("thread-a", makeMessage("already waiting"));
+    await store.getState().enqueueDurable("thread-a", makeMessage("offline follow up"));
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+    expect(
+      restored.getState().queuesByThreadKey["thread-a"]?.map((message) => message.prompt),
+    ).toEqual(["already waiting", "offline follow up"]);
+  });
+
+  it("retains attachment bytes rather than only a temporary preview URL", async () => {
+    const disk = storage();
+    const store = createQueuedMessageStore(disk);
+    await store.getState().enqueueDurable("thread-a", {
+      ...makeMessage("with a file"),
+      files: [
+        {
+          type: "file",
+          id: "file-a",
+          name: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          file: new File(["notes"], "notes.txt", { type: "text/plain" }),
+        },
+      ],
+    });
+    const restored = createQueuedMessageStore(disk);
+    await restored.getState().hydrate();
+    expect(
+      await restored.getState().queuesByThreadKey["thread-a"]?.[0]?.files[0]?.file?.text(),
+    ).toBe("notes");
+  });
+});
 
 describe("queuedMessageStore", () => {
   beforeEach(() => {
@@ -152,6 +278,22 @@ describe("queuedMessageStore", () => {
 });
 
 describe("queued message dispatch timing", () => {
+  it("preserves an explicit steer intent when the host reconnects mid-turn", () => {
+    expect(
+      isQueuedMessageDue({
+        message: { queuedAfterToolActivityId: "tool-a", sendImmediately: true },
+        phase: "running",
+        latestToolActivityId: "tool-a",
+      }),
+    ).toBe(true);
+    expect(
+      isQueuedMessageDue({
+        message: { queuedAfterToolActivityId: "tool-a", sendImmediately: false },
+        phase: "running",
+        latestToolActivityId: "tool-a",
+      }),
+    ).toBe(false);
+  });
   const activities = [
     { id: "a1", kind: "tool.started", sequence: 1, createdAt: "2026-01-01T00:00:01Z" },
     { id: "a2", kind: "tool.completed", sequence: 2, createdAt: "2026-01-01T00:00:02Z" },

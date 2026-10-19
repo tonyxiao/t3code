@@ -39,6 +39,7 @@ import type {
   RuntimeSubagent,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
+import { useEnvironment } from "../../state/environments";
 import {
   emptyAgentPanelModel,
   formatSubagentModelLabel,
@@ -1783,6 +1784,10 @@ function QueuedMessageTimelineRow({
 }) {
   const ctx = use(TimelineRowCtx);
   const { queuedMessage } = row;
+  const environment = useEnvironment(ctx.activeThreadEnvironmentId ?? null);
+  const waitingForHost =
+    queuedMessage.waitingForConnection === true ||
+    (environment !== null && environment.connection.phase !== "connected");
   const attachmentCount = queuedMessage.images.length + queuedMessage.files.length;
   const contextCount =
     queuedMessage.terminalContexts.length +
@@ -1792,11 +1797,13 @@ function QueuedMessageTimelineRow({
   const sending = queuedMessage.sending !== undefined;
   const statusLabel = sending
     ? "Sending to the agent"
-    : queuedMessage.holdUntilUserAction
-      ? "Waits for Send now"
-      : row.isNext
-        ? "Sends after the next tool call or when the turn ends"
-        : "Sends after the messages above it";
+    : waitingForHost
+      ? "Saved on this device. Sends when the host reconnects."
+      : queuedMessage.holdUntilUserAction
+        ? "Waits for Send now"
+        : row.isNext
+          ? "Sends after the next tool call or when the turn ends"
+          : "Sends after the messages above it";
   return (
     <div className="flex flex-col items-end" data-queued-message-id={queuedMessage.id}>
       <div className="max-w-[80%] rounded-2xl border border-dashed border-border p-3 text-message-foreground/80">
@@ -1827,7 +1834,7 @@ function QueuedMessageTimelineRow({
               aria-label={`${sending ? "Sending" : "Queued"}. ${statusLabel}.`}
             >
               <ClockIcon className="size-3.5" aria-hidden />
-              {sending ? "Sending" : "Queued"}
+              {sending ? "Sending" : waitingForHost ? "Queued · waiting for host" : "Queued"}
             </TooltipTrigger>
             <TooltipPopup side="bottom">{statusLabel}</TooltipPopup>
           </Tooltip>
@@ -1842,6 +1849,7 @@ function QueuedMessageTimelineRow({
                     onPointerDown={(event) => event.preventDefault()}
                     onClick={() => ctx.onSteerQueuedMessage(queuedMessage.id)}
                     aria-label="Send now"
+                    disabled={waitingForHost}
                   />
                 }
               >

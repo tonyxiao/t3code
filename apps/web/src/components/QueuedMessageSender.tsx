@@ -15,12 +15,29 @@ import { useServerConfigs, useThread, useThreadStatus } from "../state/entities"
 import { useEnvironment } from "../state/environments";
 import { hasServerAcknowledgedLocalDispatch, latestTurnStartFailureId } from "./ChatView.logic";
 import { sendQueuedMessage } from "./chat/sendQueuedMessage";
+import { toastManager } from "./ui/toast";
 
 /**
  * Sends queued messages when they are due, for every thread with a queue,
  * whether or not the thread is on screen. Mounted once at the root.
  */
 export function QueuedMessageSender() {
+  const persistenceError = useQueuedMessageStore((state) => state.persistenceError);
+  useEffect(() => {
+    void useQueuedMessageStore
+      .getState()
+      .hydrate()
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (persistenceError === null) return;
+    toastManager.add({
+      id: "queued-message-storage-error",
+      type: "error",
+      title: "Could not save the message queue",
+      description: "Keep this window open. Offline messages may not survive a restart.",
+    });
+  }, [persistenceError]);
   const threadKeys = useQueuedMessageStore(
     useShallow((state) => Object.keys(state.queuesByThreadKey)),
   );
@@ -43,6 +60,11 @@ function ThreadQueueSender({ threadKey }: { threadKey: string }) {
   const rewinding = useComposerDraftStore((store) => store.rewindingThreadKeys.has(threadKey));
   const queue = useQueuedMessages(threadKey);
   const next = queue[0];
+  const hydrated = useQueuedMessageStore((state) => state.hydrated);
+  useEffect(() => {
+    if (environment?.connection.phase === "connected" || !next?.waitingForConnection) return;
+    useQueuedMessageStore.getState().resumeAfterDisconnect(threadKey);
+  }, [environment?.connection.phase, next?.waitingForConnection, threadKey]);
   const sending = queue.some((message) => message.sending);
   const activities = thread?.activities;
   const latestToolActivityId = useMemo(
@@ -78,9 +100,10 @@ function ThreadQueueSender({ threadKey }: { threadKey: string }) {
   // user resolves them.
   const blocked =
     threadRef === null ||
-    thread === null ||
-    threadStatus !== "live" ||
-    (environment !== null && environment.connection.phase !== "connected") ||
+    !hydrated ||
+    ((thread === null || threadStatus !== "live") && !next?.bootstrap?.createThread) ||
+    environment?.connection.phase !== "connected" ||
+    next?.waitingForConnection === true ||
     !serverConfigLoaded ||
     rewinding ||
     sending ||

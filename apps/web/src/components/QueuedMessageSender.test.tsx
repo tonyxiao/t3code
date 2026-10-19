@@ -1,5 +1,5 @@
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { act, createElement } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
@@ -14,6 +14,7 @@ const io = vi.hoisted(() => ({
   upload: vi.fn(),
   toast: vi.fn(),
   thread: null as unknown,
+  connectionPhase: "connected",
   shell: { runtimeMode: "full-access", interactionMode: "default" } as Record<string, unknown>,
 }));
 const config = {
@@ -36,7 +37,8 @@ vi.mock("../state/threads", () => ({
   },
 }));
 vi.mock("../state/environments", () => ({
-  useEnvironment: () => ({ connection: { phase: "connected" } }),
+  useEnvironment: () => ({ connection: { phase: io.connectionPhase } }),
+  readEnvironmentConnectionPhase: () => io.connectionPhase,
 }));
 vi.mock("../state/entities", () => ({
   useThread: () => io.thread,
@@ -53,6 +55,8 @@ vi.mock("../lib/attachmentUploadQueue", () => ({
     { type: "image", id: "uploaded", name: "a.png", mimeType: "image/png", sizeBytes: 4 },
   ],
   releaseDraftAttachments: vi.fn(),
+  readAttachmentUpload: vi.fn(),
+  retryAttachmentUpload: vi.fn(),
 }));
 
 const threadRef = scopeThreadRef(EnvironmentId.make("env-a"), ThreadId.make("thread-a"));
@@ -86,6 +90,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   useQueuedMessageStore.setState({ queuesByThreadKey: {}, lastDispatchByThreadKey: {} });
   io.thread = null;
+  io.connectionPhase = "connected";
   io.run.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   io.upload.mockReset().mockResolvedValue(undefined);
   io.toast.mockReset();
@@ -125,6 +130,43 @@ describe("QueuedMessageSender", () => {
   afterEach(async () => {
     await act(() => root?.unmount());
     root = null;
+  });
+
+  it("keeps offline messages queued until their own host reconnects", async () => {
+    enqueue({ durable: true });
+    io.thread = thread("ready");
+    io.connectionPhase = "offline";
+    await render();
+    expect(commandsRun()).toEqual([]);
+    expect(queue()).toHaveLength(1);
+
+    io.connectionPhase = "connected";
+    await render();
+    expect(commandsRun()).toEqual(["start"]);
+    expect(queue()).toBeUndefined();
+  });
+
+  it("bootstraps a queued new thread after reconnect without needing a server thread first", async () => {
+    enqueue({
+      durable: true,
+      bootstrap: {
+        createThread: {
+          projectId: ProjectId.make("project-a"),
+          title: "Queued task",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdAt: "2026-09-25T00:00:00Z",
+        },
+      },
+    });
+    await render();
+    expect(commandsRun()).toEqual(["start"]);
+    expect(io.run.mock.calls[0]?.[2]).toMatchObject({
+      input: { bootstrap: { createThread: { title: "Queued task" } } },
+    });
   });
 
   it("sends a queued message when the turn ends, with no chat view open", async () => {
@@ -180,6 +222,35 @@ describe("QueuedMessageSender", () => {
 });
 
 describe("sendQueuedMessage", () => {
+  it("does not try Send now against an offline host", async () => {
+    const message = enqueue();
+    io.connectionPhase = "offline";
+    await sendQueuedMessage(threadRef, message.id);
+    expect(commandsRun()).toEqual([]);
+    expect(queue()?.[0]?.sending).toBeUndefined();
+  });
+
+  it("retries an interrupted durable delivery with the same command and message IDs", async () => {
+    const message = enqueue({ durable: true });
+    io.run.mockResolvedValueOnce({
+      _tag: "Failure",
+      cause: Cause.fail({
+        _tag: "EnvironmentRpcUnavailableError",
+        message: "Connection closed",
+      }),
+    });
+    await sendQueuedMessage(threadRef, message.id);
+    expect(queue()?.[0]).toMatchObject({ id: message.id, waitingForConnection: true });
+    await sendQueuedMessage(threadRef, message.id);
+    const firstInput = io.run.mock.calls[0]?.[2];
+    expect(io.run.mock.calls[1]?.[2]).toMatchObject({
+      input: {
+        commandId: firstInput.input.commandId,
+        message: { messageId: firstInput.input.message.messageId },
+      },
+    });
+    expect(queue()).toBeUndefined();
+  });
   it("saves a mode changed before queueing, then starts the turn", async () => {
     io.shell = { ...io.shell, runtimeMode: "approval-required" };
     const message = enqueue();

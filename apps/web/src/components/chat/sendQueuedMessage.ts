@@ -4,7 +4,8 @@ import {
   squashAtomCommandFailure,
   type AtomCommand,
 } from "@t3tools/client-runtime/state/runtime";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { CommandId, MessageId, type ScopedThreadRef } from "@t3tools/contracts";
+import { isTransportConnectionErrorMessage } from "@t3tools/client-runtime/errors";
 import { serializeLegacyContextMessage } from "@t3tools/shared/composerContextLegacySend";
 import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
 
@@ -14,12 +15,15 @@ import {
   awaitAttachmentUploads,
   getUploadedAttachments,
   releaseDraftAttachments,
+  readAttachmentUpload,
+  retryAttachmentUpload,
   startAttachmentUpload,
 } from "../../lib/attachmentUploadQueue";
-import { newMessageId } from "../../lib/utils";
 import { latestCompletedToolActivityId, useQueuedMessageStore } from "../../queuedMessageStore";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { readThread, readThreadShell } from "../../state/entities";
+import { readEnvironmentConnectionPhase } from "../../state/environments";
+import { markPromotedDraftThreadByRef } from "../../composerDraftStore";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import {
@@ -50,6 +54,7 @@ export async function sendQueuedMessage(
   messageId: string,
 ): Promise<void> {
   const { environmentId, threadId } = threadRef;
+  if (readEnvironmentConnectionPhase(environmentId) !== "connected") return;
   const threadKey = scopedThreadKey(threadRef);
   const queue = useQueuedMessageStore.getState();
   const message = queue.beginSend(
@@ -73,6 +78,7 @@ export async function sendQueuedMessage(
     if (reason !== null) throw new Error(reason);
   };
   try {
+    if (message.durable) await queue.flush();
     const { sendableTerminalContexts, hasSendableContent } = deriveComposerSendState({
       prompt: message.prompt,
       imageCount: attachments.length,
@@ -103,7 +109,11 @@ export async function sendQueuedMessage(
     const useUploads = readConfig()?.environment.capabilities.attachmentUploads === true;
     if (useUploads && attachments.length > 0) {
       for (const attachment of attachments) {
-        startAttachmentUpload({ environmentId, image: attachment, draftTarget: threadRef });
+        const start =
+          message.durable && readAttachmentUpload(attachment.id)?.status === "failed"
+            ? retryAttachmentUpload
+            : startAttachmentUpload;
+        start({ environmentId, image: attachment, draftTarget: threadRef });
       }
       await awaitAttachmentUploads(attachments.map((attachment) => attachment.id));
     }
@@ -132,8 +142,8 @@ export async function sendQueuedMessage(
 
     // The server starts the turn with the thread's stored modes, so a change
     // made in the composer before queueing is saved first.
-    const createdAt = new Date().toISOString();
-    const shell = readThreadShell(threadRef);
+    const createdAt = message.createdAt;
+    const shell = message.bootstrap?.createThread ? null : readThreadShell(threadRef);
     const metadataUpdate = shell
       ? resolveThreadMetadataUpdateForNextTurn({
           currentModelSelection: shell.modelSelection,
@@ -179,9 +189,10 @@ export async function sendQueuedMessage(
     await run(threadEnvironment.startTurn, {
       environmentId,
       input: {
+        commandId: CommandId.make(message.id),
         threadId,
         message: {
-          messageId: newMessageId(),
+          messageId: MessageId.make(message.id),
           role: "user",
           text:
             context !== undefined && !inlineContext
@@ -193,14 +204,38 @@ export async function sendQueuedMessage(
         modelSelection: sendSettings.modelSelection,
         runtimeMode: sendSettings.runtimeMode,
         interactionMode: sendSettings.interactionMode,
+        ...(message.bootstrap ? { bootstrap: message.bootstrap } : {}),
         createdAt,
       },
     });
+    if (message.bootstrap?.createThread) markPromotedDraftThreadByRef(threadRef);
     queue.finishSend(threadKey, message.id);
     if (useUploads) releaseDraftAttachments(attachments);
     for (const image of message.images) revokeBlobPreviewUrl(image.previewUrl);
   } catch (error) {
-    if (!queue.failSend(threadKey, message.id)) return;
+    const transportTags = [
+      "ConnectionTransientError",
+      "RpcClientError",
+      "EnvironmentRpcUnavailableError",
+      "EnvironmentNotRegisteredError",
+    ];
+    const serverRejected =
+      typeof error === "object" &&
+      error !== null &&
+      "_tag" in error &&
+      (error._tag === "OrchestrationDispatchCommandError" ||
+        error._tag === "EnvironmentAuthorizationError");
+    const retryOnReconnect =
+      message.durable === true &&
+      !serverRejected &&
+      (readEnvironmentConnectionPhase(environmentId) !== "connected" ||
+        (typeof error === "object" &&
+          error !== null &&
+          "_tag" in error &&
+          transportTags.includes(String(error._tag))) ||
+        (error instanceof Error && isTransportConnectionErrorMessage(error.message)));
+    if (!queue.failSend(threadKey, message.id, retryOnReconnect)) return;
+    if (retryOnReconnect) return;
     const title = readThreadShell(threadRef)?.title;
     toastManager.add({
       type: "error",

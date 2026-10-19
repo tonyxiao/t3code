@@ -16,6 +16,7 @@ import {
   useComposerDraftStore,
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
+import { hasQueuedMessagesForThread } from "../queuedMessageStore";
 import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -190,6 +191,12 @@ export function useNewThreadHandler() {
       // drafts rather than deleting them.
       const emptyStoredDraftThread =
         reusableStoredDraftThread &&
+        !hasQueuedMessagesForThread(
+          scopeThreadRef(
+            reusableStoredDraftThread.environmentId,
+            reusableStoredDraftThread.threadId,
+          ),
+        ) &&
         !composerDraftHasUserContent(getComposerDraft(reusableStoredDraftThread.draftId))
           ? reusableStoredDraftThread
           : null;
@@ -243,9 +250,13 @@ export function useNewThreadHandler() {
             const remappedMeanwhile =
               getDraftSessionByLogicalProjectKey(logicalProjectKey)?.draftId !==
               emptyStoredDraftThread.draftId;
-            const investedMeanwhile = composerDraftHasUserContent(
-              getComposerDraft(emptyStoredDraftThread.draftId),
-            );
+            const investedMeanwhile =
+              hasQueuedMessagesForThread(
+                scopeThreadRef(
+                  emptyStoredDraftThread.environmentId,
+                  emptyStoredDraftThread.threadId,
+                ),
+              ) || composerDraftHasUserContent(getComposerDraft(emptyStoredDraftThread.draftId));
             if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
               return null;
             }
@@ -331,6 +342,9 @@ export function useNewThreadHandler() {
         currentRouteTarget?.kind === "draft" &&
         latestActiveDraftThread.logicalProjectKey === logicalProjectKey &&
         latestActiveDraftThread.promotedTo == null &&
+        !hasQueuedMessagesForThread(
+          scopeThreadRef(latestActiveDraftThread.environmentId, latestActiveDraftThread.threadId),
+        ) &&
         // Same content rule as above: a new-thread request while viewing an
         // invested draft mints a fresh one instead of repurposing it.
         !composerDraftHasUserContent(getComposerDraft(currentRouteTarget.draftId))
@@ -376,6 +390,9 @@ export function useNewThreadHandler() {
           // to reuse is still mapped at this point — reusing it here would
           // silently undo mint-fresh semantics.
           racedDraft.draftId !== storedDraftThread?.draftId &&
+          !hasQueuedMessagesForThread(
+            scopeThreadRef(racedDraft.environmentId, racedDraft.threadId),
+          ) &&
           readThreadShell(scopeThreadRef(racedDraft.environmentId, racedDraft.threadId)) === null
         ) {
           // Same remap the reuse paths above perform: point the draft at the

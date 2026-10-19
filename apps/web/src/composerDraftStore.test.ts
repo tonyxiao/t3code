@@ -88,6 +88,7 @@ import {
   type TerminalContextDraft,
 } from "./lib/terminalContext";
 import { createDeferredStorage } from "./lib/storage";
+import { useQueuedMessageStore } from "./queuedMessageStore";
 
 function makeImage(input: {
   id: string;
@@ -1475,6 +1476,41 @@ describe("composerDraftStore project draft thread mapping", () => {
     // draft rows to surface.
     expect(useComposerDraftStore.getState().getDraftThread(draftId)?.threadId).toBe(threadId);
     expect(draftByKey(draftId)?.prompt).toBe("keep me around");
+  });
+
+  it("keeps an offline queued task reachable after opening a fresh draft", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    const queue = useQueuedMessageStore.getState();
+    const key = scopedThreadKey(scopeThreadRef(projectRef.environmentId, threadId));
+    const message = queue.enqueue(key, {
+      prompt: "send when the host reconnects",
+      images: [],
+      files: [],
+      terminalContexts: [],
+      previewAnnotations: [],
+      reviewComments: [],
+      queuedAfterToolActivityId: null,
+      sendSettings: {
+        modelSelection: { instanceId: CODEX_INSTANCE, model: "gpt-5" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        promptEffort: null,
+      },
+      createdAt: "2026-10-19T00:00:00Z",
+      durable: true,
+    });
+    try {
+      store.setProjectDraftThreadId(projectRef, otherDraftId, { threadId: otherThreadId });
+      expect(store.getDraftSession(draftId)?.threadId).toBe(threadId);
+      expect(
+        partializeComposerDraftStoreState(useComposerDraftStore.getState()).draftThreadsByThreadKey[
+          draftId
+        ]?.threadId,
+      ).toBe(threadId);
+    } finally {
+      queue.remove(key, message.id);
+    }
   });
 
   it("clears every session for a project, including unmapped invested drafts", () => {
