@@ -3474,6 +3474,34 @@ it.layer(
   });
 
   describe("checkClaudeProviderStatus", () => {
+    it.effect("accepts a Claude version probe that takes longer than the shared timeout", () =>
+      Effect.gen(function* () {
+        const layer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make((command) => {
+            const args = (command as unknown as { args: ReadonlyArray<string> }).args;
+            const output =
+              args.join(" ") === "--version"
+                ? { stdout: "1.0.0\n", stderr: "", code: 0 }
+                : { stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n', stderr: "", code: 0 };
+            return args.join(" ") === "--version"
+              ? Effect.sleep("10 seconds").pipe(Effect.as(mockHandle(output)))
+              : Effect.succeed(mockHandle(output));
+          }),
+        );
+        const fiber = yield* checkClaudeProviderStatus(
+          defaultClaudeSettings,
+          claudeCapabilities(),
+        ).pipe(Effect.provide(layer), Effect.forkChild);
+
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("10 seconds");
+
+        const status = yield* Fiber.join(fiber);
+        assert.strictEqual(status.status, "ready");
+      }),
+    );
+
     it.effect("returns ready when claude is installed and authenticated", () =>
       Effect.gen(function* () {
         const status = yield* checkClaudeProviderStatus(
