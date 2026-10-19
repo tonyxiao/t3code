@@ -210,6 +210,10 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
   [WS_METHODS.subscribeBackgroundPolicy]: "server",
+  [WS_METHODS.threadRoutingConnect]: "threadRouting",
+  [WS_METHODS.threadRoutingRespond]: "threadRouting",
+  [WS_METHODS.threadCreationProjects]: "threadRouting",
+  [WS_METHODS.threadCreationCreate]: "threadRouting",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

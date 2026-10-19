@@ -22,6 +22,15 @@ import {
   ChatGptHandoffState,
 } from "./providerSetup.ts";
 import * as Schema from "effect/Schema";
+import {
+  ThreadRoutingHost,
+  ThreadRoutingEvent,
+  ThreadRoutingResponse,
+  ThreadRoutingError,
+  ProjectThreadCreationInput,
+  ThreadCreationResult,
+  ThreadCreationProjects,
+} from "./threadCreation.ts";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
@@ -454,6 +463,10 @@ export const WS_METHODS = {
   previewClearProfile: "preview.clearProfile",
   previewReportProfiles: "preview.reportProfiles",
   previewReportStatus: "preview.reportStatus",
+  threadRoutingConnect: "threadRouting.connect",
+  threadRoutingRespond: "threadRouting.respond",
+  threadCreationProjects: "threadCreation.projects",
+  threadCreationCreate: "threadCreation.create",
 
   deviceConfigure: "device.configure",
   deviceList: "device.list",
@@ -1533,6 +1546,27 @@ const WsPreviewReportStatusRpc = Rpc.make(WS_METHODS.previewReportStatus, {
   error: Schema.Union([PreviewError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadRoutingConnectRpc = Rpc.make(WS_METHODS.threadRoutingConnect, {
+  payload: ThreadRoutingHost,
+  success: ThreadRoutingEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+const WsThreadRoutingRespondRpc = Rpc.make(WS_METHODS.threadRoutingRespond, {
+  payload: ThreadRoutingResponse,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+const WsThreadCreationProjectsRpc = Rpc.make(WS_METHODS.threadCreationProjects, {
+  payload: Schema.Struct({}),
+  success: ThreadCreationProjects,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+const WsThreadCreationCreateRpc = Rpc.make(WS_METHODS.threadCreationCreate, {
+  payload: ProjectThreadCreationInput,
+  success: ThreadCreationResult,
+  error: Schema.Union([ThreadRoutingError, EnvironmentAuthorizationError]),
+});
+
 const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewEvents, {
   payload: Schema.Struct({}),
   success: PreviewEvent,
@@ -2026,6 +2060,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewClearProfileRpc,
   WsPreviewReportProfilesRpc,
   WsPreviewReportStatusRpc,
+  WsThreadRoutingConnectRpc,
+  WsThreadRoutingRespondRpc,
+  WsThreadCreationProjectsRpc,
+  WsThreadCreationCreateRpc,
   WsSubscribePreviewEventsRpc,
   WsSubscribeDiscoveredLocalServersRpc,
   WsDeviceConfigureRpc,

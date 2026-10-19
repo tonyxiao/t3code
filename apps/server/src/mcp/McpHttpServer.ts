@@ -38,6 +38,9 @@ import {
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import * as AgentThreadRouting from "./AgentThreadRouting.ts";
+import { ThreadRoutingToolkit } from "./toolkits/threadRouting/tools.ts";
+import * as ThreadRoutingHandlers from "./toolkits/threadRouting/handlers.ts";
 import { PreviewControlsToolkit } from "./toolkits/previewControls/tools.ts";
 import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts";
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
@@ -767,6 +770,7 @@ const registerHtmlPreview = Effect.fn("McpHttpServer.registerHtmlPreview")(funct
 const HANDOFF_TOOLS: ReadonlySet<string> = new Set([
   "delegate_task",
   "create_threads",
+  "create_thread",
   "t3_thread_launch",
   "t3_thread_send",
   "t3_thread_send_attachments",
@@ -999,6 +1003,10 @@ export const layerOrchestratorToolkit = toolkitRegistration(
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
+export const layerThreadRoutingToolkit = toolkitRegistration(
+  ThreadRoutingToolkit,
+  ThreadRoutingHandlers.layer,
+).pipe(Layer.provide(AgentThreadRouting.layer));
 
 const layerWorktreeToolkitRegistration = toolkitRegistration(
   WorktreeToolkit,
@@ -1054,6 +1062,7 @@ export const layer = Layer.mergeAll(
   layerPreviewToolkit,
   layerOrchestratorToolkit,
   layerThreadToolkit,
+  layerThreadRoutingToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,
   layerEnvironmentToolkit,

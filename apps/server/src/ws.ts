@@ -1,6 +1,8 @@
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import * as ThreadRoutingBroker from "./mcp/ThreadRoutingBroker.ts";
+import * as ThreadCreation from "./mcp/ThreadCreation.ts";
 
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -1165,6 +1167,8 @@ const layerWsRpc = (
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
+  threadRoutingBroker: ThreadRoutingBroker.ThreadRoutingBroker["Service"],
+  threadCreation: ThreadCreation.ThreadCreation["Service"],
 ) =>
   ServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -2868,6 +2872,12 @@ const layerWsRpc = (
         [WS_METHODS.previewClearProfile]: (input) => serverBrowser.clearProfile(input.profileId),
         [WS_METHODS.previewReportProfiles]: (input) => serverBrowser.reportProfiles(input),
         [WS_METHODS.previewReportStatus]: (input) => previewManager.reportStatus(input),
+        [WS_METHODS.threadRoutingConnect]: (input) =>
+          Stream.unwrap(threadRoutingBroker.connect(currentSessionId, input)),
+        [WS_METHODS.threadRoutingRespond]: (input) =>
+          threadRoutingBroker.respond(currentSessionId, input),
+        [WS_METHODS.threadCreationProjects]: () => threadCreation.projects,
+        [WS_METHODS.threadCreationCreate]: (input) => threadCreation.createInProject(input),
         [WS_METHODS.subscribePreviewEvents]: (_input) => previewManager.events,
         [WS_METHODS.deviceConfigure]: (input) => deviceService.configure(input),
         [WS_METHODS.deviceTestHost]: (input) => deviceService.testHost(input),
@@ -3090,6 +3100,8 @@ export const WS_RPC_SERVER_OPTIONS = {
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const threadRoutingBroker = yield* ThreadRoutingBroker.ThreadRoutingBroker;
+    const threadCreation = yield* ThreadCreation.ThreadCreation;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
@@ -3165,6 +3177,8 @@ export const layer = Layer.unwrap(
               clientAnalyticsProps,
               previewAutomationBroker,
               serverBrowser,
+              threadRoutingBroker,
+              threadCreation,
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Request fibers run in the handlers' context, so this reporter sees
