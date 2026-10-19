@@ -47,7 +47,7 @@ import {
   buildHomeListFilterMenu,
   buildHomeListFilterNativeMenu,
 } from "../home/home-list-filter-menu";
-import { buildHomeProjectScopes } from "../home/homeThreadList";
+import { buildHomeProjectFilterOptions, buildHomeProjectScopes } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { useThreadListActions } from "../home/useThreadListActions";
@@ -215,10 +215,10 @@ function ThreadNavigationSidebarPane(
     environmentId: null,
     projectGroupingMode: options.projectGroupingMode,
   });
-  const projectFilterOptions = projectScopes.map((scope) => ({
-    key: scope.key,
-    label: scope.title,
-  }));
+  const projectFilterOptions = buildHomeProjectFilterOptions(
+    projectScopes,
+    new Map(environments.map((environment) => [environment.environmentId, environment.label])),
+  );
   const projectTitleByProjectKey = new Map(
     projectScopes.flatMap((scope) =>
       scope.projectRefs.map(
@@ -227,11 +227,19 @@ function ThreadNavigationSidebarPane(
       ),
     ),
   );
-  const selectedProjectScopes = projectScopes.filter((scope) =>
+  const selectedProjectFilterOptions = projectFilterOptions.filter((scope) =>
     resolvedProjectKeys.includes(scope.key),
   );
-  const selectedProjectKeys = selectedProjectScopes.map((scope) => scope.key);
-  const selectedProjectScopeRefs = selectedProjectScopes.flatMap((scope) => scope.projectRefs);
+  const selectedProjectKeys = selectedProjectFilterOptions.map((scope) => scope.key);
+  const selectedProjectScopeRefs = [
+    ...new Map(
+      selectedProjectFilterOptions.flatMap((scope) =>
+        scope.projectRefs.map(
+          (ref) => [scopedProjectKey(ref.environmentId, ref.projectId), ref] as const,
+        ),
+      ),
+    ).values(),
+  ];
   const selectedProjectRefs =
     selectedProjectKeys.length === 0 && options.filterModes.project === "exclude"
       ? null
@@ -686,8 +694,8 @@ function ThreadNavigationSidebarPane(
             ? threadSearch.isPending
               ? "Searching thread messages…"
               : "No matching threads"
-            : selectedProjectScopes.length === 1 && options.filterModes.project === "include"
-              ? `No threads in ${selectedProjectScopes[0]!.title}`
+            : selectedProjectFilterOptions.length === 1 && options.filterModes.project === "include"
+              ? `No threads in ${selectedProjectFilterOptions[0]!.label}`
               : filterCustomized
                 ? "No threads match these filters"
                 : "No threads yet"}

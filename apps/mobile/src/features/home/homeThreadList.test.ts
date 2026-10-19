@@ -6,8 +6,10 @@ import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  buildHomeProjectFilterOptions,
   buildHomeProjectScopes,
   findHomeProjectScope,
+  homeProjectEnvironmentScopeKey,
   sortHomeProjectScopes,
 } from "./homeThreadList";
 import { makeThreadShellFixture } from "../../test-fixtures";
@@ -163,6 +165,44 @@ describe("home project scopes", () => {
         projectId: project.id,
       })),
     );
+    const options = buildHomeProjectFilterOptions(
+      scopes,
+      new Map([
+        [localEnvironmentId, "This Mac"],
+        [remoteEnvironmentId, "Remote Mac"],
+      ]),
+    );
+    expect(options.map((option) => option.label)).toEqual([
+      "t3code",
+      "t3code · This Mac",
+      "t3code · Remote Mac",
+    ]);
+    expect(options[1]?.key).toBe(
+      homeProjectEnvironmentScopeKey(scopes[0]!.key, localEnvironmentId),
+    );
+    expect(options[1]?.projectRefs).toEqual([
+      { environmentId: localEnvironmentId, projectId: projects[0]!.id },
+    ]);
+    expect(options[2]?.projectRefs).toEqual([
+      { environmentId: remoteEnvironmentId, projectId: projects[1]!.id },
+    ]);
+    const threads = projects.map((project) =>
+      makeThread({
+        environmentId: project.environmentId,
+        projectId: project.id,
+        id: ThreadId.make(`thread-${project.id}`),
+        title: project.title,
+      }),
+    );
+    expect(
+      buildThreadListV2Items({
+        threads,
+        environmentId: null,
+        projectRefs: options[1]!.projectRefs,
+        searchQuery: "",
+        now: "2026-06-01T00:00:00.000Z",
+      }).items.map((item) => item.thread.environmentId),
+    ).toEqual([localEnvironmentId]);
   });
 
   it("keeps repository identity from an older duplicate when the freshness winner lacks it", () => {
