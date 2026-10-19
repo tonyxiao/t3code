@@ -9,7 +9,7 @@ protocol BackgroundSyncSessionController: AnyObject {
   func cancel()
 }
 
-/// An explicitly requested, finite sync window. Progress measures session time,
+/// A finite sync window requested as the app leaves the foreground. Progress measures session time,
 /// not downloaded history or server-side agent completion.
 @available(iOS 26.0, *)
 final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
@@ -27,7 +27,9 @@ final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
   var onChange: (() -> Void)?
 
   func start() throws {
-    guard UIApplication.shared.applicationState == .active else {
+    // willResignActive is still a foreground transition. Waiting until the
+    // background notification is too late to request continued processing.
+    guard UIApplication.shared.applicationState != .background else {
       throw failure("Start a sync session while T3 Code is open.")
     }
     if endsAt != nil { return }

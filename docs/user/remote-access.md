@@ -218,12 +218,12 @@ The mobile app proactively syncs recent history for unsettled, unarchived thread
 in enabled environments, so you do not have to open each chat to refresh it.
 Settling or archiving a thread stops its proactive sync.
 
-On iOS 26 or later, open **Settings → Background sync → Sync for up to 10 minutes**
-to start an extended sync session. The ten minutes start when you tap the action,
-including time spent in the foreground. System progress shows elapsed session time,
-not how much history has downloaded. Stop the session from Settings or the system
-progress display. iOS can refuse a session or end it early. Without an extended
-session, leaving the app uses iOS's limited background grace period.
+On iOS 26 or later, leaving the app automatically requests up to ten minutes of
+background sync for open threads. Returning to the app stops the session. System
+progress shows elapsed session time, not how much history has downloaded; you can
+cancel it from the system progress display. iOS can refuse a session or end it
+early, in which case the app uses its limited background grace period. The next
+time you leave the app, it requests a new session.
 
 Android automatically keeps syncing for up to ten minutes after you leave the app,
 with a background-sync notification. Returning to the app stops that background session.
