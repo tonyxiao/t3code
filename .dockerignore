@@ -1,0 +1,10 @@
+.git
+.repos
+.t3
+tmp
+node_modules
+**/node_modules
+**/dist
+**/.vite-plus
+.env
+.env.*
