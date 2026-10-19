@@ -61,6 +61,18 @@ Selections intersect: a thread must match both filters. **Only** narrows a filte
 **Exclude selected** in its menu. On mobile, the filter menu also lets you show only pinned or
 unpinned conversations. Filters stay on your device when you return to the list.
 
+## Manage threads together
+
+Open **Threads** from the sidebar or **Manage threads** from the command palette to
+search, filter, sort, and group conversations across connected environments, including
+archived threads. Select rows to snooze, settle, pin, or archive them together. Actions
+apply only to selected rows that remain in the current filter; restore archived threads
+before editing or opening them.
+
+The table has **Cells** and **Rows** modes. Use Rows to select threads. In a grouped
+table, `Cmd`/`Ctrl+A` first selects the focused group, then all filtered threads.
+Escape clears the selection.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

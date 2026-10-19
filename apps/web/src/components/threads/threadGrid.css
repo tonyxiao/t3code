@@ -1,0 +1,23 @@
+[data-testid="thread-management-grid"] {
+  height: 100%;
+  border: 0;
+  font-size: 12px;
+  --rdg-color: var(--foreground);
+  --rdg-background-color: var(--background);
+  --rdg-header-background-color: var(--muted);
+  --rdg-row-hover-background-color: var(--accent);
+  --rdg-row-selected-background-color: var(--accent);
+  --rdg-row-selected-hover-background-color: var(--accent);
+  --rdg-border-color: var(--border);
+  --rdg-selection-color: var(--ring);
+  --rdg-checkbox-focus-color: var(--ring);
+}
+
+[data-thread-grid-mode="rows"] [data-testid="thread-management-grid"] {
+  --rdg-selection-color: transparent;
+}
+
+[data-thread-grid-mode="rows"] .rdg-row:focus-within {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}

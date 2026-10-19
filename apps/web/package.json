@@ -68,6 +68,7 @@
     "mermaid": "^11.17.2",
     "morphicons": "^1.7.1",
     "react": "catalog:",
+    "react-data-grid": "7.0.0-beta.61",
     "react-dom": "catalog:",
     "react-markdown": "^10.1.0",
     "remark-gfm": "catalog:",
