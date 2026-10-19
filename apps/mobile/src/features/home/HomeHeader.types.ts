@@ -1,5 +1,11 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type {
+  SidebarFilterKind,
+  SidebarFilterMode,
+  SidebarFilterModes,
+  SidebarPinFilter,
+} from "@t3tools/client-runtime/state/sidebar-filters";
+import type {
   HomeListFilterMenuEnvironment,
   HomeListFilterMenuProject,
 } from "./home-list-filter-menu";
@@ -11,11 +17,15 @@ export interface HomeHeaderProps {
   readonly environments: ReadonlyArray<HomeHeaderEnvironment>;
   readonly projects: ReadonlyArray<HomeListFilterMenuProject>;
   readonly searchQuery: string;
-  readonly selectedEnvironmentId: EnvironmentId | null;
-  readonly selectedProjectKey: string | null;
+  readonly selectedEnvironmentIds: readonly EnvironmentId[];
+  readonly selectedProjectKeys: readonly string[];
+  readonly pinnedFilter: SidebarPinFilter;
+  readonly filterModes: SidebarFilterModes;
   readonly onSearchQueryChange: (query: string) => void;
-  readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
-  readonly onProjectChange: (projectKey: string | null) => void;
+  readonly onEnvironmentChange: (environmentIds: readonly EnvironmentId[]) => void;
+  readonly onProjectChange: (projectKeys: readonly string[]) => void;
+  readonly onPinnedFilterChange: (filter: SidebarPinFilter) => void;
+  readonly onFilterModeChange: (kind: SidebarFilterKind, mode: SidebarFilterMode) => void;
   readonly onOpenEnvironments: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;

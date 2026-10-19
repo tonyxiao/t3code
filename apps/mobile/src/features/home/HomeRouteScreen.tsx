@@ -122,37 +122,34 @@ export function HomeRouteScreen() {
   );
   const {
     options: listOptions,
-    setSelectedEnvironmentId,
-    setSelectedProjectKey,
+    setSelectedEnvironmentIds,
+    setSelectedProjectKeys,
+    setPinnedFilter,
+    setFilterMode,
   } = useHomeListOptions(availableEnvironmentIds);
-  const selectedEnvironmentId = listOptions.selectedEnvironmentId;
-  const projectScopeKey = listOptions.selectedProjectKey;
-  const resolvedProjectKey = resolveScratchProjectScopeKey(projectScopeKey, projects, {
-    sidebarProjectGroupingMode: listOptions.projectGroupingMode,
-    sidebarProjectGroupingOverrides: {},
-  });
-  useEffect(() => {
-    if (resolvedProjectKey !== projectScopeKey) {
-      setSelectedProjectKey(resolvedProjectKey);
-    }
-  }, [projectScopeKey, resolvedProjectKey, setSelectedProjectKey]);
   const projectFilterOptions = useMemo(
     () =>
       buildHomeProjectScopes({
         projects,
-        environmentId: selectedEnvironmentId,
+        environmentId: null,
         projectGroupingMode: listOptions.projectGroupingMode,
       }).map((scope) => ({
         key: scope.key,
         label: scope.title,
       })),
-    [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
+    [listOptions.projectGroupingMode, projects],
   );
-  const selectedProjectKey = projectFilterOptions.some(
-    (project) => project.key === resolvedProjectKey,
-  )
-    ? resolvedProjectKey
-    : null;
+  const selectedProjectKeys = listOptions.selectedProjectKeys.map(
+    (key) =>
+      resolveScratchProjectScopeKey(key, projects, {
+        sidebarProjectGroupingMode: listOptions.projectGroupingMode,
+        sidebarProjectGroupingOverrides: {},
+      }) ?? key,
+  );
+  useEffect(() => {
+    if (selectedProjectKeys.join("\0") !== listOptions.selectedProjectKeys.join("\0"))
+      setSelectedProjectKeys(selectedProjectKeys);
+  }, [listOptions.selectedProjectKeys, selectedProjectKeys, setSelectedProjectKeys]);
 
   if (layout.usesSplitView && !nativePrimaryColumn) {
     return (
@@ -231,10 +228,14 @@ export function HomeRouteScreen() {
           environments={environments}
           projects={projectFilterOptions}
           searchQuery={searchQuery}
-          selectedEnvironmentId={selectedEnvironmentId}
-          selectedProjectKey={selectedProjectKey}
-          onEnvironmentChange={setSelectedEnvironmentId}
-          onProjectChange={setSelectedProjectKey}
+          selectedEnvironmentIds={listOptions.selectedEnvironmentIds}
+          selectedProjectKeys={selectedProjectKeys}
+          pinnedFilter={listOptions.pinnedFilter}
+          filterModes={listOptions.filterModes}
+          onEnvironmentChange={setSelectedEnvironmentIds}
+          onProjectChange={setSelectedProjectKeys}
+          onPinnedFilterChange={setPinnedFilter}
+          onFilterModeChange={setFilterMode}
           onOpenEnvironments={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
@@ -272,8 +273,10 @@ export function HomeRouteScreen() {
           onMoveThread={moveThread}
           onRenameThread={renameThread}
           onRegenerateThreadTitle={regenerateThreadTitle}
-          onEnvironmentChange={setSelectedEnvironmentId}
-          onProjectChange={setSelectedProjectKey}
+          onEnvironmentChange={setSelectedEnvironmentIds}
+          onProjectChange={setSelectedProjectKeys}
+          onPinnedFilterChange={setPinnedFilter}
+          onFilterModeChange={setFilterMode}
           onOpenSettings={() =>
             navigation.navigate("SettingsSheet", {
               screen: "SettingsContent",
@@ -302,8 +305,10 @@ export function HomeRouteScreen() {
           projectSortOrder={listOptions.projectSortOrder}
           savedConnectionsById={savedConnectionsById}
           searchQuery={searchQuery}
-          selectedEnvironmentId={selectedEnvironmentId}
-          selectedProjectKey={selectedProjectKey}
+          selectedEnvironmentIds={listOptions.selectedEnvironmentIds}
+          selectedProjectKeys={selectedProjectKeys}
+          pinnedFilter={listOptions.pinnedFilter}
+          filterModes={listOptions.filterModes}
           threads={threads}
         />
       </>

@@ -36,8 +36,13 @@ export const PullRequestListControls = Schema.Struct({
 export type PullRequestListControls = typeof PullRequestListControls.Type;
 
 const ThreadListFilters = Schema.Struct({
-  environmentId: Schema.NullOr(EnvironmentId),
-  projectKey: Schema.NullOr(Schema.String),
+  environmentId: Schema.optionalKey(Schema.NullOr(EnvironmentId)),
+  projectKey: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  environmentIds: Schema.optionalKey(Schema.Array(EnvironmentId)),
+  projectKeys: Schema.optionalKey(Schema.Array(Schema.String)),
+  environmentMode: Schema.optionalKey(Schema.Literals(["include", "exclude"])),
+  projectMode: Schema.optionalKey(Schema.Literals(["include", "exclude"])),
+  pinnedFilter: Schema.optionalKey(Schema.Literals(["all", "pinned", "unpinned", "none"])),
 });
 export type ThreadListFilters = typeof ThreadListFilters.Type;
 

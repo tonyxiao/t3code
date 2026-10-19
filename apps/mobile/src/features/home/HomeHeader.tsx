@@ -12,12 +12,33 @@ import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 import { createNativeMailSearchToolbarItem } from "../layout/native-mail-search-toolbar";
 import { useNativeMailSearchToolbar } from "../../native/use-native-mail-search-toolbar";
 import { useDeviceType } from "../../native/native-layout-metrics";
-import { buildHomeListFilterMenu } from "./home-list-filter-menu";
+import { buildHomeListFilterMenu, type HomeListFilterMenuItem } from "./home-list-filter-menu";
 import { createSidebarHeaderItems } from "../threads/sidebar-native-header-items";
 import type { HomeHeaderProps } from "./HomeHeader.types";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 
 export type { HomeHeaderEnvironment } from "./HomeHeader.types";
+
+function renderFilterMenuItem(item: HomeListFilterMenuItem, key: string): React.ReactNode {
+  if (item.type === "action") {
+    return (
+      <Toolbar.MenuAction
+        key={key}
+        isOn={item.state === "on"}
+        onPress={item.onPress}
+        subtitle={item.subtitle}
+      >
+        <Toolbar.Label>{item.title}</Toolbar.Label>
+      </Toolbar.MenuAction>
+    );
+  }
+  return (
+    <Toolbar.Menu key={key} title={item.title}>
+      <Toolbar.Label>{item.title}</Toolbar.Label>
+      {item.items.map((child, index) => renderFilterMenuItem(child, `${key}:${index}`))}
+    </Toolbar.Menu>
+  );
+}
 
 export function HomeHeader(props: HomeHeaderProps) {
   const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
@@ -44,7 +65,11 @@ export function HomeHeader(props: HomeHeaderProps) {
   );
   const iconColor = useUniwindTheme()["--color-icon"];
   const hasCustomListOptions =
-    props.selectedEnvironmentId !== null || props.selectedProjectKey !== null;
+    props.selectedEnvironmentIds.length > 0 ||
+    props.selectedProjectKeys.length > 0 ||
+    props.filterModes.environment === "include" ||
+    props.filterModes.project === "include" ||
+    props.pinnedFilter !== "all";
   const focusSearch = useCallback(() => {
     if (primaryColumn && !panes.primarySidebarVisible) {
       focusAfterReveal.current = true;
@@ -172,47 +197,7 @@ export function HomeHeader(props: HomeHeaderProps) {
             title="Thread list options"
             separateBackground
           >
-            <Toolbar.Menu title="Environment">
-              <Toolbar.Label>Environment</Toolbar.Label>
-              <Toolbar.MenuAction
-                isOn={props.selectedEnvironmentId === null}
-                onPress={() => props.onEnvironmentChange(null)}
-                subtitle="Show threads from every environment"
-              >
-                <Toolbar.Label>All environments</Toolbar.Label>
-              </Toolbar.MenuAction>
-              {props.environments.map((environment) => (
-                <Toolbar.MenuAction
-                  key={environment.environmentId}
-                  isOn={props.selectedEnvironmentId === environment.environmentId}
-                  onPress={() => props.onEnvironmentChange(environment.environmentId)}
-                >
-                  <Toolbar.Label>{environment.label}</Toolbar.Label>
-                </Toolbar.MenuAction>
-              ))}
-            </Toolbar.Menu>
-
-            {props.projects.length > 0 ? (
-              <Toolbar.Menu title="Project">
-                <Toolbar.Label>Project</Toolbar.Label>
-                <Toolbar.MenuAction
-                  isOn={props.selectedProjectKey === null}
-                  onPress={() => props.onProjectChange(null)}
-                  subtitle="Show threads from every project"
-                >
-                  <Toolbar.Label>All projects</Toolbar.Label>
-                </Toolbar.MenuAction>
-                {props.projects.map((project) => (
-                  <Toolbar.MenuAction
-                    key={project.key}
-                    isOn={props.selectedProjectKey === project.key}
-                    onPress={() => props.onProjectChange(project.key)}
-                  >
-                    <Toolbar.Label>{project.label}</Toolbar.Label>
-                  </Toolbar.MenuAction>
-                ))}
-              </Toolbar.Menu>
-            ) : null}
+            {filterMenu.items.map((item, index) => renderFilterMenuItem(item, String(index)))}
           </Toolbar.Menu>
           <Toolbar.Spacer flexible />
           <Toolbar.Button

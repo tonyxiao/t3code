@@ -53,6 +53,14 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Filter the thread list
+
+Use the filter controls beside search to show several environments or projects at once.
+Selections intersect: a thread must match both filters. **Only** narrows a filter to one choice;
+**All** clears it. On web and desktop, switch a selection between **Include selected** and
+**Exclude selected** in its menu. On mobile, the filter menu also lets you show only pinned or
+unpinned conversations. Filters stay on your device when you return to the list.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

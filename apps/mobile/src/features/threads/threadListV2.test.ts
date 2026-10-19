@@ -13,6 +13,7 @@ import {
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import { resolveSnoozePresets } from "@t3tools/client-runtime/state/thread-settled";
+import { DEFAULT_SIDEBAR_FILTER_MODES } from "@t3tools/client-runtime/state/sidebar-filters";
 import {
   CommandId,
   EnvironmentId,
@@ -417,6 +418,40 @@ describe("getThreadListV2OrderedSection", () => {
 });
 
 describe("buildThreadListV2Items", () => {
+  it("intersects multiple environments with project exclusions", () => {
+    const remote = EnvironmentId.make("remote");
+    const third = EnvironmentId.make("third");
+    const projectId = ProjectId.make("project-test");
+    const threads = [
+      makeThread({ id: ThreadId.make("local"), title: "Local", projectId }),
+      makeThread({
+        id: ThreadId.make("remote"),
+        title: "Remote",
+        environmentId: remote,
+        projectId,
+      }),
+      makeThread({ id: ThreadId.make("third"), title: "Third", environmentId: third, projectId }),
+    ];
+    const input = {
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      environmentIds: new Set([environmentId, remote]),
+      filterModes: { ...DEFAULT_SIDEBAR_FILTER_MODES, environment: "include" as const },
+    };
+    expect(buildThreadListV2Items(input).items.map((item) => item.thread.id)).toEqual([
+      "local",
+      "remote",
+    ]);
+    expect(
+      buildThreadListV2Items({
+        ...input,
+        projectRefs: [{ environmentId, projectId }],
+      }).items.map((item) => item.thread.id),
+    ).toEqual(["remote"]);
+  });
+
   it("places a persisted settled thread in the settled shelf", () => {
     const thread = makeThread({
       id: ThreadId.make("linked-merged"),

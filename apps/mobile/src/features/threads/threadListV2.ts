@@ -24,6 +24,10 @@ import {
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  matchesSidebarFilter,
+  type SidebarFilterModes,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
 import type { ThreadMoveAvailability } from "./threadOrder";
@@ -543,6 +547,8 @@ function sortSettledThreadsReusingLast(
 }
 
 export function buildThreadListV2Items(input: {
+  readonly environmentIds?: ReadonlySet<EnvironmentId>;
+  readonly filterModes?: SidebarFilterModes;
   readonly pendingOrder?: PendingThreadOrder | null;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly environmentId: EnvironmentId | null;
@@ -591,8 +597,23 @@ export function buildThreadListV2Items(input: {
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
   for (const thread of input.threads) {
     if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
-    if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
-    if (projectKeys !== null && !projectKeys.has(`${thread.environmentId}:${thread.projectId}`)) {
+    if (
+      !matchesSidebarFilter(
+        input.environmentIds
+          ? input.environmentIds.has(thread.environmentId)
+          : input.environmentId === null
+            ? null
+            : thread.environmentId === input.environmentId,
+        input.filterModes?.environment,
+      )
+    )
+      continue;
+    if (
+      !matchesSidebarFilter(
+        projectKeys?.has(`${thread.environmentId}:${thread.projectId}`) ?? null,
+        input.filterModes?.project,
+      )
+    ) {
       continue;
     }
     if (

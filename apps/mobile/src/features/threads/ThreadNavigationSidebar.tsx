@@ -11,7 +11,10 @@ import {
   type EnvironmentThreadSearchMatch,
 } from "@t3tools/client-runtime/state/thread-search";
 import { LegendList } from "@legendapp/list/react-native";
-import type { MenuAction } from "@react-native-menu/menu";
+import {
+  matchesSidebarFilter,
+  matchesSidebarPinFilter,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextInputInstance } from "react-native";
@@ -40,7 +43,10 @@ import { useSavedRemoteConnections } from "../../state/use-remote-environment-re
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { useHomeListOptions } from "../home/home-list-options";
-import { buildHomeListFilterMenu } from "../home/home-list-filter-menu";
+import {
+  buildHomeListFilterMenu,
+  buildHomeListFilterNativeMenu,
+} from "../home/home-list-filter-menu";
 import { buildHomeProjectScopes } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
@@ -165,20 +171,23 @@ function ThreadNavigationSidebarPane(
   const availableEnvironmentIds = new Set(
     environments.map((environment) => environment.environmentId),
   );
-  const { options, setSelectedEnvironmentId, setSelectedProjectKey } =
-    useHomeListOptions(availableEnvironmentIds);
-  const searchEnvironmentIds =
-    options.selectedEnvironmentId === null
-      ? workspaceEnvironments
-          .filter((environment) => environment.connectionState === "connected")
-          .map((environment) => environment.environmentId)
-      : workspaceEnvironments.some(
-            (environment) =>
-              environment.environmentId === options.selectedEnvironmentId &&
-              environment.connectionState === "connected",
-          )
-        ? [options.selectedEnvironmentId]
-        : [];
+  const {
+    options,
+    setSelectedEnvironmentIds,
+    setSelectedProjectKeys,
+    setPinnedFilter,
+    setFilterMode,
+  } = useHomeListOptions(availableEnvironmentIds);
+  const searchEnvironmentIds = workspaceEnvironments
+    .filter(
+      (environment) =>
+        environment.connectionState === "connected" &&
+        matchesSidebarFilter(
+          options.selectedEnvironmentIds.includes(environment.environmentId),
+          options.filterModes.environment,
+        ),
+    )
+    .map((environment) => environment.environmentId);
   const threadSearch = useThreadSearch(searchEnvironmentIds, props.searchQuery);
   const threadSearchMatchByKey = (() => {
     const matches = new Map<string, EnvironmentThreadSearchMatch>();
@@ -190,19 +199,20 @@ function ThreadNavigationSidebarPane(
     return matches;
   })();
   const matchedThreadKeys = new Set(threadSearch.matches.map(threadSearchMatchKey));
-  const projectScopeKey = options.selectedProjectKey;
-  const resolvedProjectKey = resolveScratchProjectScopeKey(projectScopeKey, projects, {
-    sidebarProjectGroupingMode: options.projectGroupingMode,
-    sidebarProjectGroupingOverrides: {},
-  });
+  const resolvedProjectKeys = options.selectedProjectKeys.map(
+    (key) =>
+      resolveScratchProjectScopeKey(key, projects, {
+        sidebarProjectGroupingMode: options.projectGroupingMode,
+        sidebarProjectGroupingOverrides: {},
+      }) ?? key,
+  );
   useEffect(() => {
-    if (resolvedProjectKey !== projectScopeKey) {
-      setSelectedProjectKey(resolvedProjectKey);
-    }
-  }, [projectScopeKey, resolvedProjectKey, setSelectedProjectKey]);
+    if (resolvedProjectKeys.join("\0") !== options.selectedProjectKeys.join("\0"))
+      setSelectedProjectKeys(resolvedProjectKeys);
+  }, [options.selectedProjectKeys, resolvedProjectKeys, setSelectedProjectKeys]);
   const projectScopes = buildHomeProjectScopes({
     projects,
-    environmentId: options.selectedEnvironmentId,
+    environmentId: null,
     projectGroupingMode: options.projectGroupingMode,
   });
   const projectFilterOptions = projectScopes.map((scope) => ({
@@ -217,16 +227,16 @@ function ThreadNavigationSidebarPane(
       ),
     ),
   );
-  const selectedProjectScope =
-    projectScopes.find((scope) => scope.key === resolvedProjectKey) ?? null;
-  const selectedProjectKey = selectedProjectScope?.key ?? null;
+  const selectedProjectScopes = projectScopes.filter((scope) =>
+    resolvedProjectKeys.includes(scope.key),
+  );
+  const selectedProjectKeys = selectedProjectScopes.map((scope) => scope.key);
+  const selectedProjectScopeRefs = selectedProjectScopes.flatMap((scope) => scope.projectRefs);
   const selectedProjectRefs =
-    selectedProjectScope === null
+    selectedProjectKeys.length === 0 && options.filterModes.project === "exclude"
       ? null
       : new Set(
-          selectedProjectScope.projectRefs.map((projectRef) =>
-            scopedProjectKey(projectRef.environmentId, projectRef.projectId),
-          ),
+          selectedProjectScopeRefs.map((ref) => scopedProjectKey(ref.environmentId, ref.projectId)),
         );
   const projectByKey = (() => {
     const map = new Map<string, EnvironmentProject>();
@@ -239,7 +249,13 @@ function ThreadNavigationSidebarPane(
   const [settledVisibleCount, setSettledVisibleCount] = useState(
     THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   );
-  const settledResetKey = `${options.selectedEnvironmentId ?? "all"}:${selectedProjectKey ?? "all"}:${props.searchQuery.trim()}`;
+  const settledResetKey = JSON.stringify([
+    options.selectedEnvironmentIds,
+    selectedProjectKeys,
+    options.filterModes,
+    options.pinnedFilter,
+    props.searchQuery.trim(),
+  ]);
   const [lastSettledResetKey, setLastSettledResetKey] = useState(settledResetKey);
   if (lastSettledResetKey !== settledResetKey) {
     setLastSettledResetKey(settledResetKey);
@@ -312,9 +328,15 @@ function ThreadNavigationSidebarPane(
     threadListInboxReturns.observe(workingShelfEnabled ? threads : null);
     return buildThreadListV2Items({
       pendingOrder,
-      threads: threads.filter((thread) => thread.archivedAt === null),
-      environmentId: options.selectedEnvironmentId,
-      projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,
+      threads: threads.filter(
+        (thread) =>
+          thread.archivedAt === null &&
+          matchesSidebarPinFilter(thread.pinnedAt != null, options.pinnedFilter),
+      ),
+      environmentId: null,
+      environmentIds: new Set(options.selectedEnvironmentIds),
+      filterModes: options.filterModes,
+      projectRefs: selectedProjectRefs === null ? null : selectedProjectScopeRefs,
       searchQuery: props.searchQuery,
       matchedThreadKeys,
       settlementEnvironmentIds,
@@ -349,12 +371,17 @@ function ThreadNavigationSidebarPane(
     const v2SearchQuery = props.searchQuery.trim().toLocaleLowerCase();
     const v2PendingTasks = pendingTasks.filter(
       (pendingTask) =>
-        (options.selectedEnvironmentId === null ||
-          pendingTask.environmentId === options.selectedEnvironmentId) &&
-        (selectedProjectRefs === null ||
-          selectedProjectRefs.has(
+        matchesSidebarPinFilter(false, options.pinnedFilter) &&
+        matchesSidebarFilter(
+          options.selectedEnvironmentIds.includes(pendingTask.environmentId),
+          options.filterModes.environment,
+        ) &&
+        matchesSidebarFilter(
+          selectedProjectRefs?.has(
             scopedProjectKey(pendingTask.environmentId, pendingTask.projectId),
-          )) &&
+          ) ?? null,
+          options.filterModes.project,
+        ) &&
         (v2SearchQuery.length === 0 ||
           pendingTask.title.toLocaleLowerCase().includes(v2SearchQuery)),
     );
@@ -385,77 +412,26 @@ function ThreadNavigationSidebarPane(
     }
     return items;
   })();
-  const listMenuActions = [
-    {
-      id: "environment",
-      title: "Environment",
-      subactions: [
-        {
-          id: "environment:all",
-          title: "All environments",
-          subtitle: "Show threads from every environment",
-          state: options.selectedEnvironmentId === null ? "on" : "off",
-        },
-        ...environments.map((environment) => ({
-          id: `environment:${environment.environmentId}`,
-          title: environment.label,
-          state:
-            options.selectedEnvironmentId === environment.environmentId
-              ? ("on" as const)
-              : ("off" as const),
-        })),
-      ],
-    },
-    ...(projectFilterOptions.length === 0
-      ? []
-      : ([
-          {
-            id: "project",
-            title: "Project",
-            subactions: [
-              {
-                id: "project:all",
-                title: "All projects",
-                subtitle: "Show threads from every project",
-                state: selectedProjectKey === null ? "on" : "off",
-              },
-              ...projectFilterOptions.map((project) => ({
-                id: `project:${project.key}`,
-                title: project.label,
-                state: selectedProjectKey === project.key ? ("on" as const) : ("off" as const),
-              })),
-            ],
-          },
-        ] satisfies MenuAction[])),
-  ] satisfies MenuAction[];
+  const menuProps = {
+    environments,
+    projects: projectFilterOptions,
+    selectedEnvironmentIds: options.selectedEnvironmentIds,
+    selectedProjectKeys,
+    pinnedFilter: options.pinnedFilter,
+    filterModes: options.filterModes,
+    onEnvironmentChange: setSelectedEnvironmentIds,
+    onProjectChange: setSelectedProjectKeys,
+    onPinnedFilterChange: setPinnedFilter,
+    onFilterModeChange: setFilterMode,
+  };
+  const nativeListMenu = buildHomeListFilterNativeMenu(menuProps);
+  const listMenuActions = nativeListMenu.actions;
   const handleListMenuAction = ({
     nativeEvent,
   }: {
     readonly nativeEvent: { readonly event: string };
   }) => {
-    const event = nativeEvent.event;
-    if (event === "environment:all") {
-      setSelectedEnvironmentId(null);
-      return;
-    }
-    if (event.startsWith("environment:")) {
-      const environment = environments.find(
-        (candidate) => String(candidate.environmentId) === event.slice("environment:".length),
-      );
-      if (environment) setSelectedEnvironmentId(environment.environmentId);
-      return;
-    }
-    if (event === "project:all") {
-      setSelectedProjectKey(null);
-      return;
-    }
-    if (event.startsWith("project:")) {
-      const projectKey = event.slice("project:".length);
-      if (projectFilterOptions.some((project) => project.key === projectKey)) {
-        setSelectedProjectKey(projectKey);
-      }
-      return;
-    }
+    nativeListMenu.onAction(nativeEvent.event);
   };
 
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState<number | null>(null);
@@ -679,18 +655,16 @@ function ThreadNavigationSidebarPane(
         );
     }
   };
-  const filterCustomized = options.selectedEnvironmentId !== null || selectedProjectKey !== null;
+  const filterCustomized =
+    options.selectedEnvironmentIds.length > 0 ||
+    selectedProjectKeys.length > 0 ||
+    options.filterModes.environment === "include" ||
+    options.filterModes.project === "include" ||
+    options.pinnedFilter !== "all";
   const filterIcon = filterCustomized
     ? "line.3.horizontal.decrease.circle.fill"
     : "line.3.horizontal.decrease.circle";
-  const filterMenu = buildHomeListFilterMenu({
-    environments,
-    projects: projectFilterOptions,
-    selectedEnvironmentId: options.selectedEnvironmentId,
-    selectedProjectKey,
-    onEnvironmentChange: setSelectedEnvironmentId,
-    onProjectChange: setSelectedProjectKey,
-  });
+  const filterMenu = buildHomeListFilterMenu(menuProps);
   const nativeHeaderItems = createSidebarHeaderItems({
     filterIcon,
     filterMenu,
@@ -712,9 +686,11 @@ function ThreadNavigationSidebarPane(
             ? threadSearch.isPending
               ? "Searching thread messages…"
               : "No matching threads"
-            : selectedProjectScope !== null
-              ? `No threads in ${selectedProjectScope.title}`
-              : "No threads yet"}
+            : selectedProjectScopes.length === 1 && options.filterModes.project === "include"
+              ? `No threads in ${selectedProjectScopes[0]!.title}`
+              : filterCustomized
+                ? "No threads match these filters"
+                : "No threads yet"}
     </Text>
   );
 

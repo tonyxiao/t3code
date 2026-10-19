@@ -87,23 +87,23 @@ describe("home list options across layout changes", () => {
     async (initialLayout, otherLayout) => {
       await showLayout(initialLayout);
 
-      for (const [selectedEnvironmentId, selectedProjectKey] of [
-        [environmentId, "repository:one"],
-        [environmentId, "repository:two"],
-        [environmentId, null],
-        [null, null],
-        [null, "repository:one"],
+      for (const [selectedEnvironmentIds, selectedProjectKeys] of [
+        [[environmentId], ["repository:one"]],
+        [[environmentId], ["repository:two"]],
+        [[environmentId], []],
+        [[], []],
+        [[], ["repository:one"]],
       ] as const) {
         await act(() => {
-          latest.setSelectedEnvironmentId(selectedEnvironmentId);
-          latest.setSelectedProjectKey(selectedProjectKey);
+          latest.setSelectedEnvironmentIds(selectedEnvironmentIds);
+          latest.setSelectedProjectKeys(selectedProjectKeys);
         });
         for (let cycle = 0; cycle < 3; cycle += 1) {
           for (const layout of [otherLayout, initialLayout]) {
             await showLayout(layout);
             expect(latest.options).toMatchObject({
-              selectedEnvironmentId,
-              selectedProjectKey,
+              selectedEnvironmentIds,
+              selectedProjectKeys,
               projectGroupingMode: "repository",
             });
           }
@@ -114,14 +114,50 @@ describe("home list options across layout changes", () => {
   );
 
   it("restores saved filters on launch and saves only real changes", async () => {
-    await showLayout("compact", { environmentId, projectKey: "repository:one" });
+    await showLayout("compact", {
+      environmentIds: [environmentId],
+      projectKeys: ["repository:one"],
+      environmentMode: "include",
+      projectMode: "include",
+      pinnedFilter: "all",
+    });
     expect(latest.options).toMatchObject({
-      selectedEnvironmentId: environmentId,
-      selectedProjectKey: "repository:one",
+      selectedEnvironmentIds: [environmentId],
+      selectedProjectKeys: ["repository:one"],
     });
     expect(saved).toEqual([]);
 
-    await act(() => latest.setSelectedProjectKey(null));
-    expect(saved).toEqual([{ threadListFilters: { environmentId, projectKey: null } }]);
+    await act(() => latest.setSelectedProjectKeys([]));
+    expect(saved).toEqual([
+      {
+        threadListFilters: {
+          environmentIds: [environmentId],
+          projectKeys: [],
+          environmentMode: "include",
+          projectMode: "include",
+          pinnedFilter: "all",
+        },
+      },
+    ]);
+  });
+
+  it("migrates a saved single scope without losing its selection", async () => {
+    await showLayout("compact", { environmentId, projectKey: "repository:one" });
+    expect(latest.options).toMatchObject({
+      selectedEnvironmentIds: [environmentId],
+      selectedProjectKeys: ["repository:one"],
+      filterModes: { environment: "include", project: "include" },
+    });
+    expect(saved).toEqual([
+      {
+        threadListFilters: {
+          environmentIds: [environmentId],
+          projectKeys: ["repository:one"],
+          environmentMode: "include",
+          projectMode: "include",
+          pinnedFilter: "all",
+        },
+      },
+    ]);
   });
 });
