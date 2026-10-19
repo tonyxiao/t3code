@@ -1,3 +1,4 @@
+import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source-updates";
 import * as Schema from "effect/Schema";
 
 import {
@@ -1122,6 +1123,13 @@ export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
 export interface DesktopBridge {
+  getJavaScriptSourceState?: () => Promise<SourceSnapshot>;
+  selectJavaScriptSource?: (source: JavaScriptSource) => Promise<void>;
+  resetJavaScriptDevelopmentServer?: () => Promise<void>;
+  importJavaScriptBundle?: () => Promise<void>;
+  deleteJavaScriptBundle?: (id: string) => Promise<void>;
+  reloadJavaScriptSource?: () => Promise<void>;
+  notifyJavaScriptReady?: () => Promise<void>;
   getAppBranding: () => DesktopAppBranding | null;
   /** Absolute path of a dropped or picked file; absent on desktop builds predating it. */
   getPathForFile?: (file: File) => string;

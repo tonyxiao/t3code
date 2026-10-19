@@ -46,3 +46,6 @@ export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
 
 export * from "./threadCreation.ts";
+
+export * from "./javascriptSource.ts";
+export * from "./javascriptSourceRuntime.ts";

@@ -101,6 +101,15 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.sendSync(IpcChannels.GET_LOCAL_ENVIRONMENT_ENABLED_CHANNEL) !== false,
   setLocalEnvironmentEnabled: (enabled) =>
     ipcRenderer.invoke(IpcChannels.SET_LOCAL_ENVIRONMENT_ENABLED_CHANNEL, enabled),
+  getJavaScriptSourceState: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_STATE),
+  selectJavaScriptSource: (source) =>
+    ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_SELECT, source),
+  resetJavaScriptDevelopmentServer: () =>
+    ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_RESET_SERVER),
+  importJavaScriptBundle: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_IMPORT),
+  deleteJavaScriptBundle: (id) => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_DELETE, id),
+  reloadJavaScriptSource: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_RELOAD),
+  notifyJavaScriptReady: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_READY),
   getLocalRendererUrl: () =>
     ipcRenderer.sendSync(IpcChannels.GET_LOCAL_RENDERER_URL_CHANNEL) as string | null,
   getLastLocalRendererUrl: () =>

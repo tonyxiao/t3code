@@ -1,3 +1,5 @@
+import { javascriptSourceUpdates } from "@tonyxiao/javascript-source-updates/vite";
+import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
 import * as NodeZlib from "node:zlib";
 
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -158,6 +160,10 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      javascriptSourceUpdates({
+        runtimeVersion: DESKTOP_JAVASCRIPT_RUNTIME_VERSION,
+        version: pkg.version,
+      }),
       thirdPartyLicensesPlugin({
         bundleName: "web",
         configFile: new URL("../../third-party-licenses.config.json", import.meta.url),

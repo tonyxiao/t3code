@@ -1,3 +1,4 @@
+import { SettingsJavaScriptSourceRouteScreen } from "./features/settings/SettingsJavaScriptSourceRouteScreen";
 import { useOpenThreadSync } from "./state/use-open-thread-sync";
 import {
   createPathConfigForStaticNavigation,
@@ -230,6 +231,11 @@ const SettingsContentStack = createNativeStackNavigator({
       screen: SettingsThreadsRouteScreen,
       linking: "thread-preferences",
       options: { title: "Thread behavior" },
+    }),
+    SettingsJavaScriptSource: createNativeStackScreen({
+      screen: SettingsJavaScriptSourceRouteScreen,
+      linking: "javascript-source",
+      options: { title: "JavaScript source" },
     }),
     SettingsAbout: createNativeStackScreen({
       screen: SettingsAboutRouteScreen,

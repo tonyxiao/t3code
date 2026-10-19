@@ -14,7 +14,7 @@ import {
 export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
-  | "/settings/frontend-source"
+  | "/settings/javascript-source"
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/snap-shot"
@@ -87,7 +87,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/projects": "Project",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
-  "/settings/frontend-source": "Frontend source",
+  "/settings/javascript-source": "JavaScript source",
   "/settings/keybindings": "Keybindings",
   "/settings/snap-shot": "SnapShots",
   "/settings/providers": "Providers",
@@ -132,9 +132,9 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  */
 export const SETTINGS_SEARCH_ITEMS = [
   {
-    id: "frontend-source",
-    title: "Frontend source",
-    to: "/settings/frontend-source",
+    id: "javascript-source",
+    title: "JavaScript source",
+    to: "/settings/javascript-source",
     desktopOnly: true,
     searchTerms: [
       "bundled built-in UI local Vite development server URL renderer restart recovery",
@@ -860,7 +860,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,
-  "/settings/frontend-source": null,
+  "/settings/javascript-source": null,
   "/settings/snap-shot": null,
   // Keybindings fan out to the selection; Providers shows the representative
   // environment at any selection. Neither needs a particular scope to render.

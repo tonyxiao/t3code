@@ -25,6 +25,7 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
+    "@tonyxiao/javascript-source-updates": "git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67",
     "effect": "catalog:"
   },
   "devDependencies": {

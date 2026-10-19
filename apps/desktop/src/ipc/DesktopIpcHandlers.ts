@@ -1,3 +1,4 @@
+import * as JavaScriptSourceIpc from "./methods/javascriptSource.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -94,6 +95,13 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(getLocalRendererUrl);
   yield* ipc.handleSync(getLastLocalRendererUrl);
   yield* ipc.handle(setLocalRendererUrl);
+  yield* ipc.handle(JavaScriptSourceIpc.getJavaScriptSourceState);
+  yield* ipc.handle(JavaScriptSourceIpc.selectJavaScriptSource);
+  yield* ipc.handle(JavaScriptSourceIpc.resetJavaScriptDevelopmentServer);
+  yield* ipc.handle(JavaScriptSourceIpc.importJavaScriptBundle);
+  yield* ipc.handle(JavaScriptSourceIpc.deleteJavaScriptBundle);
+  yield* ipc.handle(JavaScriptSourceIpc.reloadJavaScriptSource);
+  yield* ipc.handle(JavaScriptSourceIpc.notifyJavaScriptReady);
   yield* ipc.handle(getLocalEnvironmentBearerToken);
 
   yield* ipc.handle(getClientSettings);

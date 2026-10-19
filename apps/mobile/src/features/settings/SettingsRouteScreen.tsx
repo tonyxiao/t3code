@@ -199,6 +199,11 @@ function SettingsIndexSections() {
 
       <SettingsSection title="App">
         <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
+        <SettingsRow
+          icon="chevron.left.forwardslash.chevron.right"
+          label="JavaScript source"
+          target="SettingsJavaScriptSource"
+        />
         <SettingsRow icon="info.circle" label="About T3 Code" target="SettingsAbout" />
       </SettingsSection>
     </>

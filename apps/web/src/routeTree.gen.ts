@@ -23,6 +23,7 @@ import { Route as SettingsProvidersRouteImport } from './routes/settings.provide
 import { Route as SettingsProjectsRouteImport } from './routes/settings.projects'
 import { Route as SettingsOpenSourceLicensesRouteImport } from './routes/settings.open-source-licenses'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
+import { Route as SettingsJavascriptSourceRouteImport } from './routes/settings.javascript-source'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsFrontendSourceRouteImport } from './routes/settings.frontend-source'
@@ -106,6 +107,12 @@ const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
   path: '/keybindings',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsJavascriptSourceRoute =
+  SettingsJavascriptSourceRouteImport.update({
+    id: '/javascript-source',
+    path: '/javascript-source',
+    getParentRoute: () => SettingsRoute,
+  } as any)
 const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
@@ -185,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/settings/frontend-source': typeof SettingsFrontendSourceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/javascript-source': typeof SettingsJavascriptSourceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
@@ -211,6 +219,7 @@ export interface FileRoutesByTo {
   '/settings/frontend-source': typeof SettingsFrontendSourceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/javascript-source': typeof SettingsJavascriptSourceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
@@ -240,6 +249,7 @@ export interface FileRoutesById {
   '/settings/frontend-source': typeof SettingsFrontendSourceRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/javascript-source': typeof SettingsJavascriptSourceRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
   '/settings/projects': typeof SettingsProjectsRoute
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/settings/frontend-source'
     | '/settings/general'
     | '/settings/integrations'
+    | '/settings/javascript-source'
     | '/settings/keybindings'
     | '/settings/open-source-licenses'
     | '/settings/projects'
@@ -296,6 +307,7 @@ export interface FileRouteTypes {
     | '/settings/frontend-source'
     | '/settings/general'
     | '/settings/integrations'
+    | '/settings/javascript-source'
     | '/settings/keybindings'
     | '/settings/open-source-licenses'
     | '/settings/projects'
@@ -324,6 +336,7 @@ export interface FileRouteTypes {
     | '/settings/frontend-source'
     | '/settings/general'
     | '/settings/integrations'
+    | '/settings/javascript-source'
     | '/settings/keybindings'
     | '/settings/open-source-licenses'
     | '/settings/projects'
@@ -446,6 +459,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsKeybindingsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/javascript-source': {
+      id: '/settings/javascript-source'
+      path: '/javascript-source'
+      fullPath: '/settings/javascript-source'
+      preLoaderRoute: typeof SettingsJavascriptSourceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/integrations': {
       id: '/settings/integrations'
       path: '/integrations'
@@ -559,6 +579,7 @@ interface SettingsRouteChildren {
   SettingsFrontendSourceRoute: typeof SettingsFrontendSourceRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsJavascriptSourceRoute: typeof SettingsJavascriptSourceRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
   SettingsOpenSourceLicensesRoute: typeof SettingsOpenSourceLicensesRoute
   SettingsProjectsRoute: typeof SettingsProjectsRoute
@@ -576,6 +597,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsFrontendSourceRoute: SettingsFrontendSourceRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,
+  SettingsJavascriptSourceRoute: SettingsJavascriptSourceRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
   SettingsOpenSourceLicensesRoute: SettingsOpenSourceLicensesRoute,
   SettingsProjectsRoute: SettingsProjectsRoute,

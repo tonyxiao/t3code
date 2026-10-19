@@ -46,3 +46,50 @@ index e189d86a8aecc814910f38012c63cf0a2cbd0964..d2200d0db5afa7bfc5f134eb55ccae66
    override func layoutSubviews() {
      super.layoutSubviews()
      devLauncherViewController?.view.frame = bounds
+diff --git a/ios/Modules/DevLauncherModule.swift b/ios/Modules/DevLauncherModule.swift
+--- a/ios/Modules/DevLauncherModule.swift
++++ b/ios/Modules/DevLauncherModule.swift
+@@ -7,0 +8,18 @@
++
++    Function("getSourceInfo") {
++      let controller = EXDevLauncherController.sharedInstance()
++      let source = controller.sourceUrl()
++      let remote = source?.scheme == "http" || source?.scheme == "https"
++      return [
++        "runtimeVersion": controller.getUpdatesConfig(nil)["runtimeVersion"] as? String ?? "",
++        "serverUrl": remote ? (source?.absoluteString ?? "") as Any : NSNull()
++      ] as [String: Any]
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { (promise: Promise) in
++      EXDevLauncherController.sharedInstance().loadLocalBundle(onSuccess: {
++        promise.resolve(true)
++      }, onError: { error in
++        promise.reject(DevLauncherLoadAppException(error.localizedDescription).causedBy(error))
++      })
++    }.runOnQueue(.main)
+diff --git a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+--- a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
++++ b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+@@ -13,0 +14,21 @@
++
++    Function("getSourceInfo") {
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      mapOf(
++        "runtimeVersion" to (controller.updatesInterface?.runtimeVersion ?: ""),
++        "serverUrl" to if (controller.useDeveloperSupport) controller.manifestURL?.toString() else null
++      )
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { promise: Promise ->
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      val activity = appContext.currentActivity as? ReactActivity
++      controller.coroutineScope.launch {
++        try {
++          controller.loadEmbeddedBundle(activity)
++          promise.resolve(true)
++        } catch (e: Exception) {
++          promise.reject("ExpoDevLauncher", "Failed to load Built-in", DevLauncherLoadAppException(e))
++        }
++      }
++    }

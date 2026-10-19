@@ -92,6 +92,7 @@ packageExtensionsChecksum: sha256-34mvKz5PLlrn2Tt9jUJC1SbK5hRE+oxwqyC1J6r09oE=
 patchedDependencies:
   '@clerk/expo@4.6.8': b8b22ab733de5bea846ad9e88046c10582352fe9ad86f314f368b2a823f0f281
   '@effect/vitest@4.0.0-rc.115': 172bd95ef73a13d322888984415d5d18d9d2aa8e13fa529eac235efac837e902
+  '@expo/fingerprint@0.21.2': d37e5bb602bf4152b239eca01facac8b09ba00650689005ebfd9493dac282d8d
   '@expo/metro-config@58.0.6': 90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760
   '@ff-labs/fff-node@0.9.4': c4e3cc2420ceb9dc650f9d189e9c24baf7e83f342998bacda5f459a4ce7927a8
   '@legendapp/list@3.3.5': 680cc6a5c5b4a4032e467e7b3fde22f89a84c0ee2e6eac6fda737d6277cc0806
@@ -104,7 +105,7 @@ patchedDependencies:
   effect@4.0.0-rc.115: 0dfc4bb8ebd80fb3e06b91ef61346f5259517ab0f2437644fe95ae531084b1f5
   expo-audio@58.0.4: c20cb927d6848c53e7bf6ec14fe12f19daae9210165d2dbaf4e0f97ce31e8742
   expo-blur@58.0.3: d0311b0c0b05bd94393bd9a84653cb42503d5f3c8a19eb2627c34ace08bedf18
-  expo-dev-launcher@58.0.10: 9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7
+  expo-dev-launcher@58.0.10: f6cf24303f54469ebbdec42490a9477b28e38416eca8fbc3686a9c54db3556f5
   expo-glass-effect@58.0.3: f750041c45ab838a3530451dc7b50d6640a79141037a1b0499c5e3412a860c57
   expo-sharing@58.0.13: fe40d857765bcd6a77aac1fed275e5b8f9415c29b972decdce05fb96de5665e6
   expo-widgets@58.0.11: 94de7964c5a67ab40e6b79d9bdf4b7bfc50ae97b70722ee8e5a35105ca83386b
@@ -171,6 +172,9 @@ importers:
       '@t3tools/tailscale':
         specifier: workspace:*
         version: link:../../packages/tailscale
+      '@tonyxiao/javascript-source-updates':
+        specifier: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
+        version: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
       dbus-next:
         specifier: 0.10.2
         version: 0.10.2(patch_hash=cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4)
@@ -317,6 +321,9 @@ importers:
       '@tabler/icons-react-native':
         specifier: ^3.44.0
         version: 3.44.0(react-native-svg@15.15.5(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0))(react@19.3.0)
+      '@tonyxiao/javascript-source-updates':
+        specifier: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
+        version: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -673,6 +680,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.3
         version: 3.31.3
+      '@tonyxiao/javascript-source-updates':
+        specifier: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
+        version: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -923,6 +933,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@tonyxiao/javascript-source-updates':
+        specifier: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
+        version: git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67
       effect:
         specifier: 4.0.0-rc.115
         version: 4.0.0-rc.115(patch_hash=0dfc4bb8ebd80fb3e06b91ef61346f5259517ab0f2437644fe95ae531084b1f5)
@@ -5203,6 +5216,11 @@ packages:
 
   '@tiptap/starter-kit@3.31.3':
     resolution: {integrity: sha512-WKof9RewdmGHvWJ1wn0/HVNG2mV+HOgVRyJkKekuM9fgr6BZAAH/xZsWE1eon+94JnQ+KtK2ThydXQM/qc6b2A==}
+
+  '@tonyxiao/javascript-source-updates@git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67':
+    resolution: {commit: a298932b09fd52c4739a41966a7124b0386c7a67, repo: git@github.com:tonyxiao/javascript-source-updates.git, type: git}
+    version: 0.1.0
+    engines: {node: '>=22.18'}
 
   '@tweenjs/tween.js@23.1.3':
     resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
@@ -12946,7 +12964,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@expo/fingerprint@0.21.2':
+  '@expo/fingerprint@0.21.2(patch_hash=d37e5bb602bf4152b239eca01facac8b09ba00650689005ebfd9493dac282d8d)':
     dependencies:
       '@expo/env': 2.5.1
       '@expo/spawn-async': 1.8.0
@@ -15087,6 +15105,10 @@ snapshots:
       '@tiptap/extensions': 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
       '@tiptap/pm': 3.31.3
 
+  '@tonyxiao/javascript-source-updates@git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67':
+    dependencies:
+      fflate: 0.8.3
+
   '@tweenjs/tween.js@23.1.3': {}
 
   '@tybys/wasm-util@0.10.3':
@@ -17120,7 +17142,7 @@ snapshots:
   expo-dev-client@58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       expo: 58.0.2(56fc8ddb8129740412739f0f0a6ee025)
-      expo-dev-launcher: 58.0.10(patch_hash=9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
+      expo-dev-launcher: 58.0.10(patch_hash=f6cf24303f54469ebbdec42490a9477b28e38416eca8fbc3686a9c54db3556f5)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu: 58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu-interface: 58.0.1(expo@58.0.2)
       expo-manifests: 58.0.1(expo@58.0.2)
@@ -17128,7 +17150,7 @@ snapshots:
     transitivePeerDependencies:
       - react-native
 
-  expo-dev-launcher@58.0.10(patch_hash=9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
+  expo-dev-launcher@58.0.10(patch_hash=f6cf24303f54469ebbdec42490a9477b28e38416eca8fbc3686a9c54db3556f5)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       '@expo/schema-utils': 58.0.1
       expo: 58.0.2(56fc8ddb8129740412739f0f0a6ee025)
@@ -17392,7 +17414,7 @@ snapshots:
       '@expo/config': 58.0.1(typescript@7.0.2)
       '@expo/config-plugins': 58.0.4(typescript@7.0.2)
       '@expo/devtools': 58.0.2(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)
-      '@expo/fingerprint': 0.21.2
+      '@expo/fingerprint': 0.21.2(patch_hash=d37e5bb602bf4152b239eca01facac8b09ba00650689005ebfd9493dac282d8d)
       '@expo/local-build-cache-provider': 58.0.1(typescript@7.0.2)
       '@expo/log-box': 58.0.8(@expo/dom-webview@58.0.2)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0)
       '@expo/log-box-utils': 58.0.1

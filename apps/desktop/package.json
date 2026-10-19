@@ -22,6 +22,7 @@
     "@t3tools/shared": "workspace:*",
     "@t3tools/ssh": "workspace:*",
     "@t3tools/tailscale": "workspace:*",
+    "@tonyxiao/javascript-source-updates": "git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67",
     "dbus-next": "0.10.2",
     "effect": "catalog:",
     "electron": "44.4.2",

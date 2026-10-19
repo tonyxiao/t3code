@@ -7,6 +7,39 @@ const extraThemes = require("./generated-uniwind-theme-names.json");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
+// Resolve the same native runtime version used by Expo builds, before loading any server JS.
+const sourceMiddleware = config.server.enhanceMiddleware;
+config.server.enhanceMiddleware = (middleware, server) => {
+  const nextMiddleware = sourceMiddleware?.(middleware, server) ?? middleware;
+  return (request, response, next) => {
+    const url = new URL(request.url ?? "/", "http://metro.invalid");
+    if (url.pathname !== "/.well-known/javascript-source.json")
+      return nextMiddleware(request, response, next);
+    const platform = url.searchParams.get("platform");
+    if (platform !== "ios" && platform !== "android") {
+      response.writeHead(400);
+      response.end("Specify an iOS or Android runtime.");
+      return;
+    }
+    const {
+      resolveRuntimeVersionAsync,
+    } = require("expo-updates/utils/build/resolveRuntimeVersionAsync");
+    void resolveRuntimeVersionAsync(__dirname, platform, {}, {})
+      .then(({ runtimeVersion }) => {
+        response.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        });
+        response.end(JSON.stringify({ platform, runtimeVersion }));
+      })
+      .catch((error) => {
+        response.writeHead(503);
+        response.end("Could not resolve native runtime compatibility.");
+        console.error("[javascript-source] Runtime resolution failed", error);
+      });
+  };
+};
+
 if (process.env.T3CODE_MOBILE_REMOTE_JS === "1") {
   const enhanceMiddleware = config.server.enhanceMiddleware;
   config.server.enhanceMiddleware = (middleware, server) => {

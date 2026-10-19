@@ -137,6 +137,9 @@ function RootRouteNotFoundView() {
 }
 
 function RootRouteView() {
+  useEffect(() => {
+    void window.desktopBridge?.notifyJavaScriptReady?.().catch(() => {});
+  }, []);
   useEffect(() => installDesktopPasteAsText(window.desktopBridge, window), []);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();

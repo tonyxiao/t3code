@@ -1,3 +1,4 @@
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,6 +37,7 @@ export class DesktopApplicationMenu extends Context.Service<
 >()("@t3tools/desktop/window/DesktopApplicationMenu") {}
 
 type DesktopApplicationMenuRuntimeServices =
+  | DesktopJavaScriptSource.DesktopJavaScriptSource
   | DesktopUpdates.DesktopUpdates
   | DesktopWindow.DesktopWindow
   | ElectronDialog.ElectronDialog
@@ -115,7 +117,6 @@ export const make = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const electronMenu = yield* ElectronMenu.ElectronMenu;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
-  const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const appName = yield* electronApp.name;
   const context = yield* Effect.context<DesktopApplicationMenuRuntimeServices>();
   const runPromise = Effect.runPromiseWith(context);
@@ -137,7 +138,6 @@ export const make = Effect.gen(function* () {
   };
 
   const configure = Effect.gen(function* () {
-    const localRendererUrl = (yield* desktopSettings.get).localRendererUrl;
     const checkForUpdatesClick = () => {
       runMenuEffect("check-for-updates", handleCheckForUpdatesMenuClick);
     };
@@ -148,10 +148,9 @@ export const make = Effect.gen(function* () {
       runMenuEffect(
         "use-built-in-ui",
         Effect.gen(function* () {
-          const settings = yield* DesktopAppSettings.DesktopAppSettings;
-          const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
-          const change = yield* settings.setLocalRendererUrl(null);
-          if (change.changed) yield* lifecycle.relaunch("localRendererUrl=bundled");
+          const sources = yield* DesktopJavaScriptSource.DesktopJavaScriptSource;
+          yield* sources.select({ kind: "built-in" });
+          yield* (yield* DesktopLifecycle.DesktopLifecycle).relaunch("javascript-source=built-in");
         }),
       );
     };
@@ -252,12 +251,8 @@ export const make = Effect.gen(function* () {
           { role: "forceReload" },
           { role: "toggleDevTools" },
           { type: "separator" },
-          ...(localRendererUrl === null
-            ? []
-            : [
-                { label: "Use Built-in UI", click: useBuiltInUiClick },
-                { type: "separator" as const },
-              ]),
+          { label: "Use Built-in JavaScript", click: useBuiltInUiClick },
+          { type: "separator" },
           /*
             Not the zoom roles: those act on the focused webContents, so with
             an embedded preview WebContentsView focused they zoom the guest
