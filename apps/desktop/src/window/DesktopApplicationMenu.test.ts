@@ -1,4 +1,4 @@
-import { ElectronUpdates } from "@tonyxiao/javascript-updates/electron";
+import { ElectronUpdates } from "@tonyxiao/electron-updates";
 import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -114,8 +114,14 @@ const configureMenu = (
     readonly localRendererUrl?: string;
     readonly relaunchReason?: Deferred.Deferred<string>;
   },
-) =>
-  Effect.gen(function* () {
+) => {
+  const store = new ElectronUpdates({
+    directory: "/unused-source-test",
+    builtInDirectory: "/unused-built-in",
+    runtimeVersion: "test",
+    reload: async () => {},
+  });
+  return Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
     yield* menu.configure;
   }).pipe(
@@ -124,12 +130,8 @@ const configureMenu = (
         Layer.provideMerge(makeElectronMenuLayer(applicationMenuTemplate)),
         Layer.provideMerge(
           Layer.mock(DesktopJavaScriptSource.DesktopJavaScriptSource, {
-            store: new ElectronUpdates({
-              directory: "/unused-source-test",
-              builtInDirectory: "/unused-built-in",
-              runtimeVersion: "test",
-              reload: async () => {},
-            }),
+            store,
+            client: store,
             select: (source) =>
               Effect.sync(() => {
                 assert.deepEqual(source, { kind: "built-in" });
@@ -165,6 +167,7 @@ const configureMenu = (
       ),
     ),
   );
+};
 
 describe("DesktopApplicationMenu", () => {
   it.effect("offers a native way back to bundled UI when local Vite is selected", () =>

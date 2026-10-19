@@ -25,7 +25,7 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
-    "@tonyxiao/javascript-updates": "https://github.com/tonyxiao/javascript-updates/releases/download/v0.1.0/tonyxiao-javascript-updates-0.1.0.tgz",
+    "@tonyxiao/javascript-source": "https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz",
     "effect": "catalog:"
   },
   "devDependencies": {

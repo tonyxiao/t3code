@@ -1,5 +1,5 @@
-import type { JavaScriptSource } from "@tonyxiao/javascript-updates";
-import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/javascript-updates/electron";
+import type { JavaScriptSource, JavaScriptSourceClient } from "@tonyxiao/javascript-source";
+import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/electron-updates";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -30,6 +30,7 @@ export class DesktopJavaScriptSource extends Context.Service<
   DesktopJavaScriptSource,
   {
     readonly store: ElectronUpdates;
+    readonly client: JavaScriptSourceClient;
     readonly select: (source: JavaScriptSource) => Effect.Effect<void, JavaScriptSourceError>;
     readonly prepareLaunch: Effect.Effect<LaunchTarget, JavaScriptSourceError>;
     readonly ready: Effect.Effect<void, JavaScriptSourceError>;
@@ -57,10 +58,12 @@ export const layer = Layer.effect(
       },
     });
     yield* attempt(() => store.initialize());
+    const client: JavaScriptSourceClient = store;
     let launch: LaunchTarget | null = null;
     return {
       store,
-      select: (source) => attempt(() => store.select(source)),
+      client,
+      select: (source) => attempt(() => client.select(source)),
       prepareLaunch: attempt(async () => {
         launch = await store.prepareLaunch();
         return launch;

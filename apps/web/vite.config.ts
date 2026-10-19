@@ -1,4 +1,4 @@
-import { javascriptSourceUpdates } from "@tonyxiao/javascript-updates/vite";
+import { electronUpdates } from "@tonyxiao/electron-updates/vite";
 import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
 import * as NodeZlib from "node:zlib";
 
@@ -160,7 +160,7 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
-      javascriptSourceUpdates({
+      electronUpdates({
         runtimeVersion: DESKTOP_JAVASCRIPT_RUNTIME_VERSION,
         version: pkg.version,
       }),

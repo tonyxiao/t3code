@@ -1,4 +1,4 @@
-import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-updates";
+import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../ui/button";

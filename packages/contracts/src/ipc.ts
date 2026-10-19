@@ -1,4 +1,4 @@
-import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-updates";
+import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source";
 import * as Schema from "effect/Schema";
 
 import {
