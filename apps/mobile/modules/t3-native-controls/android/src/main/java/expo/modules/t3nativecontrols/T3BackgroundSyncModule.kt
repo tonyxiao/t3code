@@ -1,7 +1,5 @@
 package expo.modules.t3nativecontrols
 
-import android.content.Intent
-import android.os.Build
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -25,29 +23,21 @@ class T3BackgroundSyncModule : Module() {
     OnActivityEntersBackground {
       if (enabled) {
         appContext.reactContext?.let { context ->
-          try {
-            val intent = Intent(context, BackgroundSyncService::class.java)
-            if (Build.VERSION.SDK_INT >= 26) {
-              context.startForegroundService(intent)
-            } else {
-              context.startService(intent)
-            }
-          } catch (_: IllegalStateException) {
-            // Android may already have revoked foreground-service eligibility.
-          } catch (_: SecurityException) {
-            // A restricted device can deny background execution.
-          }
+          BackgroundSyncService.start(context)
         }
       }
     }
 
     OnActivityEntersForeground { stopSync() }
-    OnDestroy { stopSync() }
+    OnDestroy {
+      enabled = false
+      stopSync()
+    }
   }
 
   private fun stopSync() {
     appContext.reactContext?.let { context ->
-      context.stopService(Intent(context, BackgroundSyncService::class.java))
+      BackgroundSyncService.stop(context)
     }
   }
 }
