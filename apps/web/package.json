@@ -51,6 +51,8 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
+    "@tonyxiao/electron-updates": "https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz",
+    "@tonyxiao/javascript-source": "https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz",
     "class-variance-authority": "^0.7.1",
     "culori": "^4.0.2",
     "dompurify": "^3.4.16",

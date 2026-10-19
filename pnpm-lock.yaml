@@ -175,6 +175,7 @@ patchedDependencies:
   alchemy@2.0.0-beta.80: bea1b6c0c0b23157fd5f439a1d7feff430f28ac1621ba135d8a13eeec60ccacd
   dbus-next@0.10.2: cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4
   expo-audio@58.0.9: 2c2f8c73a23d48804c8b537b8cd73c25eb331aa47d82eaa481c6766cb81e5add
+  expo-dev-launcher@58.0.14: 934321cf42f70fd47b7d7a367f1ea71dcb92cbd6874b65a8988d134403fd3c84
   expo-sharing@58.0.19: ad248759641ddd71b8331c09dbb3b18c8a551785f2df507533805babd3c0c124
   expo-widgets@58.0.20: 8623cb034b720c5ef2da8012c765805a7298909bd92eaf8381f64dbde41b77dd
   node-pty@1.2.0-beta.15: f1e680afec85f650699ea756f91f469844ec4c976f4f168492a45c6b3f67d651
@@ -244,6 +245,12 @@ importers:
       '@t3tools/tailscale':
         specifier: workspace:*
         version: link:../../packages/tailscale
+      '@tonyxiao/electron-updates':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz(@tonyxiao/javascript-source@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz)
+      '@tonyxiao/javascript-source':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
       dbus-next:
         specifier: 0.10.2
         version: 0.10.2(patch_hash=cfff57561b0ee59b5addb3b2e6c6f20906e967507a530ab67e8db8108e520ba4)
@@ -423,6 +430,9 @@ importers:
       '@tabler/icons-react-native':
         specifier: ^3.44.0
         version: 3.44.0(react-native-svg@15.16.0(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(react@19.3.0))(react@19.3.0)
+      '@tonyxiao/javascript-source':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -914,6 +924,12 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.3
         version: 3.31.3
+      '@tonyxiao/electron-updates':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz(@tonyxiao/javascript-source@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz)
+      '@tonyxiao/javascript-source':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1173,6 +1189,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@tonyxiao/javascript-source':
+        specifier: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
+        version: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
       effect:
         specifier: 4.0.5
         version: 4.0.5
@@ -6486,6 +6505,18 @@ packages:
 
   '@tiptap/starter-kit@3.31.3':
     resolution: {integrity: sha512-WKof9RewdmGHvWJ1wn0/HVNG2mV+HOgVRyJkKekuM9fgr6BZAAH/xZsWE1eon+94JnQ+KtK2ThydXQM/qc6b2A==}
+
+  '@tonyxiao/electron-updates@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz':
+    resolution: {integrity: sha512-vKgPhM3jGULxeHyPZCH1YJgvpnivTNvXEysjcCiW7ecADY+h8Zp+fvZ//qaSGW7UfVAaCDvi/KETmDqXebVicQ==, tarball: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz}
+    version: 0.2.0
+    engines: {node: '>=22.18'}
+    peerDependencies:
+      '@tonyxiao/javascript-source': ^0.2.0
+
+  '@tonyxiao/javascript-source@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz':
+    resolution: {integrity: sha512-w4RSlBzy6wp0AkPQYYqYWUenMF4QF7lKHu+fokuVneSHhkzWWVeLX5fsUaE6aP1/OpXHoKz6LcAQ+SBn8tvLgA==, tarball: https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz}
+    version: 0.2.0
+    engines: {node: '>=22.18'}
 
   '@tsc-rs/darwin-arm64@0.7.0':
     resolution: {integrity: sha512-3execGkNh7DXNZr03dhQP2wqmsjB1Q4OJnTMgKIibjeQMsjNK8HTalJZPIG6PkiXeusXUweHP3+4yJjbi5auNw==}
@@ -17155,6 +17186,13 @@ snapshots:
       '@tiptap/extensions': 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
       '@tiptap/pm': 3.31.3
 
+  '@tonyxiao/electron-updates@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-electron-updates-0.2.0.tgz(@tonyxiao/javascript-source@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz)':
+    dependencies:
+      '@tonyxiao/javascript-source': https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz
+      fflate: 0.8.3
+
+  '@tonyxiao/javascript-source@https://github.com/tonyxiao/javascript-source/releases/download/v0.2.0/tonyxiao-javascript-source-0.2.0.tgz': {}
+
   '@tsc-rs/darwin-arm64@0.7.0':
     optional: true
 
@@ -19611,7 +19649,7 @@ snapshots:
   expo-dev-client@58.0.14(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       expo: 58.0.14(1106b1d11fc0fad6d0556b6a93329d99)
-      expo-dev-launcher: 58.0.14(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
+      expo-dev-launcher: 58.0.14(patch_hash=934321cf42f70fd47b7d7a367f1ea71dcb92cbd6874b65a8988d134403fd3c84)(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu: 58.0.11(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu-interface: 58.0.1(expo@58.0.14)
       expo-manifests: 58.0.1(expo@58.0.14)
@@ -19619,7 +19657,7 @@ snapshots:
     transitivePeerDependencies:
       - react-native
 
-  expo-dev-launcher@58.0.14(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
+  expo-dev-launcher@58.0.14(patch_hash=934321cf42f70fd47b7d7a367f1ea71dcb92cbd6874b65a8988d134403fd3c84)(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       '@expo/schema-utils': 58.0.2
       expo: 58.0.14(1106b1d11fc0fad6d0556b6a93329d99)

@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as JavaScriptSourceIpc from "./methods/javascriptSource.ts";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
@@ -84,6 +85,13 @@ import {
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
+  yield* ipc.handle(JavaScriptSourceIpc.getJavaScriptSourceState);
+  yield* ipc.handle(JavaScriptSourceIpc.selectJavaScriptSource);
+  yield* ipc.handle(JavaScriptSourceIpc.resetJavaScriptDevelopmentServer);
+  yield* ipc.handle(JavaScriptSourceIpc.importJavaScriptBundle);
+  yield* ipc.handle(JavaScriptSourceIpc.deleteJavaScriptBundle);
+  yield* ipc.handle(JavaScriptSourceIpc.reloadJavaScriptSource);
+  yield* ipc.handle(JavaScriptSourceIpc.notifyJavaScriptReady);
   yield* installNotificationBadge();
   yield* PreviewIpc.installPreviewEventForwarding();
 

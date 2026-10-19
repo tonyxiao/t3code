@@ -404,7 +404,7 @@ async function defaultConfirmInstallNow(): Promise<boolean> {
   });
 }
 
-async function defaultFlushPendingWrites(): Promise<void> {
+export async function flushPendingUpdateWrites(): Promise<void> {
   const results = await Promise.allSettled([
     import("../../state/use-composer-drafts").then((drafts) => drafts.flushComposerDrafts()),
     import("../../state/thread-outbox").then((outbox) => outbox.flushThreadOutbox()),
@@ -466,7 +466,7 @@ function defaultOnForegroundStay(apply: () => void): void {
 
 const defaultAppUpdateEnvironment: AppUpdateEnvironment = {
   confirmInstallNow: defaultConfirmInstallNow,
-  flushPendingWrites: defaultFlushPendingWrites,
+  flushPendingWrites: flushPendingUpdateWrites,
   isSafeToRestartInBackground: defaultIsSafeToRestartInBackground,
   onNextBackground: defaultOnNextBackground,
   onForegroundStay: defaultOnForegroundStay,

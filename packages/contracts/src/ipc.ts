@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source";
 
 import { SnapShotSource } from "./chatAttachment.ts";
 import { EnvironmentId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -1026,6 +1027,13 @@ export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
 export interface DesktopBridge {
+  getJavaScriptSourceState?: () => Promise<SourceSnapshot>;
+  selectJavaScriptSource?: (source: JavaScriptSource) => Promise<void>;
+  resetJavaScriptDevelopmentServer?: () => Promise<void>;
+  importJavaScriptBundle?: () => Promise<void>;
+  deleteJavaScriptBundle?: (id: string) => Promise<void>;
+  reloadJavaScriptSource?: () => Promise<void>;
+  notifyJavaScriptReady?: () => Promise<void>;
   getAppBranding: () => DesktopAppBranding | null;
   getPathForFile?: (file: File) => string;
   getClientPlatform?: () => string;

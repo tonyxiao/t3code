@@ -23,6 +23,7 @@
       "env": {
         "APP_VARIANT": "development",
         "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
         "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       }
     },
@@ -44,6 +45,7 @@
       "env": {
         "APP_VARIANT": "preview",
         "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
         "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       },
       "android": {
@@ -92,6 +94,7 @@
       "env": {
         "APP_VARIANT": "production",
         "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
         "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       }
     }

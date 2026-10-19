@@ -10,6 +10,7 @@ Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isTonyBuild = repoEnv.T3CODE_MOBILE_TONY_BUILD === "1";
+const remoteJsEnabled = isTonyBuild && repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -345,6 +346,15 @@ const config: ExpoConfig = {
     favicon: variant.assets.appIcon,
   },
   plugins: [
+    ...(remoteJsEnabled
+      ? ([
+          [
+            "expo-dev-client",
+            { launchMode: "launcher", embeddedBundle: true, skipOnboarding: true },
+          ],
+          "./plugins/withPrivateRemoteJs.cjs",
+        ] satisfies NonNullable<ExpoConfig["plugins"]>)
+      : []),
     "expo-asset",
     "react-native-pdf-jsi",
     [

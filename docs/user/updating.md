@@ -118,6 +118,20 @@ directory and pair with the running server.
 at once. Hover it to see which providers it will update. Providers that only
 offer a manual update command are not included.
 
+## JavaScript source in private builds
+
+The desktop app can start from its built-in JavaScript, a compatible saved bundle,
+or a development server. Open **Settings → General → JavaScript source** to
+select one. Switching restarts the app without changing its server or connections.
+If a selected source fails to load, use **View → Use Built-in JavaScript** from
+the native menu. Saved bundles remain on this device until deleted.
+
+On mobile, **Settings → JavaScript source** shows the current source and the
+native runtime version. A private build with the source launcher can switch
+between its embedded JavaScript and a compatible development server. Expo owns
+downloaded updates; manual bundle import and saved version selection are
+unavailable on mobile.
+
 ## Mobile updates
 
 To update an environment from your phone, open **Settings → Environments** and

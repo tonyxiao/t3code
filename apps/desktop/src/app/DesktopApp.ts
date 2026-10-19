@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import type * as Electron from "electron";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -32,6 +33,7 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
@@ -170,14 +172,54 @@ const bootstrap = Effect.gen(function* () {
 
   const settings = yield* desktopSettings.get;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
+  const sourceManager = yield* DesktopJavaScriptSource.DesktopJavaScriptSource;
+  const launch = yield* sourceManager.prepareLaunch;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
-    ...(environment.isDevelopment
-      ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
-      : { assetDirectory: environment.clientAssetsDir }),
+    ...(launch.serverUrl !== null
+      ? { targetOrigin: new URL(launch.serverUrl) }
+      : { assetDirectory: launch.assetDirectory ?? environment.clientAssetsDir }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* installDesktopIpcHandlers();
+  if (launch.token !== null) {
+    const electronApp = yield* ElectronApp.ElectronApp;
+    const scope = yield* Effect.scope;
+    const sourceContext = yield* Effect.context<
+      DesktopLifecycle.DesktopLifecycle | DesktopLifecycle.DesktopLifecycleRuntimeServices
+    >();
+    const runFork = Effect.runForkWith(sourceContext);
+    let armed = false;
+    yield* electronApp.on<[Electron.Event, Electron.BrowserWindow]>(
+      "browser-window-created",
+      (_event, window) => {
+        window.webContents.on("did-start-navigation", (details) => {
+          if (
+            armed ||
+            !details.isMainFrame ||
+            !details.url.startsWith(ElectronProtocol.getDesktopUrl(environment.isDevelopment))
+          )
+            return;
+          armed = true;
+          runFork(
+            Effect.gen(function* () {
+              yield* Effect.sleep("60 seconds");
+              if (yield* sourceManager.failLaunch) {
+                yield* (yield* DesktopLifecycle.DesktopLifecycle).relaunch(
+                  "javascript-source-startup-recovery",
+                );
+              }
+            }).pipe(
+              Effect.catchCause((cause) =>
+                logBootstrapWarning("JavaScript recovery failed", { cause: Cause.pretty(cause) }),
+              ),
+              Effect.forkIn(scope),
+            ),
+          );
+        });
+      },
+    );
+  }
   yield* logBootstrapInfo("bootstrap ipc handlers registered");
   // Before any window: the preload merges these items before the app reads storage.
   yield* (yield* DesktopLegacyLocalStorage.DesktopLegacyLocalStorage).load(

@@ -75,6 +75,15 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  getJavaScriptSourceState: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_STATE),
+  selectJavaScriptSource: (source) =>
+    ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_SELECT, source),
+  resetJavaScriptDevelopmentServer: () =>
+    ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_RESET_SERVER),
+  importJavaScriptBundle: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_IMPORT),
+  deleteJavaScriptBundle: (id) => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_DELETE, id),
+  reloadJavaScriptSource: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_RELOAD),
+  notifyJavaScriptReady: () => ipcRenderer.invoke(IpcChannels.JAVASCRIPT_SOURCE_READY),
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

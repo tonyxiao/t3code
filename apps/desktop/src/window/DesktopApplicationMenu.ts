@@ -11,6 +11,8 @@ import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
+import * as DesktopLifecycle from "../app/DesktopLifecycle.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
 
 export class DesktopApplicationMenuActionError extends Schema.TaggedError<DesktopApplicationMenuActionError>()(
@@ -33,6 +35,9 @@ export class DesktopApplicationMenu extends Context.Service<
 >()("@t3tools/desktop/window/DesktopApplicationMenu") {}
 
 type DesktopApplicationMenuRuntimeServices =
+  | DesktopJavaScriptSource.DesktopJavaScriptSource
+  | DesktopLifecycle.DesktopLifecycle
+  | DesktopLifecycle.DesktopLifecycleRuntimeServices
   | DesktopUpdates.DesktopUpdates
   | DesktopWindow.DesktopWindow
   | ElectronDialog.ElectronDialog;
@@ -142,6 +147,17 @@ export const make = Effect.gen(function* () {
     };
     const settingsClick = () => {
       runMenuEffect("open-settings", dispatchMenuAction("open-settings"));
+    };
+    const useBuiltInJavaScriptClick = () => {
+      runMenuEffect(
+        "use-built-in-javascript",
+        Effect.gen(function* () {
+          yield* (yield* DesktopJavaScriptSource.DesktopJavaScriptSource).select({
+            kind: "built-in",
+          });
+          yield* (yield* DesktopLifecycle.DesktopLifecycle).relaunch("javascript-source=built-in");
+        }),
+      );
     };
     // Chromium already pastes as plain text for this chord, so the accelerator
     // needs nothing from the menu: the composer and the terminal each arm
@@ -254,6 +270,7 @@ export const make = Effect.gen(function* () {
             accelerator: environment.platform === "darwin" ? "Alt+Command+I" : "Ctrl+Shift+I",
             click: mainContentsClick("toggleDevTools"),
           },
+          { label: "Use Built-in JavaScript", click: useBuiltInJavaScriptClick },
           { type: "separator" },
           { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: zoomClick("reset") },
           { label: "Zoom In", accelerator: "CmdOrCtrl+=", click: zoomClick("in") },

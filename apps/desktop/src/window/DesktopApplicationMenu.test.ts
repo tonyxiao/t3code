@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ElectronUpdates } from "@tonyxiao/electron-updates";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -10,6 +11,11 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as DesktopApplicationMenu from "./DesktopApplicationMenu.ts";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
+import * as DesktopLifecycle from "../app/DesktopLifecycle.ts";
+import * as DesktopShutdown from "../app/DesktopShutdown.ts";
+import * as DesktopState from "../app/DesktopState.ts";
+import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
@@ -103,10 +109,21 @@ const layerElectronMenu = (
     showContextMenu: () => Effect.succeedNone,
   } satisfies ElectronMenu.ElectronMenu["Service"]);
 
+const sourceStore = new ElectronUpdates({
+  directory: "/unused-source-test",
+  builtInDirectory: "/unused-built-in",
+  runtimeVersion: "test",
+  reload: async () => {},
+});
+
 const configureMenu = (
   selectedAction: Deferred.Deferred<string>,
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
   environment: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
+  recovery?: {
+    selected: Deferred.Deferred<string>;
+    relaunched: Deferred.Deferred<string>;
+  },
 ) =>
   Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
@@ -114,6 +131,27 @@ const configureMenu = (
   }).pipe(
     Effect.provide(
       DesktopApplicationMenu.layer.pipe(
+        Layer.provideMerge(
+          Layer.mock(DesktopJavaScriptSource.DesktopJavaScriptSource, {
+            store: sourceStore,
+            sourceApi: sourceStore,
+            select: (source) =>
+              recovery
+                ? Deferred.succeed(recovery.selected, source.kind).pipe(Effect.asVoid)
+                : Effect.void,
+          }),
+        ),
+        Layer.provideMerge(
+          Layer.mock(DesktopLifecycle.DesktopLifecycle, {
+            relaunch: (reason) =>
+              recovery
+                ? Deferred.succeed(recovery.relaunched, reason).pipe(Effect.asVoid)
+                : Effect.void,
+          }),
+        ),
+        Layer.provideMerge(DesktopShutdown.layer),
+        Layer.provideMerge(DesktopState.layer),
+        Layer.provideMerge(Layer.mock(ElectronTheme.ElectronTheme, {})),
         Layer.provideMerge(layerElectronMenu(applicationMenuTemplate)),
         Layer.provideMerge(layerDesktopWindow(selectedAction)),
         Layer.provideMerge(layerDesktopUpdates),
@@ -129,6 +167,25 @@ const configureMenu = (
   );
 
 describe("DesktopApplicationMenu", () => {
+  it.effect("recovers the built-in JavaScript without loading Settings", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+      const selected = yield* Deferred.make<string>();
+      const relaunched = yield* Deferred.make<string>();
+      yield* configureMenu(selectedAction, applicationMenuTemplate, {}, { selected, relaunched });
+      const viewMenu = (yield* Deferred.await(applicationMenuTemplate)).find(
+        (item) => item.label === "View",
+      );
+      if (!Array.isArray(viewMenu?.submenu)) throw new Error("View menu is unavailable.");
+      const recovery = viewMenu.submenu.find((item) => item.label === "Use Built-in JavaScript");
+      if (typeof recovery?.click !== "function") throw new Error("Recovery action is unavailable.");
+      recovery.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+      assert.equal(yield* Deferred.await(selected), "built-in");
+      assert.equal(yield* Deferred.await(relaunched), "javascript-source=built-in");
+    }),
+  );
   it.effect("keeps display branding in the macOS application menu", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();

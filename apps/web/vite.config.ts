@@ -1,3 +1,5 @@
+import { electronUpdates } from "@tonyxiao/electron-updates/vite";
+import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
 import * as NodeZlib from "node:zlib";
 
 import react from "@vitejs/plugin-react";
@@ -174,6 +176,10 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      electronUpdates({
+        runtimeVersion: DESKTOP_JAVASCRIPT_RUNTIME_VERSION,
+        version: pkg.version,
+      }),
       thirdPartyLicensesPlugin({
         bundleName: "web",
         configFile: new URL("../../third-party-licenses.config.json", import.meta.url),

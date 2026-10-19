@@ -170,6 +170,7 @@ import {
   useSettingsSearchTargetId,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { DesktopRendererSourceSetting } from "./DesktopRendererSourceSetting";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
@@ -2136,6 +2137,14 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <ProjectDefaultsSettings category="general" />
+      {window.desktopBridge?.getJavaScriptSourceState ? (
+        <SettingsSection title="JavaScript source">
+          <DesktopRendererSourceSetting />
+          <p className="px-3 text-sm text-muted-foreground">
+            If the frontend fails to load, choose View → Use Built-in JavaScript in the app menu.
+          </p>
+        </SettingsSection>
+      ) : null}
       <SettingsSection id="organization" title="Organization">
         <SettingsRow
           {...searchableSetting("project-grouping")}

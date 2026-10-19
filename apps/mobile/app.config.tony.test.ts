@@ -18,6 +18,7 @@ it("keeps upstream builds separate from Tony's existing mobile identities", asyn
 
   vi.resetModules();
   vi.stubEnv("T3CODE_MOBILE_TONY_BUILD", "1");
+  vi.stubEnv("T3CODE_MOBILE_REMOTE_JS", "1");
   const tony = (await import("./app.config.ts")).default;
   expect(tony.name).toBe("Tony T3 Code");
   expect(tony.scheme).toBe("tony-t3code");
@@ -28,4 +29,5 @@ it("keeps upstream builds separate from Tony's existing mobile identities", asyn
   expect(tony.extra?.eas.projectId).toBe("f6cd51c6-6875-4ce4-9360-7aefaf9ee333");
   expect(tony.updates?.url).toBe("https://u.expo.dev/f6cd51c6-6875-4ce4-9360-7aefaf9ee333");
   expect(tony.updates?.enabled).toBe(false);
+  expect(tony.plugins).toContain("./plugins/withPrivateRemoteJs.cjs");
 });

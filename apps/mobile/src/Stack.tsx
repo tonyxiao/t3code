@@ -127,6 +127,7 @@ import { SettingsProjectOverviewRouteScreen } from "./features/settings/Settings
 import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
+import { SettingsJavaScriptSourceRouteScreen } from "./features/settings/SettingsJavaScriptSourceRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
 import { SettingsRouteScreen } from "./features/settings/SettingsRouteScreen";
 import { SettingsThreadsRouteScreen } from "./features/settings/SettingsThreadsRouteScreen";
@@ -270,6 +271,11 @@ const SettingsContentStack = createV5SheetStackNavigator({
       screen: SettingsAboutRouteScreen,
       linking: "about",
       options: { title: "About T3 Code" },
+    }),
+    SettingsJavaScriptSource: createNativeStackScreen({
+      screen: SettingsJavaScriptSourceRouteScreen,
+      linking: "javascript-source",
+      options: { title: "JavaScript source" },
     }),
     SettingsEnvironmentNew: createNativeStackScreen({
       screen: ConnectionsNewRouteScreen,
