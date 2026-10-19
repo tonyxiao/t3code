@@ -22,6 +22,7 @@ import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
+import { onRequestThreadRename } from "~/threadRenameBus";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -163,6 +164,18 @@ export const ChatHeader = memo(function ChatHeader({
       title: activeThreadTitle,
     });
   };
+  useEffect(
+    () =>
+      onRequestThreadRename((threadRef) => {
+        if (
+          threadRef.environmentId === activeThreadEnvironmentId &&
+          threadRef.threadId === activeThreadId
+        ) {
+          startRename();
+        }
+      }),
+    [activeThreadEnvironmentId, activeThreadId, startRename],
+  );
   const commitRename = (title: string) => {
     setRenaming(null);
     if (!readEnvironmentScope(activeThreadEnvironmentId, AuthOrchestrationOperateScope)) return;

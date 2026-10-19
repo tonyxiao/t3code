@@ -45,6 +45,7 @@ import {
   AuthFilesystemReadScope,
   type DesktopWslState,
   type ClientSettings,
+  type ContextMenuItem,
   type EnvironmentId,
   type EnvironmentMachineKind,
   type FilesystemBrowseResult,
@@ -96,6 +97,9 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useThreadActionMenu } from "../hooks/useThreadActionMenu";
+import { requestThreadRename } from "../threadRenameBus";
+import type { ThreadActionMenuId } from "./threadActionMenu.logic";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import {
@@ -991,6 +995,16 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectCwd = currentProjectId
     ? (projectCwdById.get(currentProjectId) ?? null)
     : null;
+  const activeThreadRef = activeThread
+    ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+    : null;
+  const threadActionMenu = useThreadActionMenu({
+    threadRef: activeThreadRef,
+    projectCwd: currentProjectCwd,
+    onStartRename: () => {
+      if (activeThreadRef) window.setTimeout(() => requestThreadRename(activeThreadRef), 0);
+    },
+  });
   const currentProjectCwdForBrowse =
     browseEnvironmentId && currentProjectEnvironmentId === browseEnvironmentId
       ? currentProjectCwd
@@ -1705,6 +1719,56 @@ function OpenCommandPaletteDialog(props: {
       shortcutCommand: "thread.copyReference",
       run: copyActiveThreadReference,
     });
+  }
+
+  if (activeThreadRef !== null) {
+    const menuItems = threadActionMenu.getMenuItems();
+    const toPaletteItem = (
+      item: ContextMenuItem<ThreadActionMenuId>,
+      parentLabel?: string,
+      parentDisabled = false,
+    ): CommandPaletteActionItem | CommandPaletteSubmenuItem => {
+      const base = {
+        value: `thread-action:${item.id}`,
+        searchTerms: [item.label, parentLabel ?? "", "thread", item.id.replaceAll("-", " ")],
+        title: parentLabel ? `${parentLabel} → ${item.label}` : item.label,
+        icon: item.checked ? (
+          <CheckIcon className={ITEM_ICON_CLASS} />
+        ) : (
+          <MessageSquareIcon className={ITEM_ICON_CLASS} />
+        ),
+        ...(item.checked ? { description: "Current" } : {}),
+        ...(item.disabled || parentDisabled ? { disabled: true } : {}),
+      };
+      if (item.children) {
+        return {
+          ...base,
+          kind: "submenu",
+          addonIcon: <MessageSquareIcon className={ADDON_ICON_CLASS} />,
+          groups: [
+            {
+              value: `thread-action-options:${item.id}`,
+              label: item.label,
+              items: item.children.map((child) => toPaletteItem(child, undefined, item.disabled)),
+            },
+          ],
+        };
+      }
+      return {
+        ...base,
+        kind: "action",
+        run: async () => threadActionMenu.runAction(item.id),
+      };
+    };
+    actionItems.push(...menuItems.map((item) => toPaletteItem(item)));
+    if (deferredQuery.trim()) {
+      actionItems.push(
+        ...menuItems.flatMap(
+          (item) =>
+            item.children?.map((child) => toPaletteItem(child, item.label, item.disabled)) ?? [],
+        ),
+      );
+    }
   }
 
   if (

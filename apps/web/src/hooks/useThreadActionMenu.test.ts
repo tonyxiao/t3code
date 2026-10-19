@@ -166,6 +166,16 @@ beforeEach(() => {
 });
 
 describe("thread menu permissions", () => {
+  it("rechecks permission when a palette action runs after its items were built", async () => {
+    state.granted.add("secondary");
+    const menu = createMenu();
+    expect(menu.getMenuItems().find((item) => item.id === "rename")?.disabled).not.toBe(true);
+    state.granted.delete("secondary");
+    await menu.runAction("rename");
+    expect(state.effects).toEqual([]);
+    expect(menu.getMenuItems().find((item) => item.id === "rename")?.disabled).toBe(true);
+  });
+
   it("disables mutations for a denied secondary environment", () => {
     createMenu().openMenu(position);
     const items = state.show.mock.calls[0]![0];
