@@ -4,12 +4,13 @@ import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-sour
 
 import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import { flushComposerDrafts } from "../../state/use-composer-drafts";
+import { flushThreadOutbox } from "../../state/thread-outbox";
 import { createMobileJavaScriptSourceClient } from "./javascript-source";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { runAppUpdateCheck, type AppUpdateCheckState } from "../updates/app-updates";
-import { flushPendingUpdateWrites } from "../updates/app-updates";
 
 export function SettingsJavaScriptSourceRouteScreen() {
   const client = useMemo(() => createMobileJavaScriptSourceClient(), []);
@@ -39,7 +40,13 @@ export function SettingsJavaScriptSourceRouteScreen() {
     setError(null);
     try {
       await client.select(source);
-      await flushPendingUpdateWrites();
+      // Keep both flush functions loaded so offline recovery does not fetch
+      // lazy JavaScript modules before switching back to the embedded bundle.
+      const writes = await Promise.allSettled([flushComposerDrafts(), flushThreadOutbox()]);
+      const failure = writes.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failure) throw failure.reason;
       await client.reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

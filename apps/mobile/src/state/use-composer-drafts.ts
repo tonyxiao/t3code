@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { Directory, File, Paths } from "expo-file-system";
 import {
   EnvironmentId as EnvironmentIdSchema,
   ModelSelection as ModelSelectionSchema,
@@ -659,7 +660,6 @@ export function decodePersistedComposerState(value: unknown): {
 }
 
 async function getComposerDraftsFile() {
-  const { Directory, File, Paths } = await import("expo-file-system");
   const directory = new Directory(Paths.document, COMPOSER_DRAFTS_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
   return new File(directory, COMPOSER_DRAFTS_FILE);

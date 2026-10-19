@@ -1,4 +1,4 @@
-import type { File } from "expo-file-system";
+import { File } from "expo-file-system";
 
 let tempFileSequence = 0;
 
@@ -8,9 +8,8 @@ let tempFileSequence = 0;
  * A failed write must clean up its own staging file so retries do not leak it.
  */
 export async function writeFileAtomically(file: File, contents: string): Promise<void> {
-  const { File: FileConstructor } = await import("expo-file-system");
   tempFileSequence += 1;
-  const temp = new FileConstructor(file.parentDirectory, `${file.name}.${tempFileSequence}.tmp`);
+  const temp = new File(file.parentDirectory, `${file.name}.${tempFileSequence}.tmp`);
   try {
     temp.create({ intermediates: true, overwrite: true });
     await temp.write(contents);
