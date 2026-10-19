@@ -21,21 +21,22 @@ export function DesktopRendererSourceSetting() {
     try {
       await setLocalRendererUrl(url);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not change the desktop UI source.");
+      setError(cause instanceof Error ? cause.message : "Could not change the frontend source.");
       setPending(false);
     }
   };
 
   return (
     <SettingsRow
-      title="Desktop UI source"
-      description="Load this window from a local Vite server while keeping this app's connections and backend. Changing the source restarts the app."
-      status={currentUrl === null ? "Built-in UI" : `Local UI: ${currentUrl}`}
+      id="frontend-source"
+      title="Frontend source"
+      description="Use the frontend bundled with this app or a local development server. Changing the source restarts the app and keeps your connections and backend."
+      status={currentUrl === null ? "Bundled frontend" : `Development server: ${currentUrl}`}
     >
       <div className="flex flex-wrap items-center gap-2 py-3">
         <div className="w-full min-w-48 flex-1 sm:max-w-72">
           <Input
-            aria-label="Local Vite URL"
+            aria-label="Development server URL"
             nativeInput
             size="sm"
             type="url"
@@ -51,11 +52,11 @@ export function DesktopRendererSourceSetting() {
           disabled={pending || draftUrl.trim().length === 0 || draftUrl === currentUrl}
           onClick={() => void apply(draftUrl)}
         >
-          Use local UI
+          Use development server
         </Button>
         {currentUrl !== null ? (
           <Button size="sm" variant="outline" disabled={pending} onClick={() => void apply(null)}>
-            Use built-in UI
+            Use bundled frontend
           </Button>
         ) : null}
       </div>
