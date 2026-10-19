@@ -149,6 +149,7 @@ import { useNativeLayoutMetrics } from "./native/native-layout-metrics";
 import { nativeHeaderScrollEdgeEffects } from "./native/StackHeader";
 import { FORM_SHEET_PRESENTATION_OPTIONS } from "./native/sheet-surface";
 import { useThreadOutboxDrain } from "./state/use-thread-outbox-drain";
+import { useOpenThreadSync } from "./state/use-open-thread-sync";
 import { useComposerAttachmentUploadWorker } from "./state/composer-attachment-uploads";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
@@ -583,6 +584,7 @@ function workspaceLocationFromState(state: NavigationState) {
 // updates from re-rendering RootStackLayout (and with it every screen) on
 // each enqueue, shell change, or reconnect.
 function ThreadOutboxDrainWorker() {
+  useOpenThreadSync();
   useThreadOutboxDrain();
   useComposerAttachmentUploadWorker();
   return null;

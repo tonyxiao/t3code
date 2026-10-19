@@ -27,7 +27,6 @@ import { appAtomRegistry } from "../state/atom-registry";
 import { clearThreadOutboxEnvironment } from "../state/thread-outbox-removal";
 import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
 import { clearThreadComposerErrorsForEnvironment } from "../state/thread-composer-error";
-import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
 import * as ConnectionStorage from "./storage";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
@@ -124,21 +123,12 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
 const layerWakeups = Wakeups.layer({
   changes: Stream.mergeAll(
     [
-      Stream.callback<"application-active-probe" | "application-active-reconnect">((queue) =>
+      Stream.callback<"application-active-probe">((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
             return AppState.addEventListener("change", (state) => {
-              if (state === "background") {
-                backgroundedAtMs = Date.now();
-                return;
-              }
               if (state === "active") {
-                Queue.offerUnsafe(
-                  queue,
-                  mobileApplicationActiveWakeup(backgroundedAtMs, Date.now()),
-                );
-                backgroundedAtMs = null;
+                Queue.offerUnsafe(queue, "application-active-probe");
               }
             });
           }),

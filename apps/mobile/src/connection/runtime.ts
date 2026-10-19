@@ -3,9 +3,12 @@ import { ShellSnapshotLoader } from "@t3tools/client-runtime/state/shell";
 import { PullRequestDiffLoader } from "@t3tools/client-runtime/state/pull-requests";
 import {
   BoundedThreadSnapshotLoader,
+  ThreadSnapshotLoader,
   ThreadHistoryController,
 } from "@t3tools/client-runtime/state/threads";
+import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Semaphore from "effect/Semaphore";
 import { Atom } from "effect/reactivity";
 
 import type { FoundationHotModule } from "../lib/foundation-fast-refresh";
@@ -19,9 +22,20 @@ declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
 const layerProvidedConnectionPlatform = ConnectionPlatform.layer.pipe(Layer.provide(Runtime.layer));
 
+const layerMobileThreadSnapshotLoader = Layer.effect(
+  ThreadSnapshotLoader,
+  Effect.gen(function* () {
+    const loader = yield* ThreadSnapshotLoader;
+    const hydration = yield* Semaphore.make(4);
+    return ThreadSnapshotLoader.of({
+      load: (...args) => loader.load(...args).pipe(hydration.withPermits(1)),
+    });
+  }),
+).pipe(Layer.provide(BoundedThreadSnapshotLoader.layer));
+
 const layerSnapshotLoader = Layer.mergeAll(
   PullRequestDiffLoader.layer,
-  BoundedThreadSnapshotLoader.layer,
+  layerMobileThreadSnapshotLoader,
   ShellSnapshotLoader.layer,
   ThreadHistoryController.layer,
 );

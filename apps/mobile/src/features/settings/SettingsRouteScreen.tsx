@@ -13,6 +13,7 @@ import { useSavedRemoteConnections } from "../../state/use-remote-environment-re
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { BackgroundSyncSection } from "./components/BackgroundSyncSection";
 import {
   AndroidSettingsEnvironmentFilter,
   SettingsEnvironmentFilterHeader,
@@ -165,6 +166,7 @@ function SettingsIndexSections() {
       <SettingsSection title="Automations">
         <SettingsRow icon="clock" label="Scheduled tasks" target="SettingsScheduledTasks" />
       </SettingsSection>
+      <BackgroundSyncSection />
 
       <SettingsSection title="Projects & threads">
         {selectedProjectKey !== null ? (

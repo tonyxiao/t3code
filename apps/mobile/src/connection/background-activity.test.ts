@@ -1,4 +1,4 @@
-import { EnvironmentId, WS_METHODS } from "@t3tools/contracts";
+import { EnvironmentId, ORCHESTRATION_V2_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
@@ -9,6 +9,22 @@ import {
 } from "./background-activity-scopes";
 
 describe("mobile background activity", () => {
+  it.effect("retains open thread demand while its subscription is mounted", () =>
+    Effect.gen(function* () {
+      const environmentId = EnvironmentId.make("mobile-environment");
+      const release = yield* observeMobileBackgroundActivitySubscription({
+        environmentId,
+        method: ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+        input: { threadId: "open-thread" },
+      });
+      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([
+        { type: "thread", threadId: "open-thread" },
+      ]);
+      yield* release;
+      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([]);
+    }),
+  );
+
   it.effect("retains VCS demand only while the mobile subscription is active", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("mobile-environment");

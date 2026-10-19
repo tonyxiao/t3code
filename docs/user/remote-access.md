@@ -62,6 +62,16 @@ created in Settings can only be copied from the client that created them while
 its Connections page stays open. If you leave or reload that page, create
 another link to share.
 
+### Keep open threads synced on mobile
+
+The mobile app keeps open threads subscribed while it is running, including
+when you leave a chat screen. When you leave the app, Android starts a foreground
+sync service for up to ten minutes and shows a notification. On iOS 26 or later,
+the app requests a ten-minute background session before it suspends; iOS may
+decline or end the session early. Return to the app to reconnect and catch up.
+On iOS, **Settings → Background sync** shows the session state and lets you stop
+an active session.
+
 ### Reach one machine several ways
 
 A machine can have more than one route: LAN, Tailscale, another VPN, a public
