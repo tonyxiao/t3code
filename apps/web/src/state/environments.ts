@@ -9,6 +9,7 @@ import * as Option from "effect/Option";
 import { useMemo } from "react";
 
 import { environmentCatalog } from "../connection/catalog";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations, useEnvironmentPresentation } from "./presentation";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 import { relayEnvironmentDiscovery } from "./relay";
@@ -69,6 +70,13 @@ export function useEnvironment(
         ? null
         : projectEnvironmentPresentation(environmentId, presentation),
     [environmentId, presentation],
+  );
+}
+
+export function readEnvironmentConnectionPhase(environmentId: EnvironmentId) {
+  return (
+    appAtomRegistry.get(environmentPresentations.presentationAtom(environmentId))?.connection
+      .phase ?? null
   );
 }
 

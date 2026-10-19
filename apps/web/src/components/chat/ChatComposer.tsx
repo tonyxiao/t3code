@@ -1744,6 +1744,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           ? "Attach the interrupted file again or remove it"
           : "Attach the interrupted files again or remove them"
         : attachmentUploadBlockReason({
+            deferUploads: environmentUnavailable !== null && !questionAttachmentTarget,
             imageIds: [...composerImages, ...composerFiles].map((attachment) => attachment.id),
             uploadsByImageId,
             environmentId,
@@ -2704,7 +2705,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     isConnecting ||
     noProviderAvailable ||
     projectSelectionRequired ||
-    environmentUnavailable !== null ||
     !composerSendState.hasSendableContent;
   const collapsedComposerPrimaryActionLabel = "Send message";
   const showMobilePendingAnswerActions =
@@ -7059,7 +7059,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
+                      (environmentUnavailable !== null &&
+                        (activePendingProgress !== null ||
+                          showPlanFollowUpPrompt ||
+                          environmentUnavailable.connection.phase === "unsupported")) ||
                       noProviderAvailable ||
                       projectSelectionRequired
                     }

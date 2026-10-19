@@ -9,6 +9,16 @@ import {
 const environmentId = EnvironmentId.make("environment-1");
 
 describe("attachmentUploadBlockReason", () => {
+  it("lets the offline outbox own pending and failed uploads", () => {
+    expect(
+      attachmentUploadBlockReason({
+        imageIds: ["pending", "failed"],
+        environmentId,
+        deferUploads: true,
+        uploadsByImageId: { failed: { status: "failed", environmentId, reason: "Host offline" } },
+      }),
+    ).toBeNull();
+  });
   it("allows uploaded images from the active environment", () => {
     expect(
       attachmentUploadBlockReason({

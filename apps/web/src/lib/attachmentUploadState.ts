@@ -31,7 +31,9 @@ export function attachmentUploadBlockReason(input: {
   readonly imageIds: ReadonlyArray<string>;
   readonly uploadsByImageId: Readonly<Record<string, AttachmentUploadState>>;
   readonly environmentId: EnvironmentId;
+  readonly deferUploads?: boolean;
 }): string | null {
+  if (input.deferUploads) return null;
   let pending = 0;
   let failed = 0;
 

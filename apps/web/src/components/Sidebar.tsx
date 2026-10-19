@@ -165,6 +165,8 @@ import {
 } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
+import { useQueuedMessageStore, type QueuedComposerMessage } from "../queuedMessageStore";
+import { releaseDraftAttachments } from "../lib/attachmentUploadQueue";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
@@ -767,7 +769,9 @@ function SidebarSectionHeader(props: {
 const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   draftId: DraftId;
   session: DraftSessionState;
-  composer: ComposerThreadDraftState;
+  composer: ComposerThreadDraftState | null;
+  queuedMessage?: QueuedComposerMessage | undefined;
+  queueSending: boolean;
   project: ProjectFaviconProject | null;
   projectDisplayName: string | null;
   environmentLabel: string | null;
@@ -775,26 +779,30 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   onNavigate: (draftId: DraftId) => void;
   onDiscard: (draftId: DraftId) => void;
 }) {
-  const { composer, draftId, onDiscard, onNavigate, session } = props;
+  const { composer, draftId, onDiscard, onNavigate, session, queuedMessage } = props;
+  const content = queuedMessage ?? composer;
   const promptPreview =
-    replaceComposerContextReferences(composer.prompt, (occurrence) => occurrence.label)
+    replaceComposerContextReferences(content?.prompt ?? "", (occurrence) => occurrence.label)
       .trim()
       .split("\n", 1)[0] ?? "";
   // images mirrors persistedAttachments once rehydration finishes; before
   // that only the persisted list is populated, hence max not sum.
   const attachmentCount =
-    Math.max(composer.images.length, composer.persistedAttachments.length) +
-    composer.files.length +
-    composer.terminalContexts.length +
-    composer.previewAnnotations.length +
-    composer.reviewComments.length;
+    Math.max(
+      content?.images.length ?? 0,
+      queuedMessage ? 0 : (composer?.persistedAttachments.length ?? 0),
+    ) +
+    (content?.files.length ?? 0) +
+    (content?.terminalContexts.length ?? 0) +
+    (content?.previewAnnotations.length ?? 0) +
+    (content?.reviewComments.length ?? 0);
   const preview =
     promptPreview.length > 0
       ? promptPreview
       : `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`;
   const accessibility = resolveSidebarRowAccessibility({
     title: preview,
-    statusLabel: "Unsent draft",
+    statusLabel: queuedMessage ? "Queued message" : "Unsent draft",
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
   });
@@ -838,7 +846,11 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         <span className="sr-only">{preview}</span>
         <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
           <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <SquarePenIcon aria-hidden className={draftPenClassName} />
+            {queuedMessage ? (
+              <ClockIcon aria-hidden className={draftPenClassName} />
+            ) : (
+              <SquarePenIcon aria-hidden className={draftPenClassName} />
+            )}
             {props.project ? (
               <ProjectFavicon project={props.project} className="size-4 shrink-0" />
             ) : null}
@@ -852,6 +864,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
                     <button
                       type="button"
                       aria-label="Discard draft"
+                      disabled={props.queueSending}
                       onClick={handleDiscard}
                       className="pointer-events-none inline-flex cursor-pointer items-center rounded-md bg-transparent px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100"
                     >
@@ -867,6 +880,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
             {preview}
           </div>
           <div className="mt-0.5 truncate text-right text-xs text-sidebar-muted-foreground">
+            {queuedMessage ? "Queued · " : ""}
             {props.environmentLabel ?? "Environment"}
           </div>
         </div>
@@ -878,7 +892,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
 interface SidebarDraftRowData {
   draftId: DraftId;
   session: DraftSessionState;
-  composer: ComposerThreadDraftState;
+  composer: ComposerThreadDraftState | null;
+  queuedMessage?: QueuedComposerMessage;
+  queueSending?: boolean;
 }
 
 // Draft sessions with user content, surfaced above the pinned block so an
@@ -898,6 +914,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
   const clearDraftThread = useComposerDraftStore((store) => store.clearDraftThread);
+  const queues = useQueuedMessageStore((store) => store.queuesByThreadKey);
   // The open draft's row is FROZEN at the moment the draft became the route:
   // it stays visible (like a thread row) but never repaints while the user
   // types. A draft that was never navigated away from has no snapshot to
@@ -941,6 +958,18 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
       ) {
         continue;
       }
+      const queue =
+        queues[scopedThreadKey(scopeThreadRef(session.environmentId, session.threadId))];
+      if (queue?.[0]) {
+        rows.push({
+          draftId: DraftId.make(draftKey),
+          session,
+          composer: draftsByThreadKey[draftKey] ?? null,
+          queuedMessage: queue[0],
+          queueSending: queue.some((message) => message.sending !== undefined),
+        });
+        continue;
+      }
       if (draftKey === props.routeDraftId) {
         // Open draft: render the frozen entry snapshot, or nothing for a
         // draft that has never been left. Gated on the LIVE session above so
@@ -961,6 +990,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   }, [
     draftThreadsByThreadKey,
     draftsByThreadKey,
+    queues,
     frozenActive,
     props.environmentScopeIds,
     props.filterModes,
@@ -969,6 +999,18 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   ]);
   const handleDiscard = useCallback(
     (draftId: DraftId) => {
+      const session = useComposerDraftStore.getState().getDraftSession(draftId);
+      if (session) {
+        const queueKey = scopedThreadKey(scopeThreadRef(session.environmentId, session.threadId));
+        const store = useQueuedMessageStore.getState();
+        if (store.queuesByThreadKey[queueKey]?.some((message) => message.sending)) return;
+        for (const message of store.drain(queueKey)) {
+          releaseDraftAttachments([...message.images, ...message.files]);
+          for (const image of message.images) {
+            if (image.previewUrl.startsWith("blob:")) URL.revokeObjectURL(image.previewUrl);
+          }
+        }
+      }
       // The /draft/$draftId route redirects home on its own when the draft
       // it renders disappears, so discarding the open draft needs no
       // special-casing here.
@@ -982,7 +1024,7 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   }
   return (
     <>
-      {drafts.map(({ composer, draftId, session }) => {
+      {drafts.map(({ composer, draftId, session, queuedMessage, queueSending }) => {
         const projectKey = `${session.environmentId}:${session.projectId}`;
         return (
           <SidebarDraftRow
@@ -990,6 +1032,8 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
             draftId={draftId}
             session={session}
             composer={composer}
+            queuedMessage={queuedMessage}
+            queueSending={queueSending ?? false}
             project={props.projectByKey.get(projectKey) ?? null}
             projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
             environmentLabel={props.environmentLabelById.get(session.environmentId) ?? null}

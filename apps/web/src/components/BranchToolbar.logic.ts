@@ -60,7 +60,7 @@ export function shouldShowEnvironmentIndicator(input: {
   canPickEnvironment: boolean;
 }): boolean {
   if (input.canPickEnvironment) return true;
-  return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
+  return input.activeEnvironment !== null;
 }
 
 export function shouldShowComposerContextStrip(input: {

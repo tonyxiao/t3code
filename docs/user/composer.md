@@ -23,7 +23,7 @@ the agent a file path; it does not enable native video input.
 
 Uploads begin when you add an attachment. All uploads must finish before the
 message can send. Retry or remove a failed upload. On web and desktop, reloading
-before an upload finishes requires you to attach that file again.
+a draft before an upload finishes requires you to attach that file again.
 
 You can drag or paste images into the web or desktop composer. HEIC and HEIF
 photos are converted to JPEG there and when selected from the mobile photo
@@ -49,7 +49,13 @@ the oldest queued message now. Change `thread.steerQueuedMessage` in
 **Settings → Keybindings** to use another shortcut. It leaves the current draft
 in the composer and waits if the agent needs an approval or an answer.
 
-## Queue messages offline on mobile
+## Queue messages offline
+
+On desktop and web, send normally when a host is offline. The existing queue
+shows **Queued · waiting for host**; messages and their attachments are saved on
+that device, survive restarts, and send automatically when the host reconnects.
+New tasks stay accessible in the sidebar. The connection dot beside the host
+name shows its current status. Offline delivery supports one model per message.
 
 Mobile keeps local copies of draft attachments, so you can preview them and queue
 messages while disconnected. Uploads resume when you reconnect. Drafts and queued
