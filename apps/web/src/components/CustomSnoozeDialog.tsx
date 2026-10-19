@@ -1,9 +1,13 @@
 import { useEffect, useId, useState } from "react";
+import type { EnvironmentId } from "@t3tools/contracts";
+import { useCustomSnooze } from "../hooks/useCustomSnooze";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { serverEnvironment } from "../state/server";
+import { useAtomCommand } from "../state/use-atom-command";
 import { create } from "zustand";
 import {
   localSnoozeDate,
   localSnoozeTime,
-  resolveCustomSnooze,
   resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
@@ -34,12 +38,19 @@ import {
 } from "./ui/dialog";
 
 type SnoozeChoice = { readonly snoozedUntil: string };
-type Request = { readonly resolve: (choice: SnoozeChoice | null) => void };
+type Request = {
+  readonly id: number;
+  readonly environmentId: EnvironmentId;
+  readonly resolve: (choice: SnoozeChoice | null) => void;
+};
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }));
+let nextRequestId = 0;
 
-export function requestCustomSnooze(): Promise<SnoozeChoice | null> {
+export function requestCustomSnooze(environmentId: EnvironmentId): Promise<SnoozeChoice | null> {
   useRequest.getState().request?.resolve(null);
-  return new Promise((resolve) => useRequest.setState({ request: { resolve } }));
+  return new Promise((resolve) =>
+    useRequest.setState({ request: { id: ++nextRequestId, environmentId, resolve } }),
+  );
 }
 
 function finish(choice: SnoozeChoice | null) {
@@ -51,10 +62,12 @@ function finish(choice: SnoozeChoice | null) {
 export function CustomSnoozeDialogHost() {
   const request = useRequest((state) => state.request);
   useEffect(() => () => finish(null), []);
-  return request ? <CustomSnoozeDialog /> : null;
+  return request ? (
+    <CustomSnoozeDialog key={request.id} environmentId={request.environmentId} />
+  ) : null;
 }
 
-function CustomSnoozeDialog() {
+function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId }) {
   const id = useId();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
@@ -64,7 +77,14 @@ function CustomSnoozeDialog() {
   const [time, setTime] = useState(localSnoozeTime(initial));
   const [amount, setAmount] = useState("2");
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
-  const [error, setError] = useState<string | null>(null);
+  const resolveSnoozeTime = useAtomCommand(serverEnvironment.resolveSnoozeTime, {
+    reportFailure: false,
+  });
+  const { resolve, error, pending, clearError } = useCustomSnooze(async (input) => {
+    const result = await resolveSnoozeTime({ environmentId, input });
+    if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+    return result.value;
+  });
   const input: CustomSnoozeInput =
     mode === "date"
       ? { mode, date: localSnoozeDate(date), time }
@@ -84,18 +104,9 @@ function CustomSnoozeDialog() {
           className="flex min-h-0 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
-            const snoozedUntil = resolveCustomSnooze(input, new Date());
-            if (!snoozedUntil) {
-              setError(
-                mode === "date"
-                  ? "Choose a valid date and time in the future."
-                  : mode === "text"
-                    ? "Enter a time such as ‘tomorrow at 9am’ or use Date and time."
-                    : "Enter a positive duration.",
-              );
-              return;
-            }
-            finish({ snoozedUntil });
+            void resolve(input).then((snoozedUntil) => {
+              if (snoozedUntil) finish({ snoozedUntil });
+            });
           }}
         >
           <DialogHeader>
@@ -111,7 +122,7 @@ function CustomSnoozeDialog() {
                 onValueChange={(next) => {
                   const value = next[0];
                   if (value === "text" || value === "date" || value === "duration") setMode(value);
-                  setError(null);
+                  clearError();
                 }}
               >
                 <Toggle value="text">Type a time</Toggle>
@@ -130,7 +141,7 @@ function CustomSnoozeDialog() {
                       value={text}
                       onChange={(event) => {
                         setText(event.target.value);
-                        setError(null);
+                        clearError();
                       }}
                     />
                     {preview ? (
@@ -171,7 +182,7 @@ function CustomSnoozeDialog() {
                             onSelect={(selected) => {
                               setDate(selected);
                               setCalendarOpen(false);
-                              setError(null);
+                              clearError();
                             }}
                           />
                         </PopoverPopup>
@@ -188,7 +199,7 @@ function CustomSnoozeDialog() {
                         value={time}
                         onChange={(event) => {
                           setTime(event.target.value);
-                          setError(null);
+                          clearError();
                         }}
                       />
                     </Label>
@@ -202,7 +213,7 @@ function CustomSnoozeDialog() {
                       value={amount === "" ? null : Number(amount)}
                       onValueChange={(value) => {
                         setAmount(value === null ? "" : String(value));
-                        setError(null);
+                        clearError();
                       }}
                     >
                       <Label htmlFor={`${id}-amount`}>Snooze for</Label>
@@ -220,7 +231,7 @@ function CustomSnoozeDialog() {
                         onValueChange={(value) => {
                           if (value === "minutes" || value === "hours" || value === "days")
                             setUnit(value);
-                          setError(null);
+                          clearError();
                         }}
                       >
                         <SelectTrigger id={`${id}-unit`} className="min-w-0">
@@ -247,7 +258,9 @@ function CustomSnoozeDialog() {
             <Button type="button" variant="outline" onClick={() => finish(null)}>
               Cancel
             </Button>
-            <Button type="submit">Snooze</Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Interpreting…" : "Snooze"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogPopup>

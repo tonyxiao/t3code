@@ -965,6 +965,10 @@ export function createServerEnvironmentAtoms<R, E>(
 
   return {
     configValueAtom,
+    resolveSnoozeTime: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:resolve-snooze-time",
+      tag: WS_METHODS.serverResolveSnoozeTime,
+    }),
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",
       tag: WS_METHODS.serverRunStorageCleanup,

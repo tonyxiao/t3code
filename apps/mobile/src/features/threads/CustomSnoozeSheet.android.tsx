@@ -23,7 +23,6 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
-  resolveCustomSnooze,
   resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
@@ -35,6 +34,7 @@ import { OverlayPortal } from "../../components/ui/OverlayPortal";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { CustomSnoozeSheet as SharedCustomSnoozeSheet } from "./CustomSnoozeSheet.shared";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   applySnoozePickerDate,
   applySnoozePickerTime,
@@ -78,25 +78,16 @@ export function CustomSnoozeSheet(props: Props) {
   const [picker, setPicker] = useState<"date" | "time">("date");
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
-  const [error, setError] = useState<string | null>(null);
-  const submit = () => {
+  const { resolve, error, pending, clearError } = useSnoozeResolver(props.environmentId);
+  const submit = async () => {
     const input: CustomSnoozeInput =
       mode === "date"
         ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
         : mode === "text"
           ? { mode, text }
           : { mode, amount: String(amount), unit };
-    const snoozedUntil = resolveCustomSnooze(input, new Date());
-    if (!snoozedUntil) {
-      setError(
-        mode === "date"
-          ? "Choose a date and time in the future."
-          : mode === "text"
-            ? "Enter a time such as ‘tomorrow at 9am’ or use Date and time."
-            : "Enter a positive duration.",
-      );
-      return;
-    }
+    const snoozedUntil = await resolve(input);
+    if (!snoozedUntil) return;
     props.onSnooze(snoozedUntil);
     props.onClose();
   };
@@ -157,7 +148,7 @@ export function CustomSnoozeSheet(props: Props) {
                     selected={mode}
                     onSelect={(value) => {
                       setMode(value);
-                      setError(null);
+                      clearError();
                     }}
                   />
                 </RNHostView>
@@ -194,7 +185,7 @@ export function CustomSnoozeSheet(props: Props) {
                       value={text}
                       onChangeText={(value) => {
                         setText(value);
-                        setError(null);
+                        clearError();
                       }}
                       style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
                     />
@@ -219,7 +210,7 @@ export function CustomSnoozeSheet(props: Props) {
                           ? applySnoozePickerDate(current, selected)
                           : applySnoozePickerTime(current, selected),
                       );
-                      setError(null);
+                      clearError();
                     }}
                   />
                 </Column>
@@ -281,10 +272,13 @@ export function CustomSnoozeSheet(props: Props) {
                     <Text style={bodyTypography}>Cancel</Text>
                   </TextButton>
                   <TextButton
-                    onClick={submit}
+                    onClick={() => {
+                      void submit();
+                    }}
+                    enabled={!pending}
                     colors={{ contentColor: colors["--color-foreground"] }}
                   >
-                    <Text style={bodyTypography}>Snooze</Text>
+                    <Text style={bodyTypography}>{pending ? "Interpreting…" : "Snooze"}</Text>
                   </TextButton>
                 </Row>
               </Column>

@@ -173,6 +173,27 @@ function withFakeCodexEnv<A, E, R>(
 }
 
 it.layer(layerCodexTextGenerationTest)("CodexTextGeneration", (it) => {
+  it.effect("interprets a snooze phrase with structured Luna output", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({ snoozedUntil: "2026-10-23T09:00:00+08:00" }),
+        requireArg: "--model gpt-6-luna",
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          if (!textGeneration.generateSnoozeTime)
+            return yield* Effect.die("Missing snooze generation");
+          const result = yield* textGeneration.generateSnoozeTime({
+            cwd: process.cwd(),
+            text: "oct 23",
+            now: "2026-10-14T10:00:00.000Z",
+            timeZone: "Asia/Hong_Kong",
+            modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-6-luna"),
+          });
+          expect(result.snoozedUntil).toBe("2026-10-23T09:00:00+08:00");
+        }),
+    ),
+  );
   it.effect.each(["gpt-5.6-luna", "openai.gpt-5.6-luna"])(
     "dispatches the qualified live model for %s",
     (selectedModel) =>

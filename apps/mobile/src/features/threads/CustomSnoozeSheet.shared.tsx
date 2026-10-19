@@ -1,8 +1,9 @@
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import type { EnvironmentId } from "@t3tools/contracts";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   localSnoozeDate,
   localSnoozeTime,
-  resolveCustomSnooze,
   resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
@@ -20,6 +21,7 @@ import { AppText } from "../../components/ui/AppText";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 
 export function CustomSnoozeSheet(props: {
+  readonly environmentId: EnvironmentId;
   readonly onClose: () => void;
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
@@ -29,7 +31,7 @@ export function CustomSnoozeSheet(props: {
   const [picker, setPicker] = useState<"date" | "time" | null>(null);
   const [amount, setAmount] = useState("2");
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
-  const [error, setError] = useState<string | null>(null);
+  const { resolve, error, pending, clearError } = useSnoozeResolver(props.environmentId);
   return (
     <Modal visible transparent animationType="fade" onRequestClose={props.onClose}>
       <KeyboardAvoidingView
@@ -60,7 +62,7 @@ export function CustomSnoozeSheet(props: {
             onSelect={(value) => {
               setMode(value);
               setPicker(null);
-              setError(null);
+              clearError();
             }}
             role="tab"
           />
@@ -74,7 +76,7 @@ export function CustomSnoozeSheet(props: {
                 value={text}
                 onChangeText={(value) => {
                   setText(value);
-                  setError(null);
+                  clearError();
                 }}
               />
               {resolveNaturalSnooze(text, new Date()) ? (
@@ -117,7 +119,7 @@ export function CustomSnoozeSheet(props: {
                       );
                     else next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
                     setDate(next);
-                    setError(null);
+                    clearError();
                   }}
                 />
               )}
@@ -132,7 +134,7 @@ export function CustomSnoozeSheet(props: {
                 value={amount}
                 onChangeText={(value) => {
                   setAmount(value);
-                  setError(null);
+                  clearError();
                 }}
               />
               <View className="flex-row gap-2">
@@ -148,7 +150,7 @@ export function CustomSnoozeSheet(props: {
                     }
                     onPress={() => {
                       setUnit(value);
-                      setError(null);
+                      clearError();
                     }}
                   >
                     <AppText>
@@ -175,29 +177,21 @@ export function CustomSnoozeSheet(props: {
             <Pressable
               accessibilityRole="button"
               className="min-h-12 justify-center rounded-xl bg-subtle px-3"
-              onPress={() => {
+              disabled={pending}
+              onPress={async () => {
                 const input: CustomSnoozeInput =
                   mode === "date"
                     ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
                     : mode === "text"
                       ? { mode, text }
                       : { mode, amount: amount.replace(",", "."), unit };
-                const snoozedUntil = resolveCustomSnooze(input, new Date());
-                if (!snoozedUntil) {
-                  setError(
-                    mode === "date"
-                      ? "Choose a date and time in the future."
-                      : mode === "text"
-                        ? "Enter a time such as ‘tomorrow at 9am’ or use Date and time."
-                        : "Enter a positive duration.",
-                  );
-                  return;
-                }
+                const snoozedUntil = await resolve(input);
+                if (!snoozedUntil) return;
                 props.onSnooze(snoozedUntil);
                 props.onClose();
               }}
             >
-              <AppText className="text-foreground">Snooze</AppText>
+              <AppText className="text-foreground">{pending ? "Interpreting…" : "Snooze"}</AppText>
             </Pressable>
           </View>
         </ScrollView>

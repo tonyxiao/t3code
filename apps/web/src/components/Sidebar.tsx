@@ -1114,6 +1114,7 @@ function SidebarThreadTooltip({
 }
 
 function SnoozeMenuButton(props: {
+  environmentId: EnvironmentId;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSnooze: (preset: Pick<SnoozePreset, "snoozedUntil">) => void;
@@ -1160,7 +1161,7 @@ function SnoozeMenuButton(props: {
         <MenuItem
           onClick={async (event) => {
             event.stopPropagation();
-            const choice = await requestCustomSnooze();
+            const choice = await requestCustomSnooze(props.environmentId);
             if (choice) onSnooze(choice);
           }}
         >
@@ -2461,6 +2462,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       ) : null}
                       {showSnoozeButton ? (
                         <SnoozeMenuButton
+                          environmentId={thread.environmentId}
                           open={snoozeMenuOpen}
                           onOpenChange={setSnoozeMenuOpen}
                           onSnooze={handleSnoozePreset}
@@ -4085,7 +4087,7 @@ export default function Sidebar() {
       if (clicked.value?.startsWith("snooze:")) {
         const preset =
           clicked.value === "snooze:custom"
-            ? await requestCustomSnooze()
+            ? await requestCustomSnooze(selectedThreads[0]!.environmentId)
             : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
         if (preset) {
           const coSnoozingKeys = new Set(threadKeys);
@@ -4351,7 +4353,7 @@ export default function Sidebar() {
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
-              ? await requestCustomSnooze()
+              ? await requestCustomSnooze(threadRef.environmentId)
               : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
           if (preset) attemptSnooze(threadRef, preset);
           return;

@@ -1253,7 +1253,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   return (
     <View collapsable={false}>
       {customSnoozeOpen && (
-        <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
+        <CustomSnoozeSheet
+          environmentId={thread.environmentId}
+          onClose={() => setCustomSnoozeOpen(false)}
+          onSnooze={handleSnooze}
+        />
       )}
       <ThreadSwipeable
         dormant={dormant}

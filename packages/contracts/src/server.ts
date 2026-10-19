@@ -882,6 +882,15 @@ export const ServerSelfUpdateProgressEvent = Schema.Union([
 ]);
 export type ServerSelfUpdateProgressEvent = typeof ServerSelfUpdateProgressEvent.Type;
 
+export const SnoozeTimeResolveInput = Schema.Struct({
+  text: TrimmedNonEmptyString.pipe(Schema.check(Schema.isMaxLength(1000))),
+  now: IsoDateTime,
+  timeZone: TrimmedNonEmptyString,
+});
+export type SnoozeTimeResolveInput = typeof SnoozeTimeResolveInput.Type;
+export const SnoozeTimeResolveResult = Schema.Struct({ snoozedUntil: IsoDateTime });
+export type SnoozeTimeResolveResult = typeof SnoozeTimeResolveResult.Type;
+
 export class ServerSelfUpdateError extends Schema.TaggedError<ServerSelfUpdateError>()(
   "ServerSelfUpdateError",
   {

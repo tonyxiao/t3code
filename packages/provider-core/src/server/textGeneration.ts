@@ -94,6 +94,13 @@ export type ReviewGuideGenerationResult = Omit<
 >;
 
 export interface ProviderTextGeneration {
+  readonly generateSnoozeTime?: (input: {
+    readonly text: string;
+    readonly now: string;
+    readonly timeZone: string;
+    readonly cwd: string;
+    readonly modelSelection: ModelSelection;
+  }) => Effect.Effect<{ readonly snoozedUntil: string | null }, TextGenerationError>;
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
   ) => Effect.Effect<CommitMessageGenerationResult, TextGenerationError>;

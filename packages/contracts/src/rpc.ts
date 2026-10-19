@@ -25,6 +25,8 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
+import { SnoozeTimeResolveInput, SnoozeTimeResolveResult } from "./server.ts";
+import { TextGenerationError } from "./git.ts";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
   CodexAuthCallbackInput,
@@ -463,6 +465,7 @@ export const WS_METHODS = {
   deviceAction: "device.action",
 
   serverProbe: "server.probe",
+  serverResolveSnoozeTime: "server.resolveSnoozeTime",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
@@ -588,6 +591,12 @@ const WsServerProbeRpc = Rpc.make(WS_METHODS.serverProbe, {
   payload: Schema.Struct({}),
   success: Schema.Struct({}),
   error: EnvironmentAuthorizationError,
+});
+
+const WsServerResolveSnoozeTimeRpc = Rpc.make(WS_METHODS.serverResolveSnoozeTime, {
+  payload: SnoozeTimeResolveInput,
+  success: SnoozeTimeResolveResult,
+  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
 });
 
 const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
@@ -1854,6 +1863,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 
 export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
+  WsServerResolveSnoozeTimeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
