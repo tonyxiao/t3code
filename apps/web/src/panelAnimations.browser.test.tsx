@@ -2,7 +2,7 @@ import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { usePanelNavigationSuppression } from "./panelAnimations";
+import { usePanelNavigationSuppression, usePanelPresence } from "./panelAnimations";
 
 let root: Root;
 let pendingFrames: FrameRequestCallback[] = [];
@@ -58,4 +58,18 @@ describe("usePanelNavigationSuppression", () => {
     await paintPendingFrame();
     expect(observed.at(-1)).toBe(false);
   });
+});
+
+it("keeps an open panel stable when its value wrapper is recreated", async () => {
+  const seen: string[] = [];
+
+  function Probe({ tick }: { tick: number }) {
+    const presence = usePanelPresence(true, { label: "Files" }, false, "thread", 0);
+    seen.push(presence.value?.label ?? "missing");
+    return <div>{tick}</div>;
+  }
+
+  await act(() => root.render(<Probe tick={0} />));
+  await act(() => root.render(<Probe tick={1} />));
+  expect(seen).toEqual(["Files", "Files"]);
 });

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { type PanelAnimationDurationMs } from "@t3tools/contracts/settings";
+import { shallow } from "zustand/vanilla/shallow";
 
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useClientSettings } from "./hooks/useSettings";
@@ -48,7 +49,7 @@ export function usePanelPresence<T>(
   const [retained, setRetained] = useState<{ scopeKey: string | null; value: T | null } | null>(
     open ? { scopeKey, value } : null,
   );
-  if (open && (retained?.scopeKey !== scopeKey || retained.value !== value)) {
+  if (open && (retained?.scopeKey !== scopeKey || !shallow(retained.value, value))) {
     setRetained({ scopeKey, value });
   }
 
