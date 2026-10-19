@@ -104,6 +104,7 @@ patchedDependencies:
   effect@4.0.0-rc.115: 0dfc4bb8ebd80fb3e06b91ef61346f5259517ab0f2437644fe95ae531084b1f5
   expo-audio@58.0.4: c20cb927d6848c53e7bf6ec14fe12f19daae9210165d2dbaf4e0f97ce31e8742
   expo-blur@58.0.3: d0311b0c0b05bd94393bd9a84653cb42503d5f3c8a19eb2627c34ace08bedf18
+  expo-dev-launcher@58.0.10: 9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7
   expo-glass-effect@58.0.3: f750041c45ab838a3530451dc7b50d6640a79141037a1b0499c5e3412a860c57
   expo-sharing@58.0.13: fe40d857765bcd6a77aac1fed275e5b8f9415c29b972decdce05fb96de5665e6
   expo-widgets@58.0.11: 94de7964c5a67ab40e6b79d9bdf4b7bfc50ae97b70722ee8e5a35105ca83386b
@@ -17119,7 +17120,7 @@ snapshots:
   expo-dev-client@58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       expo: 58.0.2(56fc8ddb8129740412739f0f0a6ee025)
-      expo-dev-launcher: 58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
+      expo-dev-launcher: 58.0.10(patch_hash=9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu: 58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))
       expo-dev-menu-interface: 58.0.1(expo@58.0.2)
       expo-manifests: 58.0.1(expo@58.0.2)
@@ -17127,7 +17128,7 @@ snapshots:
     transitivePeerDependencies:
       - react-native
 
-  expo-dev-launcher@58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
+  expo-dev-launcher@58.0.10(patch_hash=9990eada2018cc1ca2d82646395eda96c33af4eebd2d41b2f2d2c7fe9ee391d7)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       '@expo/schema-utils': 58.0.1
       expo: 58.0.2(56fc8ddb8129740412739f0f0a6ee025)
