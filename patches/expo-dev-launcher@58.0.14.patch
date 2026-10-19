@@ -39,6 +39,27 @@ diff --git a/ios/EXDevLauncherController.m b/ios/EXDevLauncherController.m
 index dfeec1c38ab81a15dc52ef05b7e1601b74b95741..9a506af740e48e150d496f9abe06e7dec8caa88f 100644
 --- a/ios/EXDevLauncherController.m
 +++ b/ios/EXDevLauncherController.m
+@@ -1,3 +1,4 @@
++#import <React/RCTAssert.h>
+ #import <React/RCTBundleURLProvider.h>
+ #import <React/RCTRootView.h>
+ #import <React/RCTDevLoadingViewSetEnabled.h>
+@@ -201,1 +202,15 @@ - (void)start:(id<EXDevLauncherControllerDelegate>)delegate launchOptions:(NSDic
+   EXDevLauncherUncaughtExceptionHandler.isInstalled = true;
++#if !RCT_DEV
++  // A fatal JavaScript startup error can leave the release launcher on its splash
++  // screen. Keep native recovery reachable even when React never mounts.
++  __weak typeof(self) weakSelf = self;
++  RCTSetFatalHandler(^(NSError *error) {
++    dispatch_async(dispatch_get_main_queue(), ^{
++      typeof(self) self = weakSelf;
++      if (!self) return;
++      EXDevLauncherAppError *appError = [[EXDevLauncherAppError alloc] initWithMessage:error.localizedDescription stack:nil];
++      [self.errorManager showError:appError];
++    });
++  });
++#endif
++
 @@ -228,7 +228,8 @@ - (void)start:(id<EXDevLauncherControllerDelegate>)delegate launchOptions:(NSDic
 -  // The autoload logic in DevLauncherViewController.viewDidLoad will load it instead.
 -  // Without this guard, loadApp's error handler would call navigateToLauncher and
