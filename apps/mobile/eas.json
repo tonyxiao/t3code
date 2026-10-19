@@ -74,6 +74,40 @@
       "channel": "production",
       "environment": "production",
       "autoIncrement": true
+    },
+    "tx-code": {
+      "extends": "preview",
+      "channel": "tx-code",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "preview",
+        "T3CODE_MOBILE_APP_NAME": "TX Code",
+        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.t3code.preview",
+        "T3CODE_MOBILE_SCHEME": "tony-t3code-preview",
+        "T3CODE_MOBILE_SLUG": "t3-code",
+        "T3CODE_MOBILE_EAS_OWNER": "txlforge-tony",
+        "T3CODE_MOBILE_EAS_PROJECT_ID": "f6cd51c6-6875-4ce4-9360-7aefaf9ee333",
+        "T3CODE_MOBILE_APPLE_TEAM_ID": "H82Z395PDV",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "tx-code:remote": {
+      "extends": "tx-code",
+      "channel": "tx-code-remote",
+      "developmentClient": true,
+      "env": {
+        "T3CODE_MOBILE_REMOTE_JS": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "1"
+      },
+      "android": {
+        "gradleCommand": ":t3-native-controls:testDebugUnitTest :app:assembleRelease"
+      },
+      "ios": {
+        "buildConfiguration": "Debug"
+      }
     }
   },
   "submit": {

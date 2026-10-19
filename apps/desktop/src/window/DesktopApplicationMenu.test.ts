@@ -1,3 +1,5 @@
+import { ElectronUpdates } from "@tonyxiao/electron-updates";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -112,14 +114,30 @@ const configureMenu = (
     readonly localRendererUrl?: string;
     readonly relaunchReason?: Deferred.Deferred<string>;
   },
-) =>
-  Effect.gen(function* () {
+) => {
+  const store = new ElectronUpdates({
+    directory: "/unused-source-test",
+    builtInDirectory: "/unused-built-in",
+    runtimeVersion: "test",
+    reload: async () => {},
+  });
+  return Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
     yield* menu.configure;
   }).pipe(
     Effect.provide(
       DesktopApplicationMenu.layer.pipe(
         Layer.provideMerge(makeElectronMenuLayer(applicationMenuTemplate)),
+        Layer.provideMerge(
+          Layer.mock(DesktopJavaScriptSource.DesktopJavaScriptSource, {
+            store,
+            client: store,
+            select: (source) =>
+              Effect.sync(() => {
+                assert.deepEqual(source, { kind: "built-in" });
+              }),
+          }),
+        ),
         Layer.provideMerge(makeDesktopWindowLayer(selectedAction)),
         Layer.provideMerge(desktopUpdatesLayer),
         Layer.provideMerge(
@@ -149,6 +167,7 @@ const configureMenu = (
       ),
     ),
   );
+};
 
 describe("DesktopApplicationMenu", () => {
   it.effect("offers a native way back to bundled UI when local Vite is selected", () =>
@@ -164,11 +183,11 @@ describe("DesktopApplicationMenu", () => {
       const view = template.find((item) => item.label === "View");
       assert.isDefined(view);
       if (!Array.isArray(view.submenu)) throw new Error("Expected View submenu.");
-      const fallback = view.submenu.find((item) => item.label === "Use Built-in UI");
+      const fallback = view.submenu.find((item) => item.label === "Use Built-in JavaScript");
       assert.isDefined(fallback);
       assert.isFunction(fallback.click);
       fallback.click!({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
-      assert.equal(yield* Deferred.await(relaunchReason), "localRendererUrl=bundled");
+      assert.equal(yield* Deferred.await(relaunchReason), "javascript-source=built-in");
     }),
   );
 

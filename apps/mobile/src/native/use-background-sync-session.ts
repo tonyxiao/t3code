@@ -4,16 +4,23 @@ import { Platform } from "react-native";
 
 interface SyncSessionStatus {
   readonly endsAt: number | null;
-  readonly state: "idle" | "requested" | "running" | "completed" | "cancelled" | "expired";
+  readonly state:
+    | "idle"
+    | "requested"
+    | "running"
+    | "completed"
+    | "cancelled"
+    | "expired"
+    | "unavailable";
 }
 
 interface BackgroundSyncModule {
+  readonly automaticSessions?: boolean;
   addListener(
     event: "onSessionChange",
     listener: (status: SyncSessionStatus) => void,
   ): EventSubscription;
   getSessionStatus(): Promise<SyncSessionStatus>;
-  startSession(): Promise<void>;
   cancelSession(): Promise<void>;
 }
 
@@ -27,7 +34,7 @@ export function useBackgroundSyncSession() {
   const supported =
     Platform.OS === "ios" &&
     Number.parseFloat(String(Platform.Version)) >= 26 &&
-    typeof native?.startSession === "function";
+    native?.automaticSessions === true;
   const revision = useRef(0);
   const busy = useRef(false);
   const [status, setStatus] = useState(IDLE_SESSION);
@@ -54,25 +61,24 @@ export function useBackgroundSyncSession() {
     };
   }, [native, supported]);
 
-  const toggle = async () => {
+  const stop = async () => {
     if (!supported || !native || busy.current) return;
     busy.current = true;
     setPending(true);
     setError(null);
     try {
-      if (status.endsAt !== null) await native.cancelSession();
-      else await native.startSession();
+      await native.cancelSession();
       // Native events also update this when the OS cancels or expires the task.
       const currentRevision = revision.current;
       const next = await native.getSessionStatus();
       if (revision.current === currentRevision) setStatus(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start background sync.");
+      setError(cause instanceof Error ? cause.message : "Could not stop background sync.");
     } finally {
       busy.current = false;
       setPending(false);
     }
   };
 
-  return { supported, status, pending, error, toggle };
+  return { supported, status, pending, error, stop };
 }

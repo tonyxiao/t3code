@@ -1,0 +1,95 @@
+diff --git a/ios/EXDevLauncherController.m b/ios/EXDevLauncherController.m
+index 076f4276d4a0de1882cccb2b915d05da5fd986e0..6560cc1663b779bf2de96fb9ec49c5f007ecd8e1 100644
+--- a/ios/EXDevLauncherController.m
++++ b/ios/EXDevLauncherController.m
+@@ -228,7 +228,8 @@ - (void)start:(id<EXDevLauncherControllerDelegate>)delegate launchOptions:(NSDic
+   // The autoload logic in DevLauncherViewController.viewDidLoad will load it instead.
+   // Without this guard, loadApp's error handler would call navigateToLauncher and
+   // invalidate the bridge that loadLocalBundle created, causing a JSI crash.
+-  if ([[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"] != nil) {
++  if ([[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"] != nil &&
++      [EXDevLauncherController initialUrlFromProcessInfo] == nil) {
+     [self navigateToLauncher];
+     return;
+   }
+diff --git a/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift b/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
+index e189d86a8aecc814910f38012c63cf0a2cbd0964..d2200d0db5afa7bfc5f134eb55ccae660fb590c8 100644
+--- a/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
++++ b/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
+@@ -17,6 +17,29 @@ private class DevLauncherWrapperView: UIView {
+   }
+ 
+ #if !os(macOS)
++  override func didMoveToWindow() {
++    super.didMoveToWindow()
++    guard window != nil, let viewController = devLauncherViewController,
++      viewController.parent == nil else {
++      return
++    }
++
++    // SwiftUI needs controller containment to receive appearance events. The
++    // factory initially installs only this wrapper view, before mount() runs.
++    var responder = next
++    while let current = responder {
++      if let parent = current as? UIViewController {
++        viewController.view.removeFromSuperview()
++        parent.addChild(viewController)
++        addSubview(viewController.view)
++        setupDevLauncherView(viewController)
++        viewController.didMove(toParent: parent)
++        break
++      }
++      responder = current.next
++    }
++  }
++
+   override func layoutSubviews() {
+     super.layoutSubviews()
+     devLauncherViewController?.view.frame = bounds
+diff --git a/ios/Modules/DevLauncherModule.swift b/ios/Modules/DevLauncherModule.swift
+--- a/ios/Modules/DevLauncherModule.swift
++++ b/ios/Modules/DevLauncherModule.swift
+@@ -7,0 +8,18 @@
++
++    Function("getSourceInfo") {
++      let controller = EXDevLauncherController.sharedInstance()
++      let source = controller.sourceUrl()
++      let remote = source?.scheme == "http" || source?.scheme == "https"
++      return [
++        "runtimeVersion": controller.getUpdatesConfig(nil)["runtimeVersion"] as? String ?? "",
++        "serverUrl": remote ? (source?.absoluteString ?? "") as Any : NSNull()
++      ] as [String: Any]
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { (promise: Promise) in
++      EXDevLauncherController.sharedInstance().loadLocalBundle(onSuccess: {
++        promise.resolve(true)
++      }, onError: { error in
++        promise.reject(DevLauncherLoadAppException(error.localizedDescription).causedBy(error))
++      })
++    }.runOnQueue(.main)
+diff --git a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+--- a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
++++ b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+@@ -13,0 +14,21 @@
++
++    Function("getSourceInfo") {
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      mapOf(
++        "runtimeVersion" to (controller.updatesInterface?.runtimeVersion ?: ""),
++        "serverUrl" to if (controller.useDeveloperSupport) controller.manifestURL?.toString() else null
++      )
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { promise: Promise ->
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      val activity = appContext.currentActivity as? ReactActivity
++      controller.coroutineScope.launch {
++        try {
++          controller.loadEmbeddedBundle(activity)
++          promise.resolve(true)
++        } catch (e: Exception) {
++          promise.reject("ExpoDevLauncher", "Failed to load Built-in", DevLauncherLoadAppException(e))
++        }
++      }
++    }

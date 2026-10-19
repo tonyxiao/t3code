@@ -152,9 +152,9 @@ you configure your own sign-in domains. Private identities omit upstream signing
 teams and associated domains by default. Native dependencies require rebuilding
 the binary; Expo Go cannot run this app.
 
-Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
+All variants use Expo fingerprinting by default so published updates and Metro source preflight identify the same native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 
-The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
+`MOBILE_VERSION_POLICY` can override the policy for both builds and their updates. Changing the policy requires a native rebuild for matching. The JavaScript source settings preflight Metro against the runtime reported by the installed native launcher; older launchers without that bridge retain their native recovery screen.
 
 For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`

@@ -1,3 +1,5 @@
+import type * as Electron from "electron";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -171,24 +173,56 @@ const bootstrap = Effect.gen(function* () {
   // production desktop can use local Vite assets while keeping its usual
   // connections and server ownership.
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
-  const rendererUrl = environment.isDevelopment
-    ? Option.getOrThrow(environment.devServerUrl)
-    : settings.localRendererUrl === null
-      ? null
-      : new URL(settings.localRendererUrl);
+  const sourceManager = yield* DesktopJavaScriptSource.DesktopJavaScriptSource;
+  const launch = yield* sourceManager.prepareLaunch;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
-    ...(rendererUrl !== null
-      ? {
-          targetOrigin: rendererUrl,
-          ...(environment.isDevelopment
-            ? {}
-            : { fallbackAssetDirectory: environment.clientAssetsDir }),
-        }
-      : { assetDirectory: environment.clientAssetsDir }),
+    ...(launch.serverUrl !== null
+      ? { targetOrigin: new URL(launch.serverUrl) }
+      : { assetDirectory: launch.assetDirectory ?? environment.clientAssetsDir }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* installDesktopIpcHandlers();
+  // Arm recovery only when the actual app document starts navigating, not while its backend is starting.
+  if (launch.token !== null) {
+    const electronApp = yield* ElectronApp.ElectronApp;
+    const scope = yield* Effect.scope;
+    const sourceContext = yield* Effect.context<
+      DesktopLifecycle.DesktopLifecycle | DesktopLifecycle.DesktopLifecycleRuntimeServices
+    >();
+    const runFork = Effect.runForkWith(sourceContext);
+    let armed = false;
+    yield* electronApp.on<[Electron.Event, Electron.BrowserWindow]>(
+      "browser-window-created",
+      (_event, window) => {
+        window.webContents.on("did-start-navigation", (details) => {
+          if (
+            armed ||
+            !details.isMainFrame ||
+            !details.url.startsWith(ElectronProtocol.getDesktopUrl(environment.isDevelopment))
+          )
+            return;
+          armed = true;
+          runFork(
+            Effect.gen(function* () {
+              yield* Effect.sleep("60 seconds");
+              if (yield* sourceManager.failLaunch) {
+                yield* (yield* DesktopLifecycle.DesktopLifecycle).relaunch(
+                  "javascript-source-startup-recovery",
+                );
+              }
+            }).pipe(
+              Effect.catchCause((cause) =>
+                logBootstrapWarning("JavaScript recovery failed", { cause: Cause.pretty(cause) }),
+              ),
+              Effect.forkIn(scope),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   yield* logBootstrapInfo("bootstrap ipc handlers registered");
 
   yield* snapShot.initialize;

@@ -122,3 +122,11 @@ export const PREVIEW_RECORDING_INPUT_CHANNEL = "desktop:preview-recording-input"
 
 export const RECEIVE_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:receive-provider-auth-callback";
 export const CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL = "desktop:cancel-provider-auth-callback";
+
+export const JAVASCRIPT_SOURCE_STATE = "desktop:javascript-source:state";
+export const JAVASCRIPT_SOURCE_SELECT = "desktop:javascript-source:select";
+export const JAVASCRIPT_SOURCE_RESET_SERVER = "desktop:javascript-source:reset-server";
+export const JAVASCRIPT_SOURCE_IMPORT = "desktop:javascript-source:import";
+export const JAVASCRIPT_SOURCE_DELETE = "desktop:javascript-source:delete";
+export const JAVASCRIPT_SOURCE_RELOAD = "desktop:javascript-source:reload";
+export const JAVASCRIPT_SOURCE_READY = "desktop:javascript-source:ready";

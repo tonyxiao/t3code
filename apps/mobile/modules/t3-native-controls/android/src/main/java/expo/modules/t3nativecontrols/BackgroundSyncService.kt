@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -20,8 +21,7 @@ class BackgroundSyncService : HeadlessJsTaskService() {
   private val expire = Runnable { stopSelf() }
   private var started = false
 
-  override fun onCreate() {
-    super.onCreate()
+  private fun promoteToForeground() {
     val manager = getSystemService(NotificationManager::class.java)
     if (Build.VERSION.SDK_INT >= 26) {
       manager.createNotificationChannel(
@@ -58,13 +58,21 @@ class BackgroundSyncService : HeadlessJsTaskService() {
     } else {
       startForeground(NOTIFICATION_ID, builder.build())
     }
-    running = true
-    handler.postDelayed(expire, WINDOW_MS)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    // Every startForegroundService request needs an acknowledgement, including
+    // a repeated start or a request cancelled before Android creates the service.
+    promoteToForeground()
+    if (pendingStarts > 0) pendingStarts -= 1
+    running = true
+    if (!requested) {
+      stopSelf()
+      return START_NOT_STICKY
+    }
     if (!started) {
       started = true
+      handler.postDelayed(expire, WINDOW_MS)
       // Headless JS keeps React Native timers running after the Activity pauses.
       super.onStartCommand(intent, flags, startId)
     }
@@ -99,10 +107,44 @@ class BackgroundSyncService : HeadlessJsTaskService() {
 
   companion object {
     private var running = false
+    private var requested = false
+    private var pendingStarts = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val completionPromises = mutableListOf<Promise>()
 
+    fun start(context: Context) = onMain {
+      val wasRequested = requested
+      requested = true
+      pendingStarts += 1
+      val intent = Intent(context, BackgroundSyncService::class.java)
+      try {
+        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
+        else context.startService(intent)
+      } catch (_: IllegalStateException) {
+        requested = wasRequested
+        pendingStarts -= 1
+      } catch (_: SecurityException) {
+        requested = wasRequested
+        pendingStarts -= 1
+      }
+    }
+
+    fun stop(context: Context) = onMain {
+      requested = false
+      // Stopping an uncreated service can leave Android's foreground-start
+      // deadline outstanding. Let onStartCommand promote and stop it instead.
+      if (running && pendingStarts == 0) {
+        context.stopService(Intent(context, BackgroundSyncService::class.java))
+      }
+    }
+
+    private fun onMain(action: () -> Unit) {
+      if (Looper.myLooper() == Looper.getMainLooper()) action()
+      else mainHandler.post { action() }
+    }
+
     fun waitUntilStopped(promise: Promise) {
-      if (running) completionPromises.add(promise) else promise.resolve(null)
+      if (running || pendingStarts > 0) completionPromises.add(promise) else promise.resolve(null)
     }
 
     private const val CHANNEL = "t3-background-sync"
