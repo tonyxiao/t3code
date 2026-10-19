@@ -3,6 +3,7 @@ import {
   localSnoozeDate,
   localSnoozeTime,
   resolveCustomSnooze,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState } from "react";
@@ -22,7 +23,8 @@ export function CustomSnoozeSheet(props: {
   readonly onClose: () => void;
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
-  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("date");
+  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [picker, setPicker] = useState<"date" | "time" | null>(null);
   const [amount, setAmount] = useState("2");
@@ -49,6 +51,7 @@ export function CustomSnoozeSheet(props: {
           <SegmentedControl
             options={
               [
+                { value: "text", label: "Type a time" },
                 { value: "date", label: "Date and time" },
                 { value: "duration", label: "Duration" },
               ] as const
@@ -61,7 +64,26 @@ export function CustomSnoozeSheet(props: {
             }}
             role="tab"
           />
-          {mode === "date" ? (
+          {mode === "text" ? (
+            <View className="gap-3">
+              <TextInput
+                accessibilityLabel="Snooze until"
+                placeholder="1w, 30days, tomorrow at 9am"
+                placeholderTextColor="#888"
+                className="min-h-12 rounded-xl bg-subtle px-3 text-base text-foreground"
+                value={text}
+                onChangeText={(value) => {
+                  setText(value);
+                  setError(null);
+                }}
+              />
+              {resolveNaturalSnooze(text, new Date()) ? (
+                <AppText className="text-foreground-secondary">
+                  Returns {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                </AppText>
+              ) : null}
+            </View>
+          ) : mode === "date" ? (
             <View className="gap-3">
               {(["date", "time"] as const).map((value) => (
                 <Pressable
@@ -157,13 +179,17 @@ export function CustomSnoozeSheet(props: {
                 const input: CustomSnoozeInput =
                   mode === "date"
                     ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
-                    : { mode, amount: amount.replace(",", "."), unit };
+                    : mode === "text"
+                      ? { mode, text }
+                      : { mode, amount: amount.replace(",", "."), unit };
                 const snoozedUntil = resolveCustomSnooze(input, new Date());
                 if (!snoozedUntil) {
                   setError(
                     mode === "date"
                       ? "Choose a date and time in the future."
-                      : "Enter a positive duration.",
+                      : mode === "text"
+                        ? "Enter a time such as ‘tomorrow at 9am’ or use Date and time."
+                        : "Enter a positive duration.",
                   );
                   return;
                 }

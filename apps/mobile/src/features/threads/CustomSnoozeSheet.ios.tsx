@@ -26,12 +26,13 @@ import {
   localSnoozeDate,
   localSnoozeTime,
   resolveCustomSnooze,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState, type ReactNode } from "react";
 import { NavigationContainer, NavigationIndependentTree } from "@react-navigation/native";
 import { createV5StackNavigator as createNativeStackNavigator } from "../../native/createV5StackNavigator";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { ScrollView, Text as RNText, TextInput, useWindowDimensions, View } from "react-native";
 import { useMobileNavigationTheme } from "../../lib/useMobileNavigationTheme";
 
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
@@ -40,6 +41,7 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 const durationAmounts = Array.from({ length: 99 }, (_, index) => index + 1);
 const SnoozeStack = createNativeStackNavigator<{ CustomSnooze: undefined }>();
 const modes = [
+  { value: "text", label: "Type a time" },
   { value: "date", label: "Date and time" },
   { value: "duration", label: "Duration" },
 ] as const;
@@ -54,7 +56,8 @@ export function CustomSnoozeSheet(props: {
   readonly onSnooze: (snoozedUntil: string) => void;
 }) {
   const { width, height } = useWindowDimensions();
-  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("date");
+  const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -71,11 +74,17 @@ export function CustomSnoozeSheet(props: {
     const input: CustomSnoozeInput =
       mode === "date"
         ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
-        : { mode, amount: String(amount), unit };
+        : mode === "text"
+          ? { mode, text }
+          : { mode, amount: String(amount), unit };
     const snoozedUntil = resolveCustomSnooze(input, new Date());
     if (!snoozedUntil) {
       setError(
-        mode === "date" ? "Choose a date and time in the future." : "Enter a positive duration.",
+        mode === "date"
+          ? "Choose a date and time in the future."
+          : mode === "text"
+            ? "Enter a time such as ‘tomorrow at 9am’ or use Date and time."
+            : "Enter a positive duration.",
       );
       return;
     }
@@ -131,7 +140,28 @@ export function CustomSnoozeSheet(props: {
                     </Text>
                   ))}
                 </Picker>
-                {mode === "date" ? (
+                {mode === "text" ? (
+                  <RNHostView matchContents={{ vertical: true }}>
+                    <View style={{ gap: 12, minHeight: 180 }}>
+                      <TextInput
+                        accessibilityLabel="Snooze until"
+                        placeholder="1w, 30days, tomorrow at 9am"
+                        placeholderTextColor={colors["--color-foreground-secondary"]}
+                        value={text}
+                        onChangeText={(value) => {
+                          setText(value);
+                          setError(null);
+                        }}
+                        style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
+                      />
+                      {resolveNaturalSnooze(text, new Date()) ? (
+                        <RNText style={{ color: colors["--color-foreground-secondary"] }}>
+                          {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                        </RNText>
+                      ) : null}
+                    </View>
+                  </RNHostView>
+                ) : mode === "date" ? (
                   <DatePicker
                     title="Snooze until"
                     selection={date}
