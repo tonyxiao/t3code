@@ -154,6 +154,10 @@ DMGs default to the host architecture. Use `--arch` to choose another target and
 to retain packaging files for inspection. Run `vp run dist:desktop:artifact --help` for other
 options.
 
+For Tony's private macOS build, run `vp run dist:desktop:tony:install` from this checkout.
+It verifies the private bundle identity, refuses to replace a running app, and keeps the
+previous app as a backup in `~/Applications`.
+
 ### Linux AppImage prerequisites
 
 Build on Linux because the browser-secret helper links against the host's libsecret. Install
