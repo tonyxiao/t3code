@@ -520,6 +520,13 @@ export function isSidebarSubagentThread(thread: Pick<SidebarThreadSummary, "line
   return thread.lineage.relationshipToParent === "subagent";
 }
 
+export function sidebarProjectEnvironmentScopeKey(
+  projectKey: string,
+  environmentId: string,
+): string {
+  return `project-environment:${JSON.stringify([projectKey, environmentId])}`;
+}
+
 export function resolveSidebarScopedProjectKeys(input: {
   groups: readonly {
     projectKey: string;
@@ -548,7 +555,13 @@ export function resolveSidebarScopedProjectKeys(input: {
         .filter(
           (member) =>
             matches(environments.has(member.environmentId), environmentMode) &&
-            matches(projects.has(group.projectKey), projectMode),
+            matches(
+              projects.has(group.projectKey) ||
+                projects.has(
+                  sidebarProjectEnvironmentScopeKey(group.projectKey, member.environmentId),
+                ),
+              projectMode,
+            ),
         )
         .map((member) => `${member.environmentId}:${member.projectId}`),
     ),

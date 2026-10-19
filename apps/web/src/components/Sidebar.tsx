@@ -232,6 +232,7 @@ import {
   sortInboxThreadsByReturn,
   sortPinnedThreadsForSidebar,
   sortThreadsForSidebar,
+  sidebarProjectEnvironmentScopeKey,
   sortWorkingThreadsBySend,
   useThreadJumpHintVisibility,
   useRetainedValue,
@@ -798,11 +799,37 @@ function useSidebarLookups() {
     ),
   );
   const projectGroupByScopeKey = new Map(
-    projectGroups.map((project) => [project.projectKey, project] as const),
+    projectGroups.flatMap((project) => [
+      [project.projectKey, project] as const,
+      ...project.memberProjects.map(
+        (member) =>
+          [
+            sidebarProjectEnvironmentScopeKey(project.projectKey, member.environmentId),
+            project,
+          ] as const,
+      ),
+    ]),
   );
   const projectScopeItems = [
     { value: "all", label: "All projects" },
-    ...projectGroups.map((project) => ({ value: project.projectKey, label: project.displayName })),
+    ...projectGroups.flatMap((project) => {
+      const memberEnvironmentIds = [
+        ...new Set(project.memberProjects.map((member) => member.environmentId)),
+      ];
+      return [
+        { value: project.projectKey, label: project.displayName },
+        ...memberEnvironmentIds.flatMap((environmentId) =>
+          memberEnvironmentIds.length > 1
+            ? [
+                {
+                  value: sidebarProjectEnvironmentScopeKey(project.projectKey, environmentId),
+                  label: `${project.displayName} · ${environmentLabelById.get(environmentId) ?? environmentId}`,
+                },
+              ]
+            : [],
+        ),
+      ];
+    }),
   ];
   return {
     projects,
@@ -2898,13 +2925,14 @@ export default function Sidebar() {
       key === null ? "exclude" : "include",
     );
   };
-  const resolvedProjectScopeKeys = projectScopeKeys.map(
-    (key) =>
-      resolveSidebarProjectScopeKey({
-        groups: projectGroups,
-        key,
-        settings: projectGroupingSettings,
-      }) ?? key,
+  const resolvedProjectScopeKeys = projectScopeKeys.map((key) =>
+    projectScopeItems.some((item) => item.value === key)
+      ? key
+      : (resolveSidebarProjectScopeKey({
+          groups: projectGroups,
+          key,
+          settings: projectGroupingSettings,
+        }) ?? key),
   );
   const projectScopeKey =
     projectScopeMode === "include" && resolvedProjectScopeKeys.length === 1
@@ -2948,9 +2976,7 @@ export default function Sidebar() {
       projectScopeFilter.contains(item, query, (candidate) => candidate.label),
   });
   const scopedProjectGroup =
-    projectScopeKey === null
-      ? null
-      : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null);
+    projectScopeKey === null ? null : (projectGroupByScopeKey.get(projectScopeKey) ?? null);
   const scopedProjectKeys = resolveSidebarScopedProjectKeys({
     groups: projectGroups,
     environmentIds: environmentScopeIds,
@@ -2960,6 +2986,7 @@ export default function Sidebar() {
   });
   useEffect(() => {
     const nextKeys = projectScopeKeys.flatMap((key) => {
+      if (projectScopeItems.some((item) => item.value === key)) return [key];
       const resolved = resolveSidebarProjectScopeKey({
         groups: projectGroups,
         key,
@@ -2977,6 +3004,7 @@ export default function Sidebar() {
     allProjectSnapshotsReady,
     clearSelection,
     projectScopeKeys,
+    projectScopeItems,
     projectScopeMode,
     projectGroups,
     projectGroupingSettings,
@@ -4866,7 +4894,9 @@ export default function Sidebar() {
                                 <FolderIcon className="size-4 shrink-0" />
                               )}
                               <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
-                              {project && showProjectEnvironments ? (
+                              {project &&
+                              item.value === project.projectKey &&
+                              showProjectEnvironments ? (
                                 <ProjectEnvironmentBadge
                                   group={project}
                                   primaryEnvironmentId={primaryEnvironmentId}

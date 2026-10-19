@@ -16,6 +16,7 @@ import {
   filterSidebarProjectScopeItems,
   filterSidebarV2VisibleThreads,
   resolveSidebarScopedProjectKeys,
+  sidebarProjectEnvironmentScopeKey,
   formatWorkingDurationLabel,
   getFallbackThreadIdAfterDelete,
   getProjectSortTimestamp,
@@ -426,6 +427,28 @@ describe("sidebar scope selection", () => {
       projectMode: "include",
     });
     expect(selected).toEqual(new Set(["local:a", "local:b"]));
+  });
+
+  it("can select one environment inside a logical project", () => {
+    const remoteAlpha = sidebarProjectEnvironmentScopeKey("alpha", "remote");
+    expect(
+      resolveSidebarScopedProjectKeys({
+        groups,
+        environmentIds: [],
+        projectKeys: [remoteAlpha],
+        environmentMode: "exclude",
+        projectMode: "include",
+      }),
+    ).toEqual(new Set(["remote:a"]));
+    expect(
+      resolveSidebarScopedProjectKeys({
+        groups,
+        environmentIds: [],
+        projectKeys: [remoteAlpha],
+        environmentMode: "exclude",
+        projectMode: "exclude",
+      }),
+    ).toEqual(new Set(["local:a", "local:b", "remote:b"]));
   });
 
   it("shows all projects with no filters and none with an empty include filter", () => {
