@@ -5,7 +5,7 @@ import {
   createExpoLauncherController,
   createExpoUpdatesClient,
   type ExpoLauncherBridge,
-} from "@tonyxiao/javascript-source-updates/expo";
+} from "@tonyxiao/javascript-updates/expo";
 
 export function createMobileJavaScriptSourceClient() {
   const launcher = requireOptionalNativeModule<ExpoLauncherBridge>("ExpoDevLauncher");

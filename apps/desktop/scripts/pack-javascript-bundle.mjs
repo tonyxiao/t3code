@@ -1,7 +1,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { packBundle } from "@tonyxiao/javascript-source-updates/electron";
+import { packBundle } from "@tonyxiao/javascript-updates/electron";
 import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "../../../packages/contracts/src/javascriptSourceRuntime.ts";
 
 const root = NodeURL.fileURLToPath(new URL("../../../", import.meta.url));

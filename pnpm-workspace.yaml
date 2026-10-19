@@ -9,7 +9,6 @@ packages:
 # true = allowed to run build scripts; false mirrors the pnpm 10 behavior
 # where anything outside onlyBuiltDependencies was silently not built.
 allowBuilds:
-  "@tonyxiao/javascript-source-updates@git+ssh://git@github.com/tonyxiao/javascript-source-updates.git#a298932b09fd52c4739a41966a7124b0386c7a67": true
   browser-tabs-lock: false
   bufferutil: false
   core-js: false

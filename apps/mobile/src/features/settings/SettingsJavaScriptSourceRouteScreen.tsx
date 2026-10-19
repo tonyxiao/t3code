@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
-import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source-updates";
+import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-updates";
 
 import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
 import { ScreenScrollView } from "../../components/ScreenScrollView";

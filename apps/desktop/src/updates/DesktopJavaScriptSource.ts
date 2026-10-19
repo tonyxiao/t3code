@@ -1,5 +1,5 @@
-import type { JavaScriptSource } from "@tonyxiao/javascript-source-updates";
-import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/javascript-source-updates/electron";
+import type { JavaScriptSource } from "@tonyxiao/javascript-updates";
+import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/javascript-updates/electron";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

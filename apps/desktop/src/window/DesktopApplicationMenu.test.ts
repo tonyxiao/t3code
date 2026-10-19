@@ -1,4 +1,4 @@
-import { ElectronUpdates } from "@tonyxiao/javascript-source-updates/electron";
+import { ElectronUpdates } from "@tonyxiao/javascript-updates/electron";
 import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";

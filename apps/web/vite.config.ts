@@ -1,4 +1,4 @@
-import { javascriptSourceUpdates } from "@tonyxiao/javascript-source-updates/vite";
+import { javascriptSourceUpdates } from "@tonyxiao/javascript-updates/vite";
 import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
 import * as NodeZlib from "node:zlib";
 
