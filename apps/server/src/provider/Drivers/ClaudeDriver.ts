@@ -12,7 +12,6 @@ import { HttpClient } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
 import { makeClaudeTextGeneration } from "../../textGeneration/ClaudeTextGeneration.ts";
-import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as ServerConfig from "../../config.ts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
@@ -44,7 +43,6 @@ import {
 import { withInstanceIdentity } from "@t3tools/provider-core/server/instanceIdentity";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import {
-  enrichProviderSnapshotWithVersionAdvisory,
   makeCachedProviderMaintenanceResolution,
   makePackageManagedProviderMaintenanceResolver,
   normalizeCommandPath,
@@ -98,7 +96,6 @@ export type ClaudeDriverEnv =
   | Crypto.Crypto
   | FileSystem.FileSystem
   | HttpClient.HttpClient
-  | ProviderLatestVersions.ProviderLatestVersions
   | ModelCatalog.ModelCatalog
   | Path.Path
   | ProviderEventLoggers.ProviderEventLoggers
@@ -122,7 +119,6 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       // wrappers that scope themselves to their cwd refuse to run there.
       const { stateDir } = yield* ServerConfig.ServerConfig;
       const httpClient = yield* HttpClient.HttpClient;
-      const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
       const resetCreditCoordinator = yield* ResetCreditCoordinator.ResetCreditCoordinator;
       const catalogService = yield* ModelCatalog.ModelCatalog;
       const modelCatalog = catalogService
@@ -289,17 +285,6 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
             Effect.map(stampIdentity),
           ),
         checkProvider,
-        enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
-          resolveMaintenance().pipe(
-            Effect.flatMap((maintenanceCapabilities) =>
-              enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {
-                enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
-              }),
-            ),
-            Effect.provideService(HttpClient.HttpClient, httpClient),
-            Effect.provideService(ProviderLatestVersions.ProviderLatestVersions, latestVersions),
-            Effect.flatMap((enrichedSnapshot) => publishSnapshot(enrichedSnapshot)),
-          ),
       }).pipe(
         Effect.mapError(
           (cause) =>
