@@ -404,13 +404,13 @@ describe("shouldShowEnvironmentIndicator", () => {
     ).toBe(true);
   });
 
-  it("hides a sole primary (this-device) environment", () => {
+  it("shows connection status for a sole primary environment", () => {
     expect(
       shouldShowEnvironmentIndicator({
         activeEnvironment: { isPrimary: true },
         canPickEnvironment: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("hides the indicator when the active environment is unknown", () => {

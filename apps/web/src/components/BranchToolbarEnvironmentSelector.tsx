@@ -7,9 +7,12 @@ import { primaryServerKeybindingsAtom } from "../state/server";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ScaleIcon } from "lucide-react";
 import { memo } from "react";
+import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
+import { ConnectionStatusDot, connectionPhaseDotClassName } from "./ConnectionStatusDot";
+import { useEnvironment } from "../state/environments";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
   Select,
@@ -38,6 +41,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
+  const connection = useEnvironment(environmentId)?.connection;
+  const connectionLabel = connection ? connectionStatusTitle(connection) : "Disconnected";
+  const connectionDot = (
+    <ConnectionStatusDot
+      dotClassName={connectionPhaseDotClassName(connection?.phase ?? "available")}
+    />
+  );
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
     "composer.host",
@@ -65,7 +75,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <span
         className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
         data-composer-context-control
+        aria-label={`${activeEnvironment?.label ?? "Host"}: ${connectionLabel}`}
       >
+        {connectionDot}
         <EnvironmentMachineIcon
           kind={activeEnvironment?.machine ?? "server"}
           className="size-3 shrink-0"
@@ -76,7 +88,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     return (
       <Tooltip>
         <TooltipTrigger render={lockedRow} />
-        <TooltipPopup>{activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+        <TooltipPopup>
+          {activeEnvironment?.label ?? "Run on"} · {connectionLabel}
+        </TooltipPopup>
       </Tooltip>
     );
   }
@@ -105,17 +119,20 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           {autoEnvironmentLabel ? (
             <ScaleIcon className="size-3 shrink-0" aria-hidden="true" />
           ) : (
-            <EnvironmentMachineIcon
-              kind={activeEnvironment?.machine ?? "server"}
-              className="size-3 shrink-0"
-            />
+            <>
+              {connectionDot}
+              <EnvironmentMachineIcon
+                kind={activeEnvironment?.machine ?? "server"}
+                className="size-3 shrink-0"
+              />
+            </>
           )}
           <ComposerContextLabel>
             <SelectValue />
           </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>
-          {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
+          {autoEnvironmentLabel ?? `${activeEnvironment?.label ?? "Run on"} · ${connectionLabel}`}
           {shortcutLabel ? ` · ${shortcutLabel}` : null}
         </TooltipPopup>
       </Tooltip>
