@@ -28,6 +28,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     sidebarProjectScopeKeys: [],
     sidebarEnvironmentScopeMode: "exclude",
     sidebarProjectScopeMode: "exclude",
+    sidebarThreadSortOrder: "created_at",
     threadLastVisitedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
@@ -230,6 +231,7 @@ describe("parsePersistedState", () => {
       sidebarProjectScopeKeys: [],
       sidebarEnvironmentScopeMode: "exclude",
       sidebarProjectScopeMode: "exclude",
+      sidebarThreadSortOrder: "created_at",
       pullRequestMergeMethod: "merge",
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -356,6 +358,7 @@ describe("uiStateStore persistence", () => {
       sidebarProjectScopeKeys: [],
       sidebarEnvironmentScopeMode: "exclude",
       sidebarProjectScopeMode: "exclude",
+      sidebarThreadSortOrder: "created_at",
       threadChangedFilesExpansionVersion: 2,
       threadChangedFilesExpandedById: {
         "environment:thread-1": {

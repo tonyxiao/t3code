@@ -51,6 +51,7 @@ import {
   resolveSidebarDropTarget,
   planSidebarThreadDrop,
   sortPinnedThreadsForSidebar,
+  sortThreadsForSidebar,
   sortProjectsForSidebar,
   sortScopedProjectsForSidebar,
   sortSidebarV2ProjectGroups,
@@ -2144,6 +2145,37 @@ describe("sortPinnedThreadsForSidebar", () => {
     ]);
 
     expect(sorted.map((thread) => thread.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("sortThreadsForSidebar", () => {
+  it("switches between manual creation order and latest user action", () => {
+    const threads = [
+      {
+        id: "older",
+        environmentId: "local",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-03T00:00:00.000Z",
+        latestUserMessageAt: "2026-01-03T00:00:00.000Z",
+        activeOrderKey: "a",
+      },
+      {
+        id: "newer",
+        environmentId: "local",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        updatedAt: "2026-01-04T00:00:00.000Z",
+        latestUserMessageAt: "2026-01-04T00:00:00.000Z",
+        activeOrderKey: "b",
+      },
+    ];
+    expect(sortThreadsForSidebar(threads, "created_at").map((thread) => thread.id)).toEqual([
+      "older",
+      "newer",
+    ]);
+    expect(sortThreadsForSidebar(threads, "updated_at").map((thread) => thread.id)).toEqual([
+      "newer",
+      "older",
+    ]);
   });
 });
 

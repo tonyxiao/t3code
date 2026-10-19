@@ -16,6 +16,7 @@ export interface SidebarThreadHeaderProps {
   searchFieldRef?: RefObject<HTMLDivElement | null>;
   hasProjects: boolean;
   projectScope: ReactNode;
+  sortOrder?: ReactNode;
   environmentScope?: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
@@ -37,6 +38,7 @@ export function SidebarThreadHeader({
   searchFieldRef,
   hasProjects,
   projectScope,
+  sortOrder,
   environmentScope,
   onNewProject,
   onNewThread,
@@ -110,6 +112,7 @@ export function SidebarThreadHeader({
           <>
             {environmentScope}
             {projectScope}
+            {sortOrder}
             <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
               <FolderPlusIcon />
             </SidebarHeaderIconButton>

@@ -68,6 +68,7 @@ import {
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
+  ArrowUpDownIcon,
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
   CheckIcon,
@@ -148,6 +149,12 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
+import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+
+const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
+  updated_at: "Last user message",
+  created_at: "Created at",
+};
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -280,7 +287,16 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuShortcut,
+  MenuTrigger,
+} from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
@@ -387,6 +403,7 @@ interface SidebarThreadPartitionInput {
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly workingShelfEnabled: boolean;
+  readonly sortOrder: SidebarThreadSortOrder;
   // Snooze wakes and the queued-turn grace depend on the clock, so the minute
   // tick and the precise snooze-wake tick are inputs: a new key repartitions.
   readonly clockKey: string;
@@ -454,6 +471,7 @@ function useSidebarThreads(input: {
     input;
   const threads = useThreadShells();
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
+  const sortOrder = useUiStateStore((store) => store.sidebarThreadSortOrder);
   const nowMinute = useNowMinute();
   // Snooze wake times are second-precise, so classifying with the quantized
   // minute would hold a woken thread on the shelf for up to a minute.
@@ -495,6 +513,7 @@ function useSidebarThreads(input: {
     serverConfigs,
     optimisticDrop,
     workingShelfEnabled,
+    sortOrder,
     clockKey: `${nowMinute}:${snoozeWakeTick}`,
   });
   const partitionNextWakeAt = partition.snoozedThreads[0]?.snoozedUntil ?? null;
@@ -583,7 +602,14 @@ function useSidebarThreads(input: {
 }
 
 function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
-  const { threads, scopedProjectKeys, serverConfigs, optimisticDrop, workingShelfEnabled } = input;
+  const {
+    threads,
+    scopedProjectKeys,
+    serverConfigs,
+    optimisticDrop,
+    workingShelfEnabled,
+    sortOrder,
+  } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
   inboxReturns.observe(workingShelfEnabled ? threads : null);
@@ -642,9 +668,10 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   // sort, or mixed-version fleets would render different pinned orders on
   // web and mobile from the same data.
   const sortedPinned = sortPinnedThreadsForSidebar(pinned);
-  const sortedActive = workingShelfEnabled
-    ? sortInboxThreadsByReturn(active, inboxReturns.returnedAt)
-    : sortThreadsForSidebar(active);
+  const sortedActive =
+    workingShelfEnabled && sortOrder === "created_at"
+      ? sortInboxThreadsByReturn(active, inboxReturns.returnedAt)
+      : sortThreadsForSidebar(active, sortOrder);
   return {
     pinnedThreads:
       optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
@@ -657,7 +684,9 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     draggableThreadKeys: draggable,
     activeReorderableThreadKeys: activeReorderable,
     activeThreads:
-      optimisticDrop?.section !== "active" || optimisticDrop.order === null
+      sortOrder !== "created_at" ||
+      optimisticDrop?.section !== "active" ||
+      optimisticDrop.order === null
         ? sortedActive
         : orderItemsByPreferredIds({
             items: sortedActive,
@@ -2799,6 +2828,8 @@ export default function Sidebar() {
   const projectScopeKeys = useUiStateStore((store) => store.sidebarProjectScopeKeys);
   const environmentScopeMode = useUiStateStore((store) => store.sidebarEnvironmentScopeMode);
   const projectScopeMode = useUiStateStore((store) => store.sidebarProjectScopeMode);
+  const sidebarThreadSortOrder = useUiStateStore((store) => store.sidebarThreadSortOrder);
+  const setSidebarThreadSortOrder = useUiStateStore((store) => store.setSidebarThreadSortOrder);
   const setSidebarScopeSelection = useUiStateStore((store) => store.setSidebarScopeSelection);
   const [environmentScopeMenuState, dispatchEnvironmentScopeMenu] = useReducer(
     reduceSidebarProjectScopeMenuState,
@@ -3705,7 +3736,7 @@ export default function Sidebar() {
             activeOrder: activeKeys,
             activeKeysById,
             activeReorderableKeys: activeReorderableThreadKeys,
-            activeTimeOrdered: workingShelfEnabled,
+            activeTimeOrdered: workingShelfEnabled || sidebarThreadSortOrder !== "created_at",
           }).kind !== "none"
         );
       },
@@ -3740,7 +3771,7 @@ export default function Sidebar() {
       activeOrder: activeKeys,
       activeKeysById,
       activeReorderableKeys: activeReorderableThreadKeys,
-      activeTimeOrdered: workingShelfEnabled,
+      activeTimeOrdered: workingShelfEnabled || sidebarThreadSortOrder !== "created_at",
     });
     if (plan.kind === "none") return;
     if (plan.kind === "settle" && settlingThreadKeysRef.current.has(activeKey)) return;
@@ -4876,6 +4907,37 @@ export default function Sidebar() {
                 </Combobox>
               }
               onNewProject={openAddProjectCommandPalette}
+              sortOrder={
+                <Menu>
+                  <MenuTrigger
+                    render={
+                      <SidebarHeaderIconButton
+                        label={`Sort threads: ${SIDEBAR_THREAD_SORT_LABELS[sidebarThreadSortOrder]}`}
+                      />
+                    }
+                  >
+                    <ArrowUpDownIcon className="size-4" />
+                  </MenuTrigger>
+                  <MenuPopup align="end" className="min-w-40">
+                    <MenuRadioGroup
+                      value={sidebarThreadSortOrder}
+                      onValueChange={(value) =>
+                        setSidebarThreadSortOrder(value as SidebarThreadSortOrder)
+                      }
+                    >
+                      {(
+                        Object.entries(SIDEBAR_THREAD_SORT_LABELS) as Array<
+                          [SidebarThreadSortOrder, string]
+                        >
+                      ).map(([value, label]) => (
+                        <MenuRadioItem key={value} value={value}>
+                          {label}
+                        </MenuRadioItem>
+                      ))}
+                    </MenuRadioGroup>
+                  </MenuPopup>
+                </Menu>
+              }
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}
               newThreadShortcutLabel={newThreadShortcutLabel}
@@ -5015,7 +5077,8 @@ export default function Sidebar() {
                             sortableDisabled={
                               renamingThreadKey === threadKey ||
                               !draggableThreadKeys.has(threadKey) ||
-                              optimisticDrop !== null
+                              optimisticDrop !== null ||
+                              (section === "active" && sidebarThreadSortOrder !== "created_at")
                             }
                             thread={thread}
                             variant={rowVariant}

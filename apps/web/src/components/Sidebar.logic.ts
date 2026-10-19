@@ -11,7 +11,10 @@ import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-searc
 import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
-import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
+import {
+  planPinnedReorder,
+  sortActiveThreadsByOrderKey,
+} from "@t3tools/client-runtime/state/thread-sort";
 import {
   effectiveSnoozed,
   type ThreadSnoozeShell,
@@ -1027,7 +1030,25 @@ export function firstValidTimestampMs(
   return 0;
 }
 
-export { sortActiveThreadsByOrderKey as sortThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
+export function sortThreadsForSidebar<
+  T extends ThreadSortInput & {
+    readonly id: string;
+    readonly environmentId?: string | undefined;
+    readonly unsettledAt?: string | null | undefined;
+    readonly activeOrderKey?: string | null | undefined;
+  },
+>(threads: readonly T[], sortOrder: SidebarThreadSortOrder = "created_at"): T[] {
+  if (sortOrder === "created_at") return sortActiveThreadsByOrderKey(threads);
+  const lastActionAt = new Map(
+    threads.map((thread) => [thread, getThreadSortTimestamp(thread, "updated_at")]),
+  );
+  return [...threads].sort(
+    (left, right) =>
+      lastActionAt.get(right)! - lastActionAt.get(left)! ||
+      left.id.localeCompare(right.id) ||
+      (left.environmentId ?? "").localeCompare(right.environmentId ?? ""),
+  );
+}
 export {
   isThreadWorking as isSidebarThreadWorking,
   sortInboxThreadsByReturn,
