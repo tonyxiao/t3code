@@ -6,7 +6,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import type { DesktopAppActivationRequest } from "@t3tools/contracts";
+import type { DesktopAppControlRequest } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
 import {
   HostProcessPlatform,
@@ -17,6 +17,7 @@ import * as NetService from "@t3tools/shared/Net";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
 import { afterEach, describe, expect, vi } from "vite-plus/test";
 
@@ -53,7 +54,7 @@ async function startFakeDesktop(input: {
   readonly stateSubdirectory?: "userdata" | "dev";
   readonly platform: NodeJS.Platform;
   readonly userId: number | undefined;
-  readonly reply?: (request: DesktopAppActivationRequest) => unknown;
+  readonly reply?: (request: DesktopAppControlRequest) => unknown;
 }) {
   const target = resolveDesktopAppControlAddress({
     stateDir: NodePath.join(input.baseDir, input.stateSubdirectory ?? "userdata"),
@@ -69,7 +70,7 @@ async function startFakeDesktop(input: {
     });
   }
 
-  const received: DesktopAppActivationRequest[] = [];
+  const received: DesktopAppControlRequest[] = [];
   const server = NodeNet.createServer((socket) => {
     socket.setEncoding("utf8");
     let buffer = "";
@@ -77,7 +78,7 @@ async function startFakeDesktop(input: {
       buffer += chunk;
       const newline = buffer.indexOf("\n");
       if (newline === -1) return;
-      const request = JSON.parse(buffer.slice(0, newline)) as DesktopAppActivationRequest;
+      const request = JSON.parse(buffer.slice(0, newline)) as DesktopAppControlRequest;
       received.push(request);
       const response = input.reply
         ? input.reply(request)
@@ -198,11 +199,16 @@ describe("t3 app", () => {
         yield* runCli(["app"], { T3CODE_HOME: baseDir });
         yield* runCli(["app", explicitPath, "--base-dir", baseDir]);
 
-        expect(desktop.received.map((request) => request.workspaceRoot)).toEqual([
-          workingDirectory,
-          explicitPath,
-        ]);
-        expect(desktop.received.every((request) => request.platform === platform)).toBe(true);
+        expect(
+          desktop.received.map((request) =>
+            request.type === "open-workspace" ? request.workspaceRoot : null,
+          ),
+        ).toEqual([workingDirectory, explicitPath]);
+        expect(
+          desktop.received.every(
+            (request) => request.type === "open-workspace" && request.platform === platform,
+          ),
+        ).toBe(true);
       }).pipe(Effect.scoped),
     ),
   );
@@ -304,4 +310,112 @@ describe("t3 app", () => {
       ),
     );
   }
+});
+
+describe("t3 pair import", () => {
+  const url = "https://remote.example.test/#token=one-time-secret";
+
+  it.effect(
+    "requires a running local desktop app without creating state or exposing the link",
+    () =>
+      withTempDirectory("t3-pair-no-app-", (root) =>
+        Effect.gen(function* () {
+          const baseDir = NodePath.join(root, "missing-home");
+          const error = yield* runCli(["pair", "import", url, "--base-dir", baseDir]).pipe(
+            Effect.flip,
+          );
+          expect(error).toMatchObject({ _tag: "DesktopPairImportError" });
+          expect(error.message).not.toContain("one-time-secret");
+          expect(yield* pathExists(baseDir)).toBe(false);
+        }),
+      ),
+  );
+
+  it.effect(
+    "sends the link only to the local desktop app and accepts an identity-based update",
+    () =>
+      withTempDirectory("t3-pair-import-", (root) =>
+        Effect.gen(function* () {
+          const desktop = yield* fakeDesktop({
+            baseDir: root,
+            reply: (request) => ({
+              version: 1,
+              requestId: request.requestId,
+              ok: true,
+              environmentId: "remote-identity",
+              action: "updated",
+            }),
+          });
+          const output = yield* Effect.gen(function* () {
+            yield* runCli(["pair", "import", url, "--base-dir", root, "--json"]);
+            return (yield* TestConsole.logLines).at(-1);
+          }).pipe(Effect.provide(TestConsole.layer));
+          expect(output).toBe('{"action":"updated","environmentId":"remote-identity"}');
+          expect(output).not.toContain("one-time-secret");
+          expect(desktop.received).toMatchObject([{ type: "import-pairing", pairingUrl: url }]);
+        }).pipe(Effect.scoped),
+      ),
+  );
+
+  it.effect("rejects malformed links before contacting the desktop app", () =>
+    withTempDirectory("t3-pair-invalid-", (root) =>
+      Effect.gen(function* () {
+        const desktop = yield* fakeDesktop({ baseDir: root });
+        const error = yield* runCli([
+          "pair",
+          "import",
+          "not-a-url-with-secret",
+          "--base-dir",
+          root,
+        ]).pipe(Effect.flip);
+        expect(error).toMatchObject({
+          _tag: "DesktopPairImportError",
+          message: "Invalid pairing URL or missing token.",
+        });
+        expect(desktop.received).toHaveLength(0);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("redacts untrusted desktop failure messages and never retries a consumed link", () =>
+    withTempDirectory("t3-pair-rejected-", (root) =>
+      Effect.gen(function* () {
+        const desktop = yield* fakeDesktop({
+          baseDir: root,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: false,
+            code: "pairing-unauthorized",
+            message: url,
+          }),
+        });
+        const error = yield* runCli(["pair", "import", url, "--base-dir", root]).pipe(Effect.flip);
+        expect(error.message).not.toContain("one-time-secret");
+        expect(error.message).toContain("fresh link");
+        expect(desktop.received).toHaveLength(1);
+      }).pipe(Effect.scoped),
+    ),
+  );
+
+  it.effect("reports older desktop apps as incompatible without echoing credentials", () =>
+    withTempDirectory("t3-pair-legacy-", (root) =>
+      Effect.gen(function* () {
+        const desktop = yield* fakeDesktop({
+          baseDir: root,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: false,
+            code: "invalid-request",
+            message: url,
+          }),
+        });
+        const error = yield* runCli(["pair", "import", url, "--base-dir", root]).pipe(Effect.flip);
+        expect(error.message).toContain("Update it first");
+        expect(error.message).not.toContain("one-time-secret");
+        expect(desktop.received).toHaveLength(1);
+      }).pipe(Effect.scoped),
+    ),
+  );
 });

@@ -2,18 +2,18 @@
 import {
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
   type DesktopAppActivationFailure,
-  type DesktopAppActivationRequest,
+  type DesktopAppControlRequest,
   type DesktopAppActivationResponse,
 } from "@t3tools/contracts";
 
 interface PendingActivation {
-  readonly request: DesktopAppActivationRequest;
+  readonly request: DesktopAppControlRequest;
   readonly resolve: (response: DesktopAppActivationResponse) => void;
   readonly timeout: ReturnType<typeof setTimeout>;
   dispatched: boolean;
 }
 
-type RendererSender = (request: DesktopAppActivationRequest) => void;
+type RendererSender = (request: DesktopAppControlRequest) => void;
 
 function failure(
   requestId: string,
@@ -33,16 +33,22 @@ function failure(
 export class DesktopAppActivationBroker {
   readonly #pending = new Map<string, PendingActivation>();
   readonly #requestTimeoutMs: number;
+  readonly #pairingRequestTimeoutMs: number;
   readonly #activate: () => void;
   #renderer: RendererSender | null = null;
   #closed = false;
 
-  constructor(input: { readonly requestTimeoutMs: number; readonly activate: () => void }) {
+  constructor(input: {
+    readonly requestTimeoutMs: number;
+    readonly pairingRequestTimeoutMs?: number;
+    readonly activate: () => void;
+  }) {
     this.#requestTimeoutMs = input.requestTimeoutMs;
+    this.#pairingRequestTimeoutMs = input.pairingRequestTimeoutMs ?? input.requestTimeoutMs;
     this.#activate = input.activate;
   }
 
-  request(request: DesktopAppActivationRequest): Promise<DesktopAppActivationResponse> {
+  request(request: DesktopAppControlRequest): Promise<DesktopAppActivationResponse> {
     if (this.#closed) {
       return Promise.resolve(
         failure(request.requestId, "renderer-unavailable", "T3 Code is shutting down."),
@@ -55,15 +61,20 @@ export class DesktopAppActivationBroker {
     }
 
     const response = new Promise<DesktopAppActivationResponse>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.#settle(
-          failure(
-            request.requestId,
-            "request-timeout",
-            "The desktop app did not finish opening the project in time.",
-          ),
-        );
-      }, this.#requestTimeoutMs);
+      const timeout = setTimeout(
+        () => {
+          this.#settle(
+            failure(
+              request.requestId,
+              "request-timeout",
+              request.type === "import-pairing"
+                ? "The desktop app did not finish importing the pairing link in time."
+                : "The desktop app did not finish opening the project in time.",
+            ),
+          );
+        },
+        request.type === "import-pairing" ? this.#pairingRequestTimeoutMs : this.#requestTimeoutMs,
+      );
       this.#pending.set(request.requestId, {
         request,
         resolve,
@@ -72,7 +83,7 @@ export class DesktopAppActivationBroker {
       });
     });
 
-    this.#activate();
+    if (request.type === "open-workspace") this.#activate();
     this.#flush();
     return response;
   }

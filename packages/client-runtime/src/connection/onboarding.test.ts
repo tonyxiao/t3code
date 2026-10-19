@@ -7,14 +7,20 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { ConnectionBlockedError } from "./model.ts";
 
 import { remoteHttpClientLayer } from "../rpc/http.ts";
 import { ClientPresentation, SshEnvironmentGateway } from "../platform/capabilities.ts";
-import { BearerConnectionCredential, BearerConnectionProfile } from "./catalog.ts";
-import { BearerConnectionTarget } from "./model.ts";
+import {
+  BearerConnectionCredential,
+  BearerConnectionProfile,
+  type ConnectionCatalogEntry,
+} from "./catalog.ts";
+import { BearerConnectionTarget, PrimaryConnectionTarget } from "./model.ts";
 import {
   prepareBearerConnectionUpdate,
   preparePairingRegistration,
+  pairingCatalogConflict,
   prepareSshRegistration,
 } from "./onboarding.ts";
 
@@ -29,6 +35,63 @@ const CLIENT_PRESENTATION_LAYER = Layer.succeed(
     scopes: AuthStandardClientScopes,
   }),
 );
+
+describe("pairing catalog identity", () => {
+  const remoteId = EnvironmentId.make("remote-a");
+  const otherId = EnvironmentId.make("remote-b");
+  const remote: ConnectionCatalogEntry = {
+    target: new BearerConnectionTarget({
+      environmentId: remoteId,
+      label: "A",
+      connectionId: "bearer:remote-a",
+    }),
+    profile: Option.some(
+      new BearerConnectionProfile({
+        connectionId: "bearer:remote-a",
+        environmentId: remoteId,
+        label: "A",
+        httpBaseUrl: "https://a.example/",
+        wsBaseUrl: "wss://a.example/",
+      }),
+    ),
+    enabled: false,
+  };
+  const local: ConnectionCatalogEntry = {
+    target: new PrimaryConnectionTarget({
+      environmentId: otherId,
+      label: "Local",
+      httpBaseUrl: "http://localhost/",
+      wsBaseUrl: "ws://localhost/",
+    }),
+    profile: Option.none(),
+    enabled: true,
+  };
+
+  it("accepts re-pairing the same trusted identity, even after an address change", () => {
+    const entries = new Map([
+      [remoteId, remote],
+      [otherId, local],
+    ]);
+    expect(pairingCatalogConflict(entries, remoteId, "https://a.example/")).toBeNull();
+    expect(pairingCatalogConflict(entries, remoteId, "https://moved.example/")).toBeNull();
+    expect(entries.get(otherId)).toBe(local);
+    expect(entries.get(remoteId)?.enabled).toBe(false);
+  });
+
+  it("rejects a different identity on a saved URL and refuses to replace local state", () => {
+    const entries = new Map([
+      [remoteId, remote],
+      [otherId, local],
+    ]);
+    expect(pairingCatalogConflict(entries, otherId, "https://a.example/")?.detail).toContain(
+      "different connection type",
+    );
+    expect(
+      pairingCatalogConflict(entries, EnvironmentId.make("intruder"), "https://a.example")?.detail,
+    ).toContain("different environment identity");
+    expect(entries.size).toBe(2);
+  });
+});
 
 function pairingHttpLayer(
   calls: Array<{ readonly url: string; readonly init: RequestInit }>,
@@ -80,6 +143,26 @@ function pairingHttpLayer(
 }
 
 describe("connection onboarding", () => {
+  it.effect("rejects a descriptor identity conflict before consuming the one-time token", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+      const error = yield* preparePairingRegistration(
+        { pairingUrl: "http://tailnet.example:3773/pair#token=one-time-secret" },
+        () =>
+          Effect.fail(
+            new ConnectionBlockedError({ reason: "configuration", detail: "identity conflict" }),
+          ),
+      ).pipe(
+        Effect.provide(Layer.mergeAll(CLIENT_PRESENTATION_LAYER, pairingHttpLayer(calls))),
+        Effect.flip,
+      );
+      expect(error).toMatchObject({ reason: "configuration", detail: "identity conflict" });
+      expect(calls.map((call) => call.url)).toEqual([
+        "http://tailnet.example:3773/.well-known/t3/environment",
+      ]);
+    }),
+  );
+
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
       const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];

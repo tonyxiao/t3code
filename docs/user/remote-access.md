@@ -56,6 +56,22 @@ in the receiving app. Connection settings are under **Settings → Connections**
 on web and desktop and **Settings → Environments** on mobile. A loopback address
 such as `127.0.0.1` reaches only the device opening the link.
 
+To save a remote server in a **running desktop app on the same machine** without
+opening Connections, import its one-time link with `t3 pair import`:
+
+```bash
+printf '%s\n' "$PAIRING_URL" | t3 pair import --json
+```
+
+The command accepts the URL as an argument too, but stdin avoids putting its
+token in shell history or process arguments. JSON output contains only the
+`action` (`added` or `updated`) and `environmentId`, never credentials. A
+previously saved environment with the same server identity is refreshed; other
+connections remain unchanged. The desktop app must support this command and
+must already be running; `t3 pair` still creates a link on the server rather
+than importing it. Do not repeat an import if the response was interrupted:
+check Connections and mint a fresh link if needed.
+
 You can revoke a paired device under **Settings → Connections →
 Authorized clients**. This list shows connected clients by default; choose **Show
 disconnected clients** to find and revoke a device that is offline. Use a fresh

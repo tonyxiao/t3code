@@ -1,14 +1,18 @@
-import { ConnectionOnboarding } from "@t3tools/client-runtime/connection";
+import { sha256 } from "@noble/hashes/sha2";
+import { bytesToHex } from "@noble/hashes/utils";
+import { ConnectionOnboarding, EnvironmentRegistry } from "@t3tools/client-runtime/connection";
 import {
   createAtomCommandScheduler,
   createRuntimeCommand,
 } from "@t3tools/client-runtime/state/runtime";
 import type { DesktopSshEnvironmentTarget } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import { connectionAtomRuntime } from "./runtime";
 
 const onboardingScheduler = createAtomCommandScheduler();
+const pairingKey = (value: string) => bytesToHex(sha256(new TextEncoder().encode(value)));
 
 export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
   label: "web:connection:connect-pairing",
@@ -16,7 +20,7 @@ export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
   concurrency: {
     mode: "singleFlight",
     key: (input: { pairingUrl?: string; host?: string; pairingCode?: string }) =>
-      JSON.stringify(input),
+      `ui:${pairingKey(JSON.stringify(input))}`,
   },
   execute: (input: {
     readonly pairingUrl?: string;
@@ -24,6 +28,26 @@ export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
     readonly pairingCode?: string;
   }) =>
     ConnectionOnboarding.pipe(Effect.flatMap((onboarding) => onboarding.registerPairing(input))),
+});
+
+export const importDesktopPairing = createRuntimeCommand(connectionAtomRuntime, {
+  label: "web:connection:import-desktop-pairing",
+  scheduler: onboardingScheduler,
+  concurrency: {
+    mode: "singleFlight",
+    key: (input: { pairingUrl: string }) => `desktop:${pairingKey(input.pairingUrl)}`,
+  },
+  execute: (input: { readonly pairingUrl: string }) =>
+    Effect.gen(function* () {
+      const registry = yield* EnvironmentRegistry;
+      const before = yield* SubscriptionRef.get(registry.entries);
+      const onboarding = yield* ConnectionOnboarding;
+      const environmentId = yield* onboarding.registerPairing(input);
+      return {
+        environmentId,
+        action: before.has(environmentId) ? "updated" : "added",
+      } as const;
+    }),
 });
 
 export const connectSshEnvironment = createRuntimeCommand(connectionAtomRuntime, {

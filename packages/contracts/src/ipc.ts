@@ -26,7 +26,7 @@ import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from
 import type { EditorId } from "./editor.ts";
 
 import type {
-  DesktopAppActivationRequest,
+  DesktopAppControlRequest,
   DesktopAppActivationResponse,
 } from "./desktopAppActivation.ts";
 
@@ -1260,7 +1260,7 @@ export interface DesktopBridge {
   appActivation?: {
     setReady: (ready: boolean) => Promise<void>;
     complete: (response: DesktopAppActivationResponse) => Promise<void>;
-    onRequest: (listener: (request: DesktopAppActivationRequest) => void) => () => void;
+    onRequest: (listener: (request: DesktopAppControlRequest) => void) => () => void;
   };
   /**
    * Desktop-only preview surface. Present iff the renderer is hosted by the

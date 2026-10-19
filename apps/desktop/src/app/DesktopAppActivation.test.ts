@@ -9,6 +9,7 @@ import {
   ThreadId,
   type DesktopAppActivationRequest,
   type DesktopAppActivationResponse,
+  type DesktopAppControlRequest,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
 import { HostProcessPlatform, HostProcessUserId } from "@t3tools/shared/hostProcess";
@@ -63,7 +64,7 @@ function startOkServer(target: ReturnType<typeof makeTarget>, userId: number | u
   });
 }
 
-function exchange(address: string, payload: DesktopAppActivationRequest) {
+function exchange(address: string, payload: DesktopAppControlRequest) {
   return new Promise<DesktopAppActivationResponse>((resolve, reject) => {
     const socket = NodeNet.createConnection(address);
     socket.setEncoding("utf8");
@@ -88,19 +89,27 @@ describe("desktop app control server", () => {
       yield* Effect.promise(async () => {
         const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-control-test-"));
         const target = makeTarget(NodePath.join(root, "userdata"), platform, userId);
-        const received: DesktopAppActivationRequest[] = [];
+        const received: DesktopAppControlRequest[] = [];
         const server = await startDesktopAppControlServer({
           ...target,
           userId,
           handle: async (input) => {
             received.push(input);
-            return {
-              version: 1,
-              requestId: input.requestId,
-              ok: true,
-              projectId: ProjectId.make("project-1"),
-              threadId: ThreadId.make("thread-1"),
-            };
+            return input.type === "import-pairing"
+              ? {
+                  version: 1,
+                  requestId: input.requestId,
+                  ok: true,
+                  environmentId: "remote-identity",
+                  action: "added",
+                }
+              : {
+                  version: 1,
+                  requestId: input.requestId,
+                  ok: true,
+                  projectId: ProjectId.make("project-1"),
+                  threadId: ThreadId.make("thread-1"),
+                };
           },
           cancel: () => undefined,
           onReclaimError: () => undefined,
@@ -108,9 +117,16 @@ describe("desktop app control server", () => {
         openServers.push(server);
 
         const response = await exchange(target.address, request("request-1", platform));
+        const imported = await exchange(target.address, {
+          version: 1,
+          requestId: "request-2",
+          type: "import-pairing",
+          pairingUrl: "https://remote.test/#token=one-time-secret",
+        });
 
-        expect(received).toHaveLength(1);
+        expect(received).toHaveLength(2);
         expect(response).toMatchObject({ ok: true, requestId: "request-1" });
+        expect(imported).toMatchObject({ ok: true, environmentId: "remote-identity" });
         await server.close();
         openServers.splice(openServers.indexOf(server), 1);
         if (target.directory !== null) {

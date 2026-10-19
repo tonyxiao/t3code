@@ -84,9 +84,45 @@ const resolvePairingTarget = Effect.fn("clientRuntime.connection.onboarding.reso
   },
 );
 
+export function pairingCatalogConflict(
+  entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>,
+  environmentId: EnvironmentId,
+  httpBaseUrl: string,
+): ConnectionBlockedError | null {
+  const origin = new URL(httpBaseUrl).origin;
+  const existing = entries.get(environmentId);
+  if (existing !== undefined && existing.target._tag !== "BearerConnectionTarget") {
+    return new ConnectionBlockedError({
+      reason: "configuration",
+      detail: "The remote identity already belongs to a different connection type.",
+    });
+  }
+  for (const entry of entries.values()) {
+    if (
+      entry.target.environmentId !== environmentId &&
+      Option.isSome(entry.profile) &&
+      isBearerProfile(entry.profile.value) &&
+      URL.canParse(entry.profile.value.httpBaseUrl) &&
+      new URL(entry.profile.value.httpBaseUrl).origin === origin
+    ) {
+      return new ConnectionBlockedError({
+        reason: "configuration",
+        detail: "This address is already saved for a different environment identity.",
+      });
+    }
+  }
+  return null;
+}
+
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
-)(function* (input: PairingConnectionInput) {
+)(function* (
+  input: PairingConnectionInput,
+  validateDescriptor?: (
+    environmentId: EnvironmentId,
+    httpBaseUrl: string,
+  ) => Effect.Effect<void, ConnectionBlockedError>,
+) {
   const target = yield* resolvePairingTarget(input);
   const presentation = yield* ClientCapabilities.ClientPresentation;
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
@@ -94,6 +130,9 @@ export const preparePairingRegistration = Effect.fn(
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
   const compatibilityError = orchestrationProtocolCompatibilityError(descriptor);
   if (compatibilityError !== null) return yield* compatibilityError;
+  if (validateDescriptor !== undefined) {
+    yield* validateDescriptor(descriptor.environmentId, target.httpBaseUrl);
+  }
   const access = yield* bootstrapRemoteBearerSession({
     httpBaseUrl: target.httpBaseUrl,
     credential: target.credential,
@@ -124,8 +163,12 @@ export const preparePairingRegistration = Effect.fn(
 const registerPairingConnection = Effect.fn(
   "clientRuntime.connection.onboarding.registerPairingConnection",
 )(function* (input: PairingConnectionInput) {
-  const registration = yield* preparePairingRegistration(input);
   const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+  const entries = yield* SubscriptionRef.get(registry.entries);
+  const registration = yield* preparePairingRegistration(input, (environmentId, httpBaseUrl) => {
+    const conflict = pairingCatalogConflict(entries, environmentId, httpBaseUrl);
+    return conflict === null ? Effect.void : Effect.fail(conflict);
+  });
   yield* registry.register(registration);
   return registration.target.environmentId;
 });
