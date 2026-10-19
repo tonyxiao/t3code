@@ -134,7 +134,10 @@ function makeRegistry(input: {
         Layer.mock(BitbucketApi.BitbucketApi)({}),
         Layer.mock(BitbucketPullRequestApi.BitbucketPullRequestApi)({}),
         input.settings
-          ? Layer.mock(ServerSettings.ServerSettingsService)(input.settings)
+          ? Layer.mock(ServerSettings.ServerSettingsService)({
+              getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+              ...input.settings,
+            })
           : ServerSettings.ServerSettingsService.layerTest(),
         Layer.mock(GitHubPullRequestApi.GitHubPullRequestApi)({}),
         // The GitHub provider's GraphQL reads go through these; no test here makes one.
@@ -188,6 +191,40 @@ it.effect("routes directly by provider kind for remote-first workflows", () =>
     const provider = yield* registry.get(SourceControlProviderKind.make("github"));
 
     assert.strictEqual(provider.kind, "github");
+  }),
+);
+
+it.effect("disables a hosting provider for both remote and direct operations", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry({
+      remotes: [{ name: "origin", url: "git@github.com:pingdotgg/t3code.git" }],
+      settings: {
+        getSettings: Effect.succeed({
+          ...DEFAULT_SERVER_SETTINGS,
+          disabledSourceControlProviders: [SourceControlProviderKind.make("github")],
+        }),
+        subscribeChanges: Effect.succeed(Stream.empty),
+      },
+    });
+    const direct = yield* registry.get(SourceControlProviderKind.make("github"));
+    const remote = yield* registry.resolve({ cwd: "/repo" });
+    assert.strictEqual(yield* registry.isEnabled(SourceControlProviderKind.make("github")), false);
+    for (const provider of [direct, remote]) {
+      assert.deepStrictEqual(
+        yield* provider.listChangeRequests({ cwd: "/repo", headSelector: "main", state: "all" }),
+        [],
+      );
+      const error = yield* provider
+        .createChangeRequest({
+          cwd: "/repo",
+          baseRefName: "main",
+          headSelector: "test",
+          title: "Nope",
+          bodyFile: "/tmp/unused-body",
+        })
+        .pipe(Effect.flip);
+      assert.match(error.detail, /disabled in Settings/);
+    }
   }),
 );
 

@@ -14,6 +14,7 @@ import {
 } from "@t3tools/contracts";
 import type {} from "@t3tools/contracts";
 import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
+import { isSourceControlProviderEnabled } from "@t3tools/shared/serverSettings";
 
 import * as BuiltInDrivers from "./builtInDrivers.ts";
 import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
@@ -66,8 +67,31 @@ export class SourceControlProviderRegistry extends Context.Service<
       SourceControlProviderError
     >;
     readonly discover: Effect.Effect<ReadonlyArray<SourceControlProviderDiscoveryItem>>;
+    readonly isEnabled: (kind: SourceControlProviderKind) => Effect.Effect<boolean>;
   }
 >()("t3/sourceControl/SourceControlProviderRegistry") {}
+
+function disabledProvider(
+  kind: SourceControlProviderKind,
+): SourceControlProvider.SourceControlProvider["Service"] {
+  const unavailable = (operation: string, cwd: string) =>
+    new SourceControlProviderError({
+      provider: kind,
+      operation,
+      cwd,
+      detail: `${kind} source control integration is disabled in Settings.`,
+    });
+  return SourceControlProvider.SourceControlProvider.of({
+    kind,
+    listChangeRequests: () => Effect.succeed([]),
+    getChangeRequest: (input) => unavailable("getChangeRequest", input.cwd),
+    createChangeRequest: (input) => unavailable("createChangeRequest", input.cwd),
+    getRepositoryCloneUrls: (input) => unavailable("getRepositoryCloneUrls", input.cwd),
+    createRepository: (input) => unavailable("createRepository", input.cwd),
+    getDefaultBranch: () => Effect.succeed(null),
+    checkoutChangeRequest: (input) => unavailable("checkoutChangeRequest", input.cwd),
+  });
+}
 
 function unsupportedProvider(
   kind: SourceControlProviderKind,
@@ -248,8 +272,17 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     >(registrations.map((registration) => [registration.kind, registration.provider]));
     const discoverySpecs = registrations.map((registration) => registration.discovery);
 
+    const isEnabled: SourceControlProviderRegistry["Service"]["isEnabled"] = (kind) =>
+      serverSettings.getSettings.pipe(
+        Effect.map((settings) => isSourceControlProviderEnabled(settings, kind)),
+        Effect.orElseSucceed(() => true),
+      );
+    const configuredProvider = (provider: SourceControlProvider.SourceControlProvider["Service"]) =>
+      isEnabled(provider.kind).pipe(
+        Effect.map((enabled) => (enabled ? provider : disabledProvider(provider.kind))),
+      );
     const get: SourceControlProviderRegistry["Service"]["get"] = (kind) =>
-      Effect.succeed(providers.get(kind) ?? unsupportedProvider(kind));
+      configuredProvider(providers.get(kind) ?? unsupportedProvider(kind));
 
     const unknownRemoteCache = yield* Cache.makeWith(
       (request: UnknownRemoteLookup) => request.lookup,
@@ -322,13 +355,18 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
         ? Cache.get(providerContextCache, input.cwd)
         : refineContext(input.cwd, input.context)
       ).pipe(
-        Effect.map((context) => {
+        Effect.flatMap((context) => {
           const kind = context?.provider.kind ?? SourceControlProviderKind.make("unknown");
           const provider = providers.get(kind) ?? unsupportedProvider(kind);
-          return {
-            provider: bindProviderContext(provider, context),
-            context,
-          } satisfies SourceControlProviderHandle;
+          return configuredProvider(provider).pipe(
+            Effect.map(
+              (configured) =>
+                ({
+                  provider: bindProviderContext(configured, context),
+                  context,
+                }) satisfies SourceControlProviderHandle,
+            ),
+          );
         }),
       );
 
@@ -341,6 +379,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
         return kind ? providers.get(kind)?.resolveLink?.(input) : undefined;
       },
       get,
+      isEnabled,
       resolveHandle,
       resolve: (input) => resolveHandle(input).pipe(Effect.map((handle) => handle.provider)),
       discover: Effect.forEach(
@@ -350,7 +389,11 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
             spec,
             process,
             cwd: config.cwd,
-          }),
+          }).pipe(
+            Effect.flatMap((item) =>
+              isEnabled(item.kind).pipe(Effect.map((enabled) => ({ ...item, enabled }))),
+            ),
+          ),
         { concurrency: "unbounded" },
       ),
     });

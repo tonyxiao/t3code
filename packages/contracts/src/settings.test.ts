@@ -21,6 +21,15 @@ const encodeClientSettings = Schema.encodeSync(ClientSettingsSchema);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
+
+describe("source control provider preferences", () => {
+  it("keeps existing providers enabled and accepts disabled provider patches", () => {
+    expect(decodeServerSettings({}).disabledSourceControlProviders).toEqual([]);
+    expect(decodeServerSettingsPatch({ disabledSourceControlProviders: ["github"] })).toEqual({
+      disabledSourceControlProviders: ["github"],
+    });
+  });
+});
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
 describe("ServerSettings response streaming", () => {

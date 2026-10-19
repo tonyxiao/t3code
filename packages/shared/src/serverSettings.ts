@@ -1,4 +1,5 @@
 import type { ModelPreferences } from "@t3tools/contracts/settings";
+import type { SourceControlProviderKind } from "@t3tools/contracts";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_TEXT_GENERATION_MODEL,
@@ -33,6 +34,13 @@ import {
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
+
+export function isSourceControlProviderEnabled(
+  settings: Pick<ServerSettings, "disabledSourceControlProviders">,
+  kind: SourceControlProviderKind,
+): boolean {
+  return !settings.disabledSourceControlProviders.includes(kind);
+}
 
 export function resolveProjectAgentBrowserAccess(
   settings: Pick<
