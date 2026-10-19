@@ -191,6 +191,7 @@ import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
   filterSidebarV2VisibleThreads,
+  resolveSidebarScopedProjectKeys,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
   deleteSelectedThreadEntries,
@@ -776,6 +777,7 @@ function useSidebarLookups() {
   ];
   return {
     projects,
+    environments,
     serverConfigs,
     projectGroups,
     environmentLabelById,
@@ -2690,6 +2692,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 export default function Sidebar() {
   const {
     projects,
+    environments,
     serverConfigs,
     projectGroups,
     environmentLabelById,
@@ -2792,13 +2795,21 @@ export default function Sidebar() {
   );
   const environmentMachineById = useEnvironmentMachines();
   const projectGroupsRef = useRef(projectGroups);
-  const persistedProjectScopeKey = useUiStateStore((store) => store.sidebarProjectScopeKey);
-  const setPersistedProjectScopeKey = useUiStateStore((store) => store.setSidebarProjectScopeKey);
+  const environmentScopeIds = useUiStateStore((store) => store.sidebarEnvironmentScopeIds);
+  const projectScopeKeys = useUiStateStore((store) => store.sidebarProjectScopeKeys);
+  const environmentScopeMode = useUiStateStore((store) => store.sidebarEnvironmentScopeMode);
+  const projectScopeMode = useUiStateStore((store) => store.sidebarProjectScopeMode);
+  const setSidebarScopeSelection = useUiStateStore((store) => store.setSidebarScopeSelection);
+  const [environmentScopeMenuState, dispatchEnvironmentScopeMenu] = useReducer(
+    reduceSidebarProjectScopeMenuState,
+    { open: false, query: "" },
+  );
   const [projectScopeMenuState, dispatchProjectScopeMenu] = useReducer(
     reduceSidebarProjectScopeMenuState,
     { open: false, query: "" },
   );
   const projectScopeFilter = useComboboxFilter();
+  const environmentScopeFilter = useComboboxFilter();
   const allProjectSnapshotsReady = useAllEnvironmentProjectSnapshotsReady();
   const allProjectConfigsReady = useAtomValue(environmentProjects.projectConfigsReadyAtom);
   const headerSearchRef = useRef<HTMLDivElement | null>(null);
@@ -2850,13 +2861,25 @@ export default function Sidebar() {
   // A selection made under one scope can hold threads the next scope hides.
   const setProjectScopeKey = (key: string | null) => {
     clearSelection();
-    setPersistedProjectScopeKey(key);
+    setSidebarScopeSelection(
+      "project",
+      key === null ? [] : [key],
+      key === null ? "exclude" : "include",
+    );
   };
-  const projectScopeKey = resolveSidebarProjectScopeKey({
-    groups: projectGroups,
-    key: persistedProjectScopeKey,
-    settings: projectGroupingSettings,
-  });
+  const resolvedProjectScopeKeys = projectScopeKeys.map(
+    (key) =>
+      resolveSidebarProjectScopeKey({
+        groups: projectGroups,
+        key,
+        settings: projectGroupingSettings,
+      }) ?? key,
+  );
+  const projectScopeKey =
+    projectScopeMode === "include" && resolvedProjectScopeKeys.length === 1
+      ? resolvedProjectScopeKeys[0]!
+      : null;
+  const scopeKeyForTail = `${environmentScopeMode}:${environmentScopeIds.join("|")}:${projectScopeMode}:${resolvedProjectScopeKeys.join("|")}`;
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
   const scratchMachineLabelFor = (
     thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">,
@@ -2871,11 +2894,24 @@ export default function Sidebar() {
     }
     return environmentLabelById.get(thread.environmentId) ?? null;
   };
-  const selectedProjectScopeItem =
-    projectScopeItems.find((item) => item.value === (projectScopeKey ?? "all")) ??
-    projectScopeItems[0]!;
+  const selectedProjectScopeItems = projectScopeItems.filter((item) =>
+    resolvedProjectScopeKeys.includes(item.value),
+  );
+  const environmentScopeItems = environments.map((environment) => ({
+    value: environment.environmentId,
+    label: environment.label,
+  }));
+  const selectedEnvironmentScopeItems = environmentScopeItems.filter((item) =>
+    environmentScopeIds.includes(item.value),
+  );
+  const filteredEnvironmentScopeItems = filterSidebarProjectScopeItems({
+    items: environmentScopeItems,
+    query: environmentScopeMenuState.query,
+    matches: (item, query) =>
+      environmentScopeFilter.contains(item, query, (candidate) => candidate.label),
+  });
   const filteredProjectScopeItems = filterSidebarProjectScopeItems({
-    items: projectScopeItems,
+    items: projectScopeItems.slice(1),
     query: projectScopeMenuState.query,
     matches: (item, query) =>
       projectScopeFilter.contains(item, query, (candidate) => candidate.label),
@@ -2884,33 +2920,36 @@ export default function Sidebar() {
     projectScopeKey === null
       ? null
       : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null);
-  const scopedProjectKeys =
-    scopedProjectGroup === null
-      ? null
-      : new Set(
-          scopedProjectGroup.memberProjectRefs.map(
-            (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
-          ),
-        );
+  const scopedProjectKeys = resolveSidebarScopedProjectKeys({
+    groups: projectGroups,
+    environmentIds: environmentScopeIds,
+    projectKeys: resolvedProjectScopeKeys,
+    environmentMode: environmentScopeMode,
+    projectMode: projectScopeMode,
+  });
   useEffect(() => {
-    const nextKey = resolveSidebarProjectScopeKey({
-      groups: projectGroups,
-      key: persistedProjectScopeKey,
-      settings: projectGroupingSettings,
-      canClearMissingScope: allProjectSnapshotsReady && allProjectConfigsReady,
+    const nextKeys = projectScopeKeys.flatMap((key) => {
+      const resolved = resolveSidebarProjectScopeKey({
+        groups: projectGroups,
+        key,
+        settings: projectGroupingSettings,
+        canClearMissingScope: allProjectSnapshotsReady && allProjectConfigsReady,
+      });
+      return resolved === null ? [] : [resolved];
     });
-    if (nextKey !== persistedProjectScopeKey) {
+    if (nextKeys.join("\0") !== projectScopeKeys.join("\0")) {
       clearSelection();
-      setPersistedProjectScopeKey(nextKey);
+      setSidebarScopeSelection("project", nextKeys, projectScopeMode);
     }
   }, [
     allProjectConfigsReady,
     allProjectSnapshotsReady,
     clearSelection,
-    persistedProjectScopeKey,
+    projectScopeKeys,
+    projectScopeMode,
     projectGroups,
     projectGroupingSettings,
-    setPersistedProjectScopeKey,
+    setSidebarScopeSelection,
   ]);
   const routeDraftIdForRows = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
@@ -2998,7 +3037,7 @@ export default function Sidebar() {
     pinnedKeysById,
     activeKeysById,
   } = useSidebarThreads({
-    projectScopeKey,
+    projectScopeKey: scopeKeyForTail,
     scopedProjectKeys,
     serverConfigs,
     optimisticDrop,
@@ -4539,11 +4578,136 @@ export default function Sidebar() {
             <SidebarThreadHeader
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
+              environmentScope={
+                environments.length > 1 ||
+                environmentScopeIds.length > 0 ||
+                environmentScopeMode === "include" ? (
+                  <Combobox<(typeof environmentScopeItems)[number], true>
+                    items={environmentScopeItems}
+                    filteredItems={filteredEnvironmentScopeItems}
+                    multiple
+                    autoHighlight
+                    itemToStringLabel={(item) => item.label}
+                    isItemEqualToValue={(a, b) => a.value === b.value}
+                    open={environmentScopeMenuState.open}
+                    onOpenChange={(open) =>
+                      dispatchEnvironmentScopeMenu({ type: "open-changed", open })
+                    }
+                    value={selectedEnvironmentScopeItems}
+                    onValueChange={(items) => {
+                      clearSelection();
+                      setSidebarScopeSelection(
+                        "environment",
+                        items.map((item) => item.value),
+                        environmentScopeMode === "exclude" && environmentScopeIds.length === 0
+                          ? "include"
+                          : environmentScopeMode,
+                      );
+                    }}
+                  >
+                    <ComboboxTrigger
+                      render={
+                        <SidebarHeaderIconButton
+                          label={
+                            environmentScopeIds.length === 0 && environmentScopeMode === "exclude"
+                              ? "Filter threads by environment"
+                              : `Filter threads by environment (${environmentScopeMode === "exclude" ? "exclude" : "only"}): ${selectedEnvironmentScopeItems.map((item) => item.label).join(", ") || "None"}`
+                          }
+                        />
+                      }
+                    >
+                      <ListFilterIcon className="size-4" />
+                    </ComboboxTrigger>
+                    <ComboboxPopup
+                      align="start"
+                      anchor={headerSearchRef}
+                      className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
+                    >
+                      <ComboboxSearchInput
+                        aria-label="Search environments"
+                        placeholder="Search environments..."
+                        value={environmentScopeMenuState.query}
+                        onChange={(event) =>
+                          dispatchEnvironmentScopeMenu({
+                            type: "query-changed",
+                            query: event.target.value,
+                          })
+                        }
+                      />
+                      <Button
+                        size="xs"
+                        variant="ghost-muted"
+                        onClick={() => {
+                          clearSelection();
+                          setSidebarScopeSelection("environment", [], "exclude");
+                        }}
+                      >
+                        All environments
+                      </Button>
+                      {environmentScopeIds.length > 0 ? (
+                        <div className="flex gap-1 px-2">
+                          <Button
+                            size="xs"
+                            variant="ghost-muted"
+                            aria-pressed={environmentScopeMode === "include"}
+                            onClick={() =>
+                              setSidebarScopeSelection(
+                                "environment",
+                                environmentScopeIds,
+                                "include",
+                              )
+                            }
+                          >
+                            Include selected
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="ghost-muted"
+                            aria-pressed={environmentScopeMode === "exclude"}
+                            onClick={() =>
+                              setSidebarScopeSelection(
+                                "environment",
+                                environmentScopeIds,
+                                "exclude",
+                              )
+                            }
+                          >
+                            Exclude selected
+                          </Button>
+                        </div>
+                      ) : null}
+                      <ComboboxEmpty>No matching environments.</ComboboxEmpty>
+                      <ComboboxList>
+                        {(item: (typeof environmentScopeItems)[number]) => (
+                          <div key={item.value} className="flex items-center">
+                            <ComboboxItem value={item} className="min-w-0 flex-1">
+                              {item.label}
+                            </ComboboxItem>
+                            <Button
+                              size="xs"
+                              variant="ghost-muted"
+                              aria-label={`Only ${item.label}`}
+                              onPointerDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                clearSelection();
+                                setSidebarScopeSelection("environment", [item.value], "include");
+                              }}
+                            >
+                              Only
+                            </Button>
+                          </div>
+                        )}
+                      </ComboboxList>
+                    </ComboboxPopup>
+                  </Combobox>
+                ) : null
+              }
               projectScope={
-                <Combobox
-                  items={projectScopeItems}
+                <Combobox<(typeof projectScopeItems)[number], true>
+                  items={projectScopeItems.slice(1)}
                   filteredItems={filteredProjectScopeItems}
                   autoHighlight
+                  multiple
                   itemToStringLabel={(item) => item.label}
                   isItemEqualToValue={(a, b) => a.value === b.value}
                   open={projectScopeMenuState.open}
@@ -4554,22 +4718,28 @@ export default function Sidebar() {
                   onItemHighlighted={(item) => {
                     highlightedProjectScopeKeyRef.current = item?.value ?? null;
                   }}
-                  value={selectedProjectScopeItem}
-                  onValueChange={(item) => {
+                  value={selectedProjectScopeItems}
+                  onValueChange={(items) => {
                     if (suppressNextScopeChangeRef.current) {
                       suppressNextScopeChangeRef.current = false;
                       return;
                     }
-                    if (!item) return;
-                    setProjectScopeKey(item.value === "all" ? null : item.value);
+                    clearSelection();
+                    setSidebarScopeSelection(
+                      "project",
+                      items.map((item) => item.value),
+                      projectScopeMode === "exclude" && projectScopeKeys.length === 0
+                        ? "include"
+                        : projectScopeMode,
+                    );
                   }}
                 >
                   <ComboboxTrigger
                     render={
                       <SidebarHeaderIconButton
                         label={
-                          scopedProjectGroup
-                            ? `Filter threads by project: ${scopedProjectGroup.displayName}`
+                          selectedProjectScopeItems.length > 0 || projectScopeMode === "include"
+                            ? `Filter threads by project (${projectScopeMode === "exclude" ? "exclude" : "only"}): ${selectedProjectScopeItems.map((item) => item.label).join(", ") || "None"}`
                             : "Filter threads by project"
                         }
                       />
@@ -4588,6 +4758,37 @@ export default function Sidebar() {
                     anchor={headerSearchRef}
                     className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
                   >
+                    <Button
+                      size="xs"
+                      variant="ghost-muted"
+                      onClick={() => setProjectScopeKey(null)}
+                    >
+                      All projects
+                    </Button>
+                    {projectScopeKeys.length > 0 ? (
+                      <div className="flex gap-1 px-2">
+                        <Button
+                          size="xs"
+                          variant="ghost-muted"
+                          aria-pressed={projectScopeMode === "include"}
+                          onClick={() =>
+                            setSidebarScopeSelection("project", projectScopeKeys, "include")
+                          }
+                        >
+                          Include selected
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost-muted"
+                          aria-pressed={projectScopeMode === "exclude"}
+                          onClick={() =>
+                            setSidebarScopeSelection("project", projectScopeKeys, "exclude")
+                          }
+                        >
+                          Exclude selected
+                        </Button>
+                      </div>
+                    ) : null}
                     <ComboboxSearchInput
                       aria-label="Search projects"
                       placeholder="Search projects..."
@@ -4619,44 +4820,55 @@ export default function Sidebar() {
                       {(item: (typeof projectScopeItems)[number]) => {
                         const project = projectGroupByScopeKey.get(item.value) ?? null;
                         return (
-                          <ComboboxItem
-                            key={item.value}
-                            hideIndicator
-                            value={item}
-                            onContextMenu={(event) => {
-                              if (project) handleProjectSettings(event, project);
-                            }}
-                          >
-                            {project ? (
-                              <ProjectFavicon project={project} className="size-4 shrink-0" />
-                            ) : (
-                              <FolderIcon className="size-4 shrink-0" />
-                            )}
-                            <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
-                            {project && showProjectEnvironments ? (
-                              <ProjectEnvironmentBadge
-                                group={project}
-                                primaryEnvironmentId={primaryEnvironmentId}
-                                machineByEnvironmentId={environmentMachineById}
-                              />
-                            ) : null}
-                            {project ? (
-                              <Button
-                                size="icon-xs"
-                                variant="ghost-muted"
-                                tabIndex={-1}
-                                aria-hidden="true"
-                                title={`Project settings for ${project.displayName}`}
-                                className="ml-auto"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  void handleProjectSettings(event, project);
-                                }}
-                              >
-                                <SettingsIcon className="size-3.5" />
-                              </Button>
-                            ) : null}
-                          </ComboboxItem>
+                          <div key={item.value} className="flex items-center">
+                            <ComboboxItem
+                              hideIndicator
+                              value={item}
+                              className="min-w-0 flex-1"
+                              onContextMenu={(event) => {
+                                if (project) handleProjectSettings(event, project);
+                              }}
+                            >
+                              {project ? (
+                                <ProjectFavicon project={project} className="size-4 shrink-0" />
+                              ) : (
+                                <FolderIcon className="size-4 shrink-0" />
+                              )}
+                              <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
+                              {project && showProjectEnvironments ? (
+                                <ProjectEnvironmentBadge
+                                  group={project}
+                                  primaryEnvironmentId={primaryEnvironmentId}
+                                  machineByEnvironmentId={environmentMachineById}
+                                />
+                              ) : null}
+                              {project ? (
+                                <Button
+                                  size="icon-xs"
+                                  variant="ghost-muted"
+                                  tabIndex={-1}
+                                  aria-hidden="true"
+                                  title={`Project settings for ${project.displayName}`}
+                                  className="ml-auto"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    void handleProjectSettings(event, project);
+                                  }}
+                                >
+                                  <SettingsIcon className="size-3.5" />
+                                </Button>
+                              ) : null}
+                            </ComboboxItem>
+                            <Button
+                              size="xs"
+                              variant="ghost-muted"
+                              aria-label={`Only ${item.label}`}
+                              onPointerDown={(event) => event.preventDefault()}
+                              onClick={() => setProjectScopeKey(item.value)}
+                            >
+                              Only
+                            </Button>
+                          </div>
                         );
                       }}
                     </ComboboxList>

@@ -14,6 +14,7 @@ import {
   setDefaultAdvertisedEndpointKey,
   setProjectExpanded,
   setSidebarProjectScopeKey,
+  setSidebarScopeSelection,
   setThreadChangedFilesExpanded,
   type UiState,
 } from "./uiStateStore";
@@ -23,6 +24,10 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectExpandedById: {},
     projectOrder: [],
     sidebarProjectScopeKey: null,
+    sidebarEnvironmentScopeIds: [],
+    sidebarProjectScopeKeys: [],
+    sidebarEnvironmentScopeMode: "exclude",
+    sidebarProjectScopeMode: "exclude",
     threadLastVisitedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
@@ -156,6 +161,25 @@ describe("uiStateStore pure functions", () => {
     expect(setSidebarProjectScopeKey(scoped, null).sidebarProjectScopeKey).toBeNull();
     expect(setSidebarProjectScopeKey(scoped, "").sidebarProjectScopeKey).toBeNull();
   });
+
+  it("persists independent multi-environment and project selections", () => {
+    const selected = setSidebarScopeSelection(
+      setSidebarScopeSelection(
+        makeUiState(),
+        "environment",
+        ["remote", "local", "remote"],
+        "include",
+      ),
+      "project",
+      ["alpha", "beta"],
+      "include",
+    );
+    expect(selected.sidebarEnvironmentScopeIds).toEqual(["remote", "local"]);
+    expect(selected.sidebarProjectScopeKeys).toEqual(["alpha", "beta"]);
+    expect(setSidebarScopeSelection(selected, "project", ["alpha", "beta"], "include")).toBe(
+      selected,
+    );
+  });
 });
 
 describe("parsePersistedState", () => {
@@ -202,6 +226,10 @@ describe("parsePersistedState", () => {
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
+      sidebarEnvironmentScopeIds: [],
+      sidebarProjectScopeKeys: [],
+      sidebarEnvironmentScopeMode: "exclude",
+      sidebarProjectScopeMode: "exclude",
       pullRequestMergeMethod: "merge",
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -324,6 +352,10 @@ describe("uiStateStore persistence", () => {
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
+      sidebarEnvironmentScopeIds: [],
+      sidebarProjectScopeKeys: [],
+      sidebarEnvironmentScopeMode: "exclude",
+      sidebarProjectScopeMode: "exclude",
       threadChangedFilesExpansionVersion: 2,
       threadChangedFilesExpandedById: {
         "environment:thread-1": {

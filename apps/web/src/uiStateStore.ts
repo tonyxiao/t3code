@@ -27,6 +27,10 @@ export interface PersistedUiState {
   projectOrderCwds?: string[];
   defaultAdvertisedEndpointKey?: string | null;
   sidebarProjectScopeKey?: string | null;
+  sidebarEnvironmentScopeIds?: string[];
+  sidebarProjectScopeKeys?: string[];
+  sidebarEnvironmentScopeMode?: "include" | "exclude";
+  sidebarProjectScopeMode?: "include" | "exclude";
   threadChangedFilesExpansionVersion?: number;
   threadChangedFilesExpandedById?: Record<string, Record<string, boolean>>;
   pullRequestMergeMethod?: string;
@@ -36,6 +40,10 @@ export interface UiProjectState {
   projectExpandedById: Record<string, boolean>;
   projectOrder: string[];
   sidebarProjectScopeKey: string | null;
+  sidebarEnvironmentScopeIds: string[];
+  sidebarProjectScopeKeys: string[];
+  sidebarEnvironmentScopeMode: "include" | "exclude";
+  sidebarProjectScopeMode: "include" | "exclude";
 }
 
 export interface UiThreadState {
@@ -58,6 +66,10 @@ const initialState: UiState = {
   projectExpandedById: {},
   projectOrder: [],
   sidebarProjectScopeKey: null,
+  sidebarEnvironmentScopeIds: [],
+  sidebarProjectScopeKeys: [],
+  sidebarEnvironmentScopeMode: "exclude",
+  sidebarProjectScopeMode: "exclude",
   threadLastVisitedAtById: {},
   threadChangedFilesExpandedById: {},
   defaultAdvertisedEndpointKey: null,
@@ -151,6 +163,17 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
         : {},
     defaultAdvertisedEndpointKey: sanitizeOptionalKey(parsed.defaultAdvertisedEndpointKey),
     sidebarProjectScopeKey: sanitizeOptionalKey(parsed.sidebarProjectScopeKey),
+    sidebarEnvironmentScopeIds: sanitizeStringArray(parsed.sidebarEnvironmentScopeIds),
+    sidebarProjectScopeKeys: Array.isArray(parsed.sidebarProjectScopeKeys)
+      ? sanitizeStringArray(parsed.sidebarProjectScopeKeys)
+      : sanitizeStringArray([parsed.sidebarProjectScopeKey]),
+    sidebarEnvironmentScopeMode:
+      parsed.sidebarEnvironmentScopeMode === "include" ? "include" : "exclude",
+    sidebarProjectScopeMode:
+      parsed.sidebarProjectScopeMode === "include" ||
+      (!Array.isArray(parsed.sidebarProjectScopeKeys) && parsed.sidebarProjectScopeKey)
+        ? "include"
+        : "exclude",
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,
@@ -225,6 +248,10 @@ export function persistState(state: UiState): void {
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
         sidebarProjectScopeKey: state.sidebarProjectScopeKey,
+        sidebarEnvironmentScopeIds: state.sidebarEnvironmentScopeIds,
+        sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
+        sidebarEnvironmentScopeMode: state.sidebarEnvironmentScopeMode,
+        sidebarProjectScopeMode: state.sidebarProjectScopeMode,
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
         threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
         pullRequestMergeMethod: state.pullRequestMergeMethod,
@@ -325,12 +352,47 @@ export function setDefaultAdvertisedEndpointKey(state: UiState, key: string | nu
 
 export function setSidebarProjectScopeKey(state: UiState, projectKey: string | null): UiState {
   const nextKey = sanitizeOptionalKey(projectKey);
-  if (state.sidebarProjectScopeKey === nextKey) {
+  if (
+    state.sidebarProjectScopeKey === nextKey &&
+    state.sidebarProjectScopeKeys.length === (nextKey === null ? 0 : 1) &&
+    (nextKey === null || state.sidebarProjectScopeKeys[0] === nextKey)
+  ) {
     return state;
   }
   return {
     ...state,
     sidebarProjectScopeKey: nextKey,
+    sidebarProjectScopeKeys: nextKey === null ? [] : [nextKey],
+    sidebarProjectScopeMode: nextKey === null ? "exclude" : "include",
+  };
+}
+
+export function setSidebarScopeSelection(
+  state: UiState,
+  kind: "environment" | "project",
+  keys: readonly string[],
+  mode: "include" | "exclude",
+): UiState {
+  const nextKeys = sanitizeStringArray(keys);
+  const keysField =
+    kind === "environment" ? "sidebarEnvironmentScopeIds" : "sidebarProjectScopeKeys";
+  const modeField =
+    kind === "environment" ? "sidebarEnvironmentScopeMode" : "sidebarProjectScopeMode";
+  if (
+    state[modeField] === mode &&
+    state[keysField].length === nextKeys.length &&
+    state[keysField].every((key, index) => key === nextKeys[index])
+  )
+    return state;
+  return {
+    ...state,
+    [keysField]: nextKeys,
+    [modeField]: mode,
+    ...(kind === "project"
+      ? {
+          sidebarProjectScopeKey: mode === "include" && nextKeys.length === 1 ? nextKeys[0]! : null,
+        }
+      : {}),
   };
 }
 
@@ -423,6 +485,11 @@ interface UiStateStore extends UiState {
   setThreadChangedFilesExpanded: (threadId: string, turnId: string, expanded: boolean) => void;
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
   setSidebarProjectScopeKey: (projectKey: string | null) => void;
+  setSidebarScopeSelection: (
+    kind: "environment" | "project",
+    keys: readonly string[],
+    mode: "include" | "exclude",
+  ) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
   setProjectExpanded: (projectIds: string | readonly string[], expanded: boolean) => void;
   reorderProjects: (
@@ -444,6 +511,8 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     set((state) => setDefaultAdvertisedEndpointKey(state, key)),
   setSidebarProjectScopeKey: (projectKey) =>
     set((state) => setSidebarProjectScopeKey(state, projectKey)),
+  setSidebarScopeSelection: (kind, keys, mode) =>
+    set((state) => setSidebarScopeSelection(state, kind, keys, mode)),
   setPullRequestMergeMethod: (method) => set((state) => setPullRequestMergeMethod(state, method)),
   setProjectExpanded: (projectIds, expanded) =>
     set((state) => setProjectExpanded(state, projectIds, expanded)),

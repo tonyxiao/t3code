@@ -15,6 +15,7 @@ import {
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   filterSidebarV2VisibleThreads,
+  resolveSidebarScopedProjectKeys,
   formatWorkingDurationLabel,
   getFallbackThreadIdAfterDelete,
   getProjectSortTimestamp,
@@ -394,6 +395,57 @@ describe("resolveSidebarStageBadgeLabel", () => {
         fallbackStageLabel: "Alpha",
       }),
     ).toBe("Alpha");
+  });
+});
+
+describe("sidebar scope selection", () => {
+  const groups = [
+    {
+      projectKey: "alpha",
+      memberProjectRefs: [
+        { environmentId: "local", projectId: "a" },
+        { environmentId: "remote", projectId: "a" },
+      ],
+    },
+    {
+      projectKey: "beta",
+      memberProjectRefs: [
+        { environmentId: "local", projectId: "b" },
+        { environmentId: "remote", projectId: "b" },
+      ],
+    },
+  ];
+
+  it("intersects multiple project selections with environment exclusions", () => {
+    const selected = resolveSidebarScopedProjectKeys({
+      groups,
+      environmentIds: ["remote"],
+      projectKeys: ["alpha", "beta"],
+      environmentMode: "exclude",
+      projectMode: "include",
+    });
+    expect(selected).toEqual(new Set(["local:a", "local:b"]));
+  });
+
+  it("shows all projects with no filters and none with an empty include filter", () => {
+    expect(
+      resolveSidebarScopedProjectKeys({
+        groups,
+        environmentIds: [],
+        projectKeys: [],
+        environmentMode: "exclude",
+        projectMode: "exclude",
+      }),
+    ).toBeNull();
+    expect(
+      resolveSidebarScopedProjectKeys({
+        groups,
+        environmentIds: [],
+        projectKeys: [],
+        environmentMode: "include",
+        projectMode: "exclude",
+      }),
+    ).toEqual(new Set());
   });
 });
 

@@ -517,6 +517,41 @@ export function isSidebarSubagentThread(thread: Pick<SidebarThreadSummary, "line
   return thread.lineage.relationshipToParent === "subagent";
 }
 
+export function resolveSidebarScopedProjectKeys(input: {
+  groups: readonly {
+    projectKey: string;
+    memberProjectRefs: readonly { environmentId: string; projectId: string }[];
+  }[];
+  environmentIds: readonly string[];
+  projectKeys: readonly string[];
+  environmentMode: "include" | "exclude";
+  projectMode: "include" | "exclude";
+}): ReadonlySet<string> | null {
+  const { groups, environmentIds, projectKeys, environmentMode, projectMode } = input;
+  if (
+    environmentIds.length === 0 &&
+    environmentMode === "exclude" &&
+    projectKeys.length === 0 &&
+    projectMode === "exclude"
+  )
+    return null;
+  const environments = new Set(environmentIds);
+  const projects = new Set(projectKeys);
+  const matches = (selected: boolean, mode: "include" | "exclude") =>
+    mode === "include" ? selected : !selected;
+  return new Set(
+    groups.flatMap((group) =>
+      group.memberProjectRefs
+        .filter(
+          (member) =>
+            matches(environments.has(member.environmentId), environmentMode) &&
+            matches(projects.has(group.projectKey), projectMode),
+        )
+        .map((member) => `${member.environmentId}:${member.projectId}`),
+    ),
+  );
+}
+
 export function filterSidebarV2VisibleThreads<
   T extends Pick<SidebarThreadSummary, "archivedAt" | "lineage"> & {
     environmentId: string;
