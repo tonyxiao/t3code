@@ -3,6 +3,16 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
+## From the command line
+
+With a local T3 Code server running, use `t3 thread list` to find thread ids and
+`t3 thread show <id>` to read a conversation. `t3 thread new "task"` creates a
+thread in the project containing your current directory; pass `--project` to
+choose another project. Use `t3 thread send <id> "message"` to continue work,
+or add `--follow` to print the reply as it arrives. `t3 thread interrupt <id>`,
+`t3 thread snooze <id> --for 2h`, and `t3 thread wake <id>` manage ongoing work.
+Inside a T3 agent session, commands that take a thread id can use `T3_THREAD_ID`.
+
 ## Start a thread
 
 On web and desktop, a new thread keeps the current project and carries your model

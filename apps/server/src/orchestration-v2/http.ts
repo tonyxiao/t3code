@@ -1,4 +1,5 @@
 import {
+  AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
   type OrchestrationProjectShell,
@@ -149,6 +150,38 @@ export const layer = HttpApiBuilder.group(
     );
 
     return handlers
+      .handle(
+        "dispatchCommand",
+        Effect.fn("environment.orchestration.dispatchCommand")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          const command = args.payload;
+          if (
+            command.type !== "thread.create" &&
+            command.type !== "thread.snooze" &&
+            command.type !== "thread.unsnooze" &&
+            command.type !== "run.interrupt" &&
+            command.type !== "message.dispatch"
+          ) {
+            return yield* failEnvironmentInvalidRequest("invalid_command");
+          }
+          if (command.type === "message.dispatch" && command.attachments.length > 0) {
+            return yield* failEnvironmentInvalidRequest("invalid_command");
+          }
+          return yield* threadManagement
+            .dispatch(
+              ThreadManagementService.withCreationProvenance(command, {
+                createdBy: "user",
+                creationSource: "server",
+              }),
+            )
+            .pipe(
+              Effect.map((result) => ({ sequence: result.sequence })),
+              traceLocalHandlerWork,
+              Effect.catch((cause) => failEnvironmentInternal("internal_error", cause)),
+            );
+        }),
+      )
       .handle(
         "shellSnapshot",
         Effect.fn("environment.orchestration.shellSnapshot")(function* (args) {

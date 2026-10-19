@@ -99,6 +99,7 @@ const items = Schema.decodeUnknownSync(Schema.Array(OrchestrationV2TurnItem))(
 it.effect("exports full history with size, scope, and missing-thread checks", () =>
   Effect.gen(function* () {
     let allowed = true;
+    let operateAllowed = false;
     const runtime = ProviderReplayHarness.layerWithRegistry(
       { name: "thread-transcript" },
       ProviderAdapterRegistry.layerFromAdapters([]),
@@ -143,7 +144,14 @@ it.effect("exports full history with size, scope, and missing-thread checks", ()
                 sessionId: AuthSessionId.make("test-session"),
                 subject: "test",
                 method: "bearer-access-token",
-                scopes: new Set<AuthEnvironmentScope>(allowed ? ["orchestration:read"] : []),
+                scopes: new Set<AuthEnvironmentScope>(
+                  allowed
+                    ? [
+                        "orchestration:read",
+                        ...(operateAllowed ? ["orchestration:operate" as const] : []),
+                      ]
+                    : [],
+                ),
               }),
             ),
           ),
@@ -168,6 +176,28 @@ it.effect("exports full history with size, scope, and missing-thread checks", ()
 
     const emptyResponse = yield* read(thread.id);
     expect(emptyResponse.status).toBe(200);
+    const dispatch = (type = "thread.snooze") =>
+      Effect.promise(() =>
+        handler(
+          new Request("http://localhost/api/orchestration/command", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+            },
+            body: JSON.stringify({
+              type,
+              commandId: "cli-snooze-test",
+              threadId: thread.id,
+              snoozedUntil: "2026-10-30T00:00:00.000Z",
+            }),
+          }),
+        ),
+      );
+    expect((yield* dispatch()).status).toBe(403);
+    operateAllowed = true;
+    expect((yield* dispatch()).status).toBe(200);
+    expect((yield* dispatch("thread.archive")).status).toBe(400);
     expect(
       (yield* decodeTranscript(yield* Effect.promise(() => emptyResponse.json()))).items,
     ).toEqual([]);

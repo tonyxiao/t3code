@@ -50,6 +50,8 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import {
+  OrchestrationV2Command,
+  OrchestrationV2DispatchCommandResult,
   OrchestrationV2ShellSnapshot,
   OrchestrationV2ThreadBoundedSnapshot,
   OrchestrationV2ThreadDetailSnapshot,
@@ -591,6 +593,14 @@ const EnvironmentOrchestrationThreadHistoryErrors = [
 ] as const;
 
 class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
+  .add(
+    HttpApiEndpoint.post("dispatchCommand", "/api/orchestration/command", {
+      headers: OrchestrationProtocolHeaders,
+      payload: OrchestrationV2Command,
+      success: OrchestrationV2DispatchCommandResult,
+      error: [EnvironmentRequestInvalidError, ...EnvironmentOrchestrationSnapshotErrors],
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
   .add(
     HttpApiEndpoint.get("shellSnapshot", "/api/orchestration/shell", {
       headers: OrchestrationProtocolHeaders,
