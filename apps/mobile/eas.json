@@ -18,6 +18,14 @@
         "image": "macos-tahoe-26.6-xcode-27.1"
       }
     },
+    "tony:development": {
+      "extends": "development",
+      "env": {
+        "APP_VARIANT": "development",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      }
+    },
     "preview": {
       "corepack": true,
       "env": {
@@ -29,6 +37,17 @@
       "distribution": "internal",
       "ios": {
         "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "tony:preview": {
+      "extends": "preview",
+      "env": {
+        "APP_VARIANT": "preview",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      },
+      "android": {
+        "buildType": "apk"
       }
     },
     "preview:dev": {
@@ -66,6 +85,14 @@
       "autoIncrement": true,
       "ios": {
         "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "tony:production": {
+      "extends": "production",
+      "env": {
+        "APP_VARIANT": "production",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       }
     }
   },

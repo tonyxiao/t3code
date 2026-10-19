@@ -3,6 +3,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import { isTonyDesktop } from "./TonyDesktop.ts";
 
 export class DesktopUserDataInitializationError extends Schema.TaggedError<DesktopUserDataInitializationError>()(
   "DesktopUserDataInitializationError",
@@ -39,9 +40,13 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const names = input.isDevelopment
-      ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
-      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
+    const names = isTonyDesktop
+      ? input.isDevelopment
+        ? { current: "tony-t3code-dev", legacy: "Tony T3 Code (Dev)" }
+        : { current: "tony-t3code", legacy: "Tony T3 Code (Alpha)" }
+      : input.isDevelopment
+        ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
+        : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>

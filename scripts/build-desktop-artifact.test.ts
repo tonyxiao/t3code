@@ -291,6 +291,29 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopWebAssetBrand("0.0.17-nightly.20260413.42"), "nightly");
   });
 
+  it.effect("uses the private HTTPS feed before the source repository", () =>
+    Effect.gen(function* () {
+      const config = yield* resolveGitHubPublishConfig("latest").pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                T3CODE_DESKTOP_UPDATE_URL:
+                  "https://cs-mini.meteor-ruffe.ts.net/t3-downloads/macos/",
+                GITHUB_REPOSITORY: "tonyxiao/t3code",
+              },
+            }),
+          ),
+        ),
+      );
+      assert.deepStrictEqual(config, {
+        provider: "generic",
+        url: "https://cs-mini.meteor-ruffe.ts.net/t3-downloads/macos/",
+        channel: "latest",
+      });
+    }),
+  );
+
   it.effect("resolves GitHub desktop publish config from Effect config", () =>
     Effect.gen(function* () {
       const latestConfig = yield* resolveGitHubPublishConfig("latest").pipe(

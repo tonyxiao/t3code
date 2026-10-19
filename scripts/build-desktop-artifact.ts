@@ -56,7 +56,8 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
+const isTonyDesktopBuild = process.env.T3CODE_DESKTOP_TONY_BUILD === "1";
+const DESKTOP_APP_ID = isTonyDesktopBuild ? "com.tonyxiao.t3code.desktop" : "com.t3tools.t3code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2604,10 +2605,19 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const env = yield* Config.all({
     updateRepository: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     githubRepository: Config.String("GITHUB_REPOSITORY").pipe(Config.option),
+    updateUrl: Config.String("T3CODE_DESKTOP_UPDATE_URL").pipe(Config.option),
   });
+  const updateUrl = Option.getOrUndefined(env.updateUrl)?.trim();
+  if (updateUrl) {
+    const url = new URL(updateUrl);
+    if (url.protocol !== "https:" || url.username || url.password) {
+      throw new Error("Desktop update URL must use HTTPS without embedded credentials.");
+    }
+    return { provider: "generic", url: updateUrl, channel: updateChannel };
+  }
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
-    Option.getOrUndefined(env.githubRepository)?.trim() ||
+    (!isTonyDesktopBuild ? Option.getOrUndefined(env.githubRepository)?.trim() : "") ||
     ""
   ).trim();
   if (!rawRepo) return undefined;
@@ -2670,6 +2680,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  if (isTonyDesktopBuild) return "Tony T3 Code (Alpha)";
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -2768,7 +2779,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          schemes: isTonyDesktopBuild
+            ? ["tony-t3code", "tony-t3code-dev"]
+            : ["t3code", "t3code-dev"],
         },
         {
           name: "Web site URL",
@@ -2825,7 +2838,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [
         {
           name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          schemes: isTonyDesktopBuild
+            ? ["tony-t3code", "tony-t3code-dev"]
+            : ["t3code", "t3code-dev"],
         },
       ],
       desktop: {
@@ -3681,7 +3696,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
   const configuredMacPasskeySigning =
-    options.platform === "mac" && options.signed
+    options.platform === "mac" && options.signed && !isTonyDesktopBuild
       ? yield* Effect.try({
           try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,

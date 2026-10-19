@@ -9,6 +9,7 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const isTonyBuild = repoEnv.T3CODE_MOBILE_TONY_BUILD === "1";
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -96,6 +97,30 @@ const VARIANT_CONFIG = {
   },
 } as const;
 
+const TONY_VARIANT_CONFIG = {
+  development: {
+    ...VARIANT_CONFIG.development,
+    appName: "Tony T3 Code Dev",
+    scheme: "tony-t3code-dev",
+    iosBundleIdentifier: "com.tonyxiao.t3code.dev",
+    androidPackage: "com.tonyxiao.t3code.dev",
+  },
+  preview: {
+    ...VARIANT_CONFIG.preview,
+    appName: "Tony T3 Code Preview",
+    scheme: "tony-t3code-preview",
+    iosBundleIdentifier: "com.tonyxiao.t3code.preview",
+    androidPackage: "com.tonyxiao.t3code.preview",
+  },
+  production: {
+    ...VARIANT_CONFIG.production,
+    appName: "Tony T3 Code",
+    scheme: "tony-t3code",
+    iosBundleIdentifier: "com.tonyxiao.t3code",
+    androidPackage: "com.tonyxiao.t3code",
+  },
+} as const;
+
 function resolveAppVariant(value: string | undefined): AppVariant {
   switch (value) {
     case "development":
@@ -107,7 +132,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = VARIANT_CONFIG[APP_VARIANT];
+const variant = isTonyBuild ? TONY_VARIANT_CONFIG[APP_VARIANT] : VARIANT_CONFIG[APP_VARIANT];
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
@@ -237,8 +262,12 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    enabled: isTonyBuild
+      ? repoEnv.T3CODE_MOBILE_UPDATES_ENABLED === "1"
+      : repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    url: isTonyBuild
+      ? "https://u.expo.dev/f6cd51c6-6875-4ce4-9360-7aefaf9ee333"
+      : "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -250,7 +279,7 @@ const config: ExpoConfig = {
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: isTonyBuild ? "H82Z395PDV" : "ARK85ZXQ4Z",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
@@ -487,10 +516,12 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: isTonyBuild
+        ? "f6cd51c6-6875-4ce4-9360-7aefaf9ee333"
+        : "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     },
   },
-  owner: "pingdotgg",
+  owner: isTonyBuild ? "txlforge-tony" : "pingdotgg",
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
