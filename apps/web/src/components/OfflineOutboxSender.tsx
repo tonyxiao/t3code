@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useOfflineOutbox, type OfflineOutboxTurn } from "../offlineOutbox";
@@ -44,8 +44,15 @@ function TurnSender({ turn, first }: { turn: OfflineOutboxTurn; first: boolean }
   const hydrated = useOfflineOutbox((state) => state.hydrated);
   const sending = useOfflineOutbox((state) => state.sendingIds.has(turn.id));
   const connected = environment?.connection.phase === "connected";
+  const handledConnection = useRef(false);
   useEffect(() => {
-    if (connected || turn.blockedReason !== "Waiting for connection") return;
+    if (!connected) {
+      handledConnection.current = false;
+      return;
+    }
+    if (handledConnection.current) return;
+    handledConnection.current = true;
+    if (turn.blockedReason !== "Waiting for connection") return;
     void useOfflineOutbox
       .getState()
       .retry(turn.id)
