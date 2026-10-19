@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { authScopeResponse, AuthStandardClientScopes } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
@@ -353,6 +354,37 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(verified.sessionId).toBe(bearer.sessionId);
     }).pipe(Effect.provide(layerEnvironmentAuth({ mode: "web", host: "192.168.1.50" }))),
+  );
+
+  it.effect(
+    "keeps paired mobile and browser sessions usable beyond the normal 30-day lifetime",
+    () =>
+      Effect.gen(function* () {
+        const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+        const mobilePairing = yield* serverAuth.issuePairingCredential({
+          scopes: ["orchestration:read"],
+        });
+        const mobileToken = yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
+          mobilePairing.credential,
+          ["orchestration:read"],
+          { ...requestMetadata, deviceType: "mobile" },
+        );
+        const mobileSession = yield* serverAuth.authenticateHttpRequest(
+          makeBearerRequest(mobileToken.access_token),
+        );
+        const browserPairing = yield* serverAuth.issuePairingCredential({
+          scopes: ["orchestration:read"],
+        });
+        const browserSession = yield* serverAuth.createBrowserSession(
+          browserPairing.credential,
+          requestMetadata,
+        );
+        const minimumExpiry = (yield* DateTime.now).epochMilliseconds + 9 * 365 * 24 * 60 * 60_000;
+
+        expect(mobileToken.expires_in).toBeGreaterThan(9 * 365 * 24 * 60 * 60);
+        expect(mobileSession.expiresAt?.epochMilliseconds).toBeGreaterThan(minimumExpiry);
+        expect(browserSession.response.expiresAt.epochMilliseconds).toBeGreaterThan(minimumExpiry);
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
   );
 
   it.effect("preserves pairing grants after rejecting scopes they do not grant", () =>

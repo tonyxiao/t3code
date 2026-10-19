@@ -76,6 +76,7 @@ export interface IssuedBearerSession {
  */
 const MCP_CLIENT_SUBJECT = "mcp-client";
 const MCP_CLIENT_SESSION_TTL = Duration.days(30);
+const PAIRED_SESSION_TTL = Duration.days(10 * 365);
 
 export const mcpClientScopes = (
   access: AuthMcpClientAccess,
@@ -896,6 +897,7 @@ export const make = Effect.gen(function* () {
         method: "browser-session-cookie",
         subject: grant.subject,
         scopes: grant.scopes,
+        ...(grant.method === "one-time-token" ? { ttl: PAIRED_SESSION_TTL } : {}),
         ...(previousSession?.method === "browser-session-cookie"
           ? { replaceSessionId: previousSession.sessionId }
           : {}),
@@ -976,6 +978,9 @@ export const make = Effect.gen(function* () {
                 method: input?.proofKeyThumbprint ? "dpop-access-token" : "bearer-access-token",
                 subject: grant.subject,
                 scopes: grantedScopes,
+                ...(grant.method === "one-time-token" && !input?.proofKeyThumbprint
+                  ? { ttl: PAIRED_SESSION_TTL }
+                  : {}),
                 ...(input?.proofKeyThumbprint
                   ? {
                       proofKeyThumbprint: input.proofKeyThumbprint,
