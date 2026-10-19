@@ -1,4 +1,5 @@
 .git
+.pnpm-store
 .repos
 .t3
 tmp
