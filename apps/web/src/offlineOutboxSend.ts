@@ -17,7 +17,7 @@ import {
 
 import { markPromotedDraftThreadByRef } from "./composerDraftStore";
 import { appAtomRegistry } from "./rpc/atomRegistry";
-import { readThreadShell } from "./state/entities";
+import { readThreadShell, waitForThreadShell } from "./state/entities";
 import { readEnvironmentScope } from "./state/session";
 import { environmentServerConfigsAtom } from "./state/server";
 import { threadEnvironment } from "./state/threads";
@@ -129,6 +129,9 @@ export async function sendOfflineOutboxTurn(id: string): Promise<void> {
       context && !inlineContext
         ? serializeLegacyContextMessage({ text: outgoingText, records: context.records })
         : outgoingText;
+    if (!turn.bootstrap?.createThread && !readThreadShell(threadRef)) {
+      await waitForThreadShell(threadRef);
+    }
     const shell = turn.bootstrap?.createThread ? null : readThreadShell(threadRef);
     if (!shell && !turn.bootstrap?.createThread) {
       throw new Error(

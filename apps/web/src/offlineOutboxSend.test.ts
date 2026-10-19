@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   finish: vi.fn(),
   fail: vi.fn(),
   markPromoted: vi.fn(),
+  shell: null as null | Record<string, unknown>,
+  waitForShell: vi.fn(async () => true),
   readFileAsDataUrl: vi.fn(async () => "data:image/png;base64,aW1hZ2U="),
   startTurn: Symbol("start-turn"),
 }));
@@ -36,7 +38,10 @@ vi.mock("./rpc/atomRegistry", () => ({
   },
 }));
 vi.mock("./state/server", () => ({ environmentServerConfigsAtom: Symbol("configs") }));
-vi.mock("./state/entities", () => ({ readThreadShell: () => null }));
+vi.mock("./state/entities", () => ({
+  readThreadShell: () => mocks.shell,
+  waitForThreadShell: mocks.waitForShell,
+}));
 vi.mock("./state/session", () => ({ readEnvironmentScope: () => true }));
 vi.mock("./state/threads", () => ({ threadEnvironment: { startTurn: mocks.startTurn } }));
 vi.mock("./composerDraftStore", () => ({ markPromotedDraftThreadByRef: mocks.markPromoted }));
@@ -73,14 +78,17 @@ beforeEach(() => {
   mocks.finish.mockClear();
   mocks.fail.mockClear();
   mocks.markPromoted.mockClear();
+  mocks.shell = null;
+  mocks.waitForShell.mockReset();
+  mocks.waitForShell.mockResolvedValue(true);
 });
 
-it("replays a saved draft with its original ids, bootstrap, and image after reconnect", async () => {
+function makeTurn(): OfflineOutboxTurn {
   const environmentId = EnvironmentId.make("remote");
   const projectId = ProjectId.make("project");
   const threadId = ThreadId.make("draft");
   const modelSelection = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6" };
-  mocks.turn = {
+  return {
     id: "message-1",
     environmentId,
     projectId,
@@ -123,6 +131,11 @@ it("replays a saved draft with its original ids, bootstrap, and image after reco
       },
     },
   };
+}
+
+it("replays a saved draft with its original ids, bootstrap, and image after reconnect", async () => {
+  mocks.turn = makeTurn();
+  const { environmentId, projectId, threadId } = mocks.turn;
 
   await sendOfflineOutboxTurn("message-1");
 
@@ -143,5 +156,31 @@ it("replays a saved draft with its original ids, bootstrap, and image after reco
   });
   expect(mocks.finish).toHaveBeenCalledWith("message-1");
   expect(mocks.markPromoted).toHaveBeenCalledWith({ environmentId, threadId });
+  expect(mocks.fail).not.toHaveBeenCalled();
+});
+
+it("waits for the created thread to reach the shell before replaying its next turn", async () => {
+  const { bootstrap: _bootstrap, ...followingTurn } = makeTurn();
+  mocks.turn = { ...followingTurn, id: "message-2" };
+  mocks.waitForShell.mockImplementation(async () => {
+    mocks.shell = {
+      modelSelection: mocks.turn?.modelSelection,
+      runtimeMode: mocks.turn?.runtimeMode,
+      interactionMode: mocks.turn?.interactionMode,
+      branch: null,
+    };
+    return true;
+  });
+
+  await sendOfflineOutboxTurn("message-2");
+
+  expect(mocks.waitForShell).toHaveBeenCalledWith({
+    environmentId: mocks.turn.environmentId,
+    threadId: mocks.turn.threadId,
+  });
+  expect(mocks.commands[0]?.input).toMatchObject({
+    input: { commandId: "message-2", message: { messageId: "message-2" } },
+  });
+  expect(mocks.finish).toHaveBeenCalledWith("message-2");
   expect(mocks.fail).not.toHaveBeenCalled();
 });

@@ -5406,7 +5406,12 @@ export default function ChatView(props: ChatViewProps) {
                   <Button
                     size="xs"
                     variant="ghost"
-                    onClick={() => void useOfflineOutbox.getState().retry(queuedOffline.id)}
+                    onClick={() =>
+                      void useOfflineOutbox
+                        .getState()
+                        .retry(queuedOffline.id)
+                        .catch(() => undefined)
+                    }
                   >
                     Retry
                   </Button>
