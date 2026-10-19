@@ -18,12 +18,12 @@ failures wait for a wakeup instead of spending attempts on unchanged conditions.
 
 Foregrounding, an explicit retry, and an offline report probe the established
 session, and only a failed probe reconnects. Offline reports are often wrong, for
-example for a loopback server. A long mobile background suspension is the one
-exception: it replaces the session at once, because the OS can kill a socket
-without reporting closure, and a probe would hold a dead socket in "Resuming"
-until it times out. That fresh attempt runs even while the network reports
-offline. Foregrounding also wakes a pending retry immediately and
-leaves an ordinary in-flight attempt alone.
+example for a loopback server. Mobile uses a bounded three-second foreground
+probe even after a long background interval: native background execution may
+have kept the socket alive. A failed or timed-out probe replaces the session
+immediately, since the OS can suspend a socket without reporting closure.
+Foregrounding also wakes a pending retry immediately and leaves an ordinary
+in-flight attempt alone.
 
 The [registry](../../packages/client-runtime/src/connection/registry.ts) scopes
 connections by environment. An involuntary disconnect retains the registration
@@ -72,7 +72,10 @@ thread then needs no replay. The shell and detail streams are independent, so
 the shell can report a stop before the detail loads or catches up. A stopped
 thread stays mounted until its own stream is live and shows the stop, and the
 stream then closes and saves the settled state.
-Web and mobile do not keep threads alive.
+Mobile adds a consumer for every unsettled, unarchived thread in enabled
+environments, independent of the visible route. Native background execution is
+finite, so the streams still need to catch up after OS suspension. Web does not
+add a keep-alive consumer.
 
 Retain state and cursor together only after an update finishes. Cancellation must
 not advance the cached cursor beyond the applied data, and an old scope must not
