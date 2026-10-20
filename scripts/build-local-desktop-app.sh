@@ -7,6 +7,7 @@ if [[ $(uname -s) != Darwin ]]; then
 fi
 
 cd "$(dirname "$0")/.."
+export PATH="$PWD/node_modules/.bin:$PATH"
 
 if ! command -v cargo >/dev/null 2>&1 && command -v rustup >/dev/null 2>&1; then
   export PATH="$(dirname "$(rustup which cargo)"):$PATH"
@@ -20,3 +21,4 @@ if [[ -d "$app_path" ]] && lsof -t "$app_path/Contents/MacOS/$app_name" >/dev/nu
 fi
 
 node scripts/build-desktop-artifact.ts --platform mac --target dir --output-dir build
+node scripts/finalize-local-desktop-app.ts "$app_path"
