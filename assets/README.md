@@ -6,7 +6,23 @@ The three Icon Composer projects are the source of truth for full application ic
 - `nightly/app-icon.icon`
 - `prod/app-icon.icon`
 
-Each project uses `text.svg` for the T3 mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
+Each project uses `text.svg` for the tx mark and `background.svg` when the background is a vector layer. Additional layers use semantic names that describe their role and placement.
+
+## Portable exports with Docker
+
+Run `vp run icons:export:docker` from the repository root to regenerate the tracked iOS,
+macOS, Linux, Windows, and web icons without installing Apple tools. Run
+`vp run icons:check:docker` to verify these exports without changing files. The container
+uses Sharp to render the SVG layers and placements from the same projects. It also updates
+the development web public icons and production marketing favicons.
+
+The portable rendition uses flat artwork rather than Apple's glass materials. iOS fallback
+icons are opaque, web and desktop icons have a rounded silhouette, and macOS exports retain
+an 824×824 body inset 100 pixels into a 1024×1024 transparent canvas with a soft shadow.
+Regenerate and check with the same renderer: native and portable exports differ visually
+and byte-for-byte.
+
+## Native Apple exports
 
 Run `vp run icons:export` from the repository root to regenerate the tracked iOS, Linux, Windows, and web assets. The development web exports are also copied to `apps/web/public` for the browser favicon and splash screen. Run `vp run icons:check` to verify that the generated assets and public copies match their sources without changing files.
 
@@ -63,5 +79,5 @@ is instead rendered from the same Icon Composer SVG sources by `vp run icons:exp
 - `apps/mobile/assets/android-splash-icon-*.png`: the two layers composed into one 288dp image, so
   the splash mask reproduces the launcher icon's framing.
 
-Rerun the export after changing a layer SVG. `android-icon-mark.png` remains a flat silhouette for
-Android's monochrome themed icon.
+Rerun the export after changing a layer SVG. It also regenerates `android-icon-mark.png` for
+Android's monochrome themed icon and `android-notification-icon.png` for status-bar notifications.

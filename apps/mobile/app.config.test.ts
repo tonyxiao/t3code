@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 async function loadConfig(env: Record<string, string | undefined>) {
-  vi.stubEnv("APP_VARIANT", "production");
+  vi.stubEnv("APP_VARIANT", env.APP_VARIANT ?? "production");
   for (const key of [
     "T3CODE_MOBILE_APP_ID",
     "T3CODE_MOBILE_SCHEME",
@@ -34,7 +34,7 @@ describe("private mobile builds", () => {
       T3CODE_MOBILE_SCHEME: "example-t3",
     });
 
-    expect(config.name).toBe("T3 Code");
+    expect(config.name).toBe("txcode");
     expect(config.ios?.bundleIdentifier).toBe("com.example.private");
     expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
       "com.example.private.background-sync",
@@ -76,12 +76,41 @@ describe("private mobile builds", () => {
     ]);
   });
 
-  it("preserves official builds when no overrides are configured", async () => {
-    const config = await loadConfig({});
-    expect(config.ios?.bundleIdentifier).toBe("com.t3tools.t3code");
-    expect(config.android?.package).toBe("com.t3tools.t3code");
-    expect(config.ios?.appleTeamId).toBe("ARK85ZXQ4Z");
-    expect(config.owner).toBe("pingdotgg");
-    expect(config.updates?.enabled).toBe(true);
+  it.each([
+    ["production", "com.tonyxiao.txcode"],
+    ["development", "com.tonyxiao.txcode.dev"],
+    ["preview", "com.tonyxiao.txcode.preview"],
+  ])("uses our %s identity without upstream signing or updates", async (variant, bundleId) => {
+    const config = await loadConfig({ APP_VARIANT: variant });
+    expect(config.ios?.bundleIdentifier).toBe(bundleId);
+    expect(config.android?.package).toBe(bundleId);
+    expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
+      `${bundleId}.background-sync`,
+    ]);
+    expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
+      `$(AppIdentifierPrefix)${bundleId}`,
+    ]);
+    expect(config.ios?.appleTeamId).toBeUndefined();
+    expect(config.ios?.associatedDomains).toEqual([]);
+    expect(config.owner).toBeUndefined();
+    expect(config.updates?.enabled).toBe(false);
+    expect(config.updates?.url).toBeUndefined();
+    expect(config.extra?.eas.projectId).toBeUndefined();
+    expect(config.plugins).toContainEqual([
+      "expo-widgets",
+      expect.objectContaining({
+        bundleIdentifier: `${bundleId}.widgets`,
+        groupIdentifier: `group.${bundleId}`,
+      }),
+    ]);
+    expect(config.plugins).toContainEqual([
+      "expo-sharing",
+      expect.objectContaining({
+        ios: expect.objectContaining({
+          extensionBundleIdentifier: `${bundleId}.sharing`,
+          appGroupId: `group.${bundleId}`,
+        }),
+      }),
+    ]);
   });
 });

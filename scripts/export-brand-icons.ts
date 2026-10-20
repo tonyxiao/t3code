@@ -13,8 +13,11 @@ import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { BRAND_ASSET_PATHS, DEVELOPMENT_PUBLIC_ICON_OVERRIDES } from "./lib/brand-assets.ts";
+import { ICON_VARIANTS } from "./lib/brand-icon-variants.ts";
+import { DEVELOPMENT_PUBLIC_ICON_OVERRIDES } from "./lib/brand-assets.ts";
 import { encodePngIco, readPngDimensions, WINDOWS_ICON_SIZES } from "./lib/icon-export.ts";
+
+type IconVariant = (typeof ICON_VARIANTS)[number];
 
 const DESIGN_GENERATION = 26;
 const ICON_COMPOSER_EXECUTABLE_PARTS = [
@@ -42,25 +45,6 @@ const decodeIconComposerVersion = Schema.decodeUnknownEffect(
 );
 
 type IconPlatform = "iOS";
-
-interface VariantOutputs {
-  readonly ios: string;
-  readonly macos: string;
-  readonly universal: string;
-  readonly appleTouch: string;
-  readonly webApp192: string;
-  readonly webApp512: string;
-  readonly favicon16: string;
-  readonly favicon32: string;
-  readonly faviconIco: string;
-  readonly windowsIco: string;
-}
-
-interface IconVariant {
-  readonly label: string;
-  readonly source: string;
-  readonly outputs: VariantOutputs;
-}
 
 interface IconComposerTool {
   readonly path: string;
@@ -203,57 +187,6 @@ export class IconExportAssetsStaleError extends Schema.TaggedError<IconExportAss
     return `Generated icon assets are stale:\n${this.paths.map((path) => `- ${path}`).join("\n")}`;
   }
 }
-
-const ICON_VARIANTS = [
-  {
-    label: "development",
-    source: BRAND_ASSET_PATHS.developmentIconComposerProject,
-    outputs: {
-      ios: BRAND_ASSET_PATHS.developmentIosIconPng,
-      macos: BRAND_ASSET_PATHS.developmentDesktopIconPng,
-      universal: BRAND_ASSET_PATHS.developmentUniversalIconPng,
-      appleTouch: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
-      webApp192: BRAND_ASSET_PATHS.developmentWebAppIcon192Png,
-      webApp512: BRAND_ASSET_PATHS.developmentWebAppIcon512Png,
-      favicon16: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
-      favicon32: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
-      faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
-      windowsIco: BRAND_ASSET_PATHS.developmentWindowsIconIco,
-    },
-  },
-  {
-    label: "preview",
-    source: BRAND_ASSET_PATHS.nightlyIconComposerProject,
-    outputs: {
-      ios: BRAND_ASSET_PATHS.nightlyIosIconPng,
-      macos: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      universal: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      appleTouch: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
-      webApp192: BRAND_ASSET_PATHS.nightlyWebAppIcon192Png,
-      webApp512: BRAND_ASSET_PATHS.nightlyWebAppIcon512Png,
-      favicon16: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-      favicon32: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-      faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-      windowsIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
-    },
-  },
-  {
-    label: "production",
-    source: BRAND_ASSET_PATHS.productionIconComposerProject,
-    outputs: {
-      ios: BRAND_ASSET_PATHS.productionIosIconPng,
-      macos: BRAND_ASSET_PATHS.productionMacIconPng,
-      universal: BRAND_ASSET_PATHS.productionLinuxIconPng,
-      appleTouch: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
-      webApp192: BRAND_ASSET_PATHS.productionWebAppIcon192Png,
-      webApp512: BRAND_ASSET_PATHS.productionWebAppIcon512Png,
-      favicon16: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-      favicon32: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-      faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-      windowsIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
-    },
-  },
-] as const satisfies ReadonlyArray<IconVariant>;
 
 const MACOS_EXPORT_CODEX_PROMPT = [
   "Use [@Computer](plugin://computer-use@openai-bundled) and the Icon Composer app to export the three macOS app icons in this repository.",

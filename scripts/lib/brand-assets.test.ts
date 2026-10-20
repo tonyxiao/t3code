@@ -27,8 +27,8 @@ describe("brand-assets", () => {
     };
 
     expect(manifest).toMatchObject({
-      name: "T3 Code",
-      short_name: "T3 Code",
+      name: "txcode",
+      short_name: "txcode",
       start_url: "/",
       display: "standalone",
       icons: [

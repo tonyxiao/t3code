@@ -204,7 +204,7 @@ function SettingsIndexSections() {
           label="JavaScript source"
           target="SettingsJavaScriptSource"
         />
-        <SettingsRow icon="info.circle" label="About T3 Code" target="SettingsAbout" />
+        <SettingsRow icon="info.circle" label="About txcode" target="SettingsAbout" />
       </SettingsSection>
     </>
   );
