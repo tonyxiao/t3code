@@ -117,8 +117,11 @@ class BackgroundSyncService : HeadlessJsTaskService() {
       pendingStarts += 1
       val intent = Intent(context, BackgroundSyncService::class.java)
       try {
-        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
-        else context.startService(intent)
+        if (Build.VERSION.SDK_INT >= 26) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
       } catch (_: IllegalStateException) {
         requested = wasRequested
         pendingStarts -= 1
@@ -137,8 +140,11 @@ class BackgroundSyncService : HeadlessJsTaskService() {
     }
 
     private fun onMain(action: () -> Unit) {
-      if (Looper.myLooper() == Looper.getMainLooper()) action()
-      else mainHandler.post { action() }
+      if (Looper.myLooper() == Looper.getMainLooper()) {
+        action()
+      } else {
+        mainHandler.post { action() }
+      }
     }
 
     fun waitUntilStopped(promise: Promise) {

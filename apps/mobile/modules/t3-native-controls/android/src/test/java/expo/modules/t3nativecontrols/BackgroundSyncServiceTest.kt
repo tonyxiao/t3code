@@ -23,6 +23,7 @@ import org.robolectric.shadows.ShadowService
 @Implements(HeadlessJsTaskService::class)
 class HeadlessRuntimeShadow : ShadowService() {
   @Implementation
+  @Suppress("UnusedParameter")
   fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = Service.START_NOT_STICKY
 
   @Implementation
