@@ -136,6 +136,7 @@ export const hashBundle = Effect.fn("hashBundle")(function* (root: string) {
 type FileSystemError = import("effect/PlatformError").PlatformError;
 
 const bundleId = "com.tonyxiao.txcode.v2.dev";
+const iosAppName = "txcodeDev";
 const roots = Effect.gen(function* () {
   const path = yield* Path.Path;
   const repo = yield* path.fromFileUrl(new URL("../", import.meta.url));
@@ -387,9 +388,9 @@ const main = Command.make(
             [
               "xcodebuild",
               "-workspace",
-              path.join(mobile, "ios/T3CodeDev.xcworkspace"),
+              path.join(mobile, `ios/${iosAppName}.xcworkspace`),
               "-scheme",
-              "T3CodeDev",
+              iosAppName,
               "-configuration",
               "Debug",
               "-destination",
@@ -406,7 +407,7 @@ const main = Command.make(
               "simctl",
               "install",
               device,
-              path.join(output, "Build/Products/Debug-iphonesimulator/T3CodeDev.app"),
+              path.join(output, `Build/Products/Debug-iphonesimulator/${iosAppName}.app`),
             ],
             true,
           );
