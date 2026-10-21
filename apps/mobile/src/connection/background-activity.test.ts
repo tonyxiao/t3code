@@ -1,4 +1,4 @@
-import { EnvironmentId, ThreadId, ORCHESTRATION_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
+import { EnvironmentId, ORCHESTRATION_V2_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
@@ -9,21 +9,18 @@ import {
 } from "./background-activity-scopes";
 
 describe("mobile background activity", () => {
-  it.effect("keeps thread demand until both the chat and proactive sync release it", () =>
+  it.effect("retains open thread demand while its subscription is mounted", () =>
     Effect.gen(function* () {
-      const environmentId = EnvironmentId.make("thread-environment");
-      const threadId = ThreadId.make("open-thread");
-      const observation = {
+      const environmentId = EnvironmentId.make("mobile-environment");
+      const release = yield* observeMobileBackgroundActivitySubscription({
         environmentId,
-        method: ORCHESTRATION_WS_METHODS.subscribeThread,
-        input: { threadId },
-      };
-      const releaseChat = yield* observeMobileBackgroundActivitySubscription(observation);
-      const releaseSync = yield* observeMobileBackgroundActivitySubscription(observation);
-      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([{ type: "thread", threadId }]);
-      yield* releaseChat;
-      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([{ type: "thread", threadId }]);
-      yield* releaseSync;
+        method: ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+        input: { threadId: "open-thread" },
+      });
+      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([
+        { type: "thread", threadId: "open-thread" },
+      ]);
+      yield* release;
       expect(retainedMobileBackgroundScopes(environmentId)).toEqual([]);
     }),
   );
@@ -31,12 +28,23 @@ describe("mobile background activity", () => {
   it.effect("retains VCS demand only while the mobile subscription is active", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("mobile-environment");
+      const releasePassive = yield* observeMobileBackgroundActivitySubscription({
+        environmentId,
+        method: WS_METHODS.subscribeVcsStatus,
+        input: { cwd: "/workspace", includeRemote: false },
+      });
+      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([]);
       const release = yield* observeMobileBackgroundActivitySubscription({
         environmentId,
         method: WS_METHODS.subscribeVcsStatus,
         input: { cwd: "/workspace" },
       });
 
+      expect(retainedMobileBackgroundScopes(environmentId)).toEqual([
+        { type: "vcs-status", cwd: "/workspace" },
+      ]);
+
+      yield* releasePassive;
       expect(retainedMobileBackgroundScopes(environmentId)).toEqual([
         { type: "vcs-status", cwd: "/workspace" },
       ]);

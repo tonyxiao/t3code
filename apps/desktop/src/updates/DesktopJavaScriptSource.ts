@@ -1,5 +1,7 @@
+// @effect-diagnostics nodeBuiltinImport:off -- The Electron settings path is a Node filesystem boundary.
 import type { JavaScriptSource, JavaScriptSourceClient } from "@tonyxiao/javascript-source";
 import { ElectronUpdates, type LaunchTarget } from "@tonyxiao/electron-updates";
+import * as NodeFSP from "node:fs/promises";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,8 +9,12 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { DESKTOP_JAVASCRIPT_RUNTIME_VERSION } from "@t3tools/contracts";
+
+const LegacyDesktopSettings = Schema.fromJsonString(
+  Schema.Struct({ localRendererUrl: Schema.optional(Schema.String) }),
+);
+const decodeLegacyDesktopSettings = Schema.decodeUnknownEffect(LegacyDesktopSettings);
 
 export class JavaScriptSourceError extends Schema.TaggedError<JavaScriptSourceError>()(
   "JavaScriptSourceError",
@@ -30,7 +36,7 @@ export class DesktopJavaScriptSource extends Context.Service<
   DesktopJavaScriptSource,
   {
     readonly store: ElectronUpdates;
-    readonly client: JavaScriptSourceClient;
+    readonly sourceApi: JavaScriptSourceClient;
     readonly select: (source: JavaScriptSource) => Effect.Effect<void, JavaScriptSourceError>;
     readonly prepareLaunch: Effect.Effect<LaunchTarget, JavaScriptSourceError>;
     readonly ready: Effect.Effect<void, JavaScriptSourceError>;
@@ -42,15 +48,27 @@ export const layer = Layer.effect(
   DesktopJavaScriptSource,
   Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
-    const legacy = yield* (yield* DesktopAppSettings.DesktopAppSettings).get;
     const defaultUrl = Option.getOrUndefined(environment.devServerUrl)?.href;
+    const legacyUrl = yield* Effect.gen(function* () {
+      const contents = yield* Effect.promise(() =>
+        NodeFSP.readFile(environment.desktopSettingsPath, "utf8").catch(() => null),
+      );
+      if (contents === null) return null;
+      const value = yield* decodeLegacyDesktopSettings(contents).pipe(
+        Effect.catch(() => Effect.succeed(null)),
+      );
+      const url = value?.localRendererUrl;
+      if (typeof url !== "string" || !URL.canParse(url)) return null;
+      const parsed = new URL(url);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+    });
     const store = new ElectronUpdates({
       directory: environment.path.join(environment.stateDir, "javascript-source-updates"),
       builtInDirectory: environment.clientAssetsDir,
       runtimeVersion: DESKTOP_JAVASCRIPT_RUNTIME_VERSION,
       ...(defaultUrl ? { defaultDevelopmentServerUrl: defaultUrl } : {}),
-      ...(legacy.localRendererUrl
-        ? { initialSource: { kind: "development-server" as const, url: legacy.localRendererUrl } }
+      ...(legacyUrl
+        ? { initialSource: { kind: "development-server" as const, url: legacyUrl } }
         : {}),
       // The host coordinates shutdown through DesktopLifecycle rather than letting the library exit.
       reload: async () => {
@@ -58,12 +76,12 @@ export const layer = Layer.effect(
       },
     });
     yield* attempt(() => store.initialize());
-    const client: JavaScriptSourceClient = store;
+    const sourceApi: JavaScriptSourceClient = store;
     let launch: LaunchTarget | null = null;
     return {
       store,
-      client,
-      select: (source) => attempt(() => client.select(source)),
+      sourceApi,
+      select: (source) => attempt(() => sourceApi.select(source)),
       prepareLaunch: attempt(async () => {
         launch = await store.prepareLaunch();
         return launch;

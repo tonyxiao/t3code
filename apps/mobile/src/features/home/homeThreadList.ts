@@ -29,6 +29,37 @@ export interface HomeProjectScope {
   readonly projectRefs: ReadonlyArray<ScopedProjectRef>;
 }
 
+export function homeProjectEnvironmentScopeKey(projectKey: string, environmentId: EnvironmentId) {
+  return `project-environment:${JSON.stringify([projectKey, environmentId])}`;
+}
+
+export function buildHomeProjectFilterOptions(
+  scopes: ReadonlyArray<HomeProjectScope>,
+  environmentLabels: ReadonlyMap<EnvironmentId, string>,
+): ReadonlyArray<{
+  readonly key: string;
+  readonly label: string;
+  readonly projectRefs: ReadonlyArray<ScopedProjectRef>;
+}> {
+  return scopes.flatMap((scope) => {
+    const environmentIds = [...new Set(scope.projectRefs.map((ref) => ref.environmentId))];
+    return [
+      { key: scope.key, label: scope.title, projectRefs: scope.projectRefs },
+      ...environmentIds.flatMap((environmentId) =>
+        environmentIds.length > 1
+          ? [
+              {
+                key: homeProjectEnvironmentScopeKey(scope.key, environmentId),
+                label: `${scope.title} · ${environmentLabels.get(environmentId) ?? environmentId}`,
+                projectRefs: scope.projectRefs.filter((ref) => ref.environmentId === environmentId),
+              },
+            ]
+          : [],
+      ),
+    ];
+  });
+}
+
 function getProjectSortTimestamp(
   project: EnvironmentProject,
   sortOrder: HomeProjectSortOrder,
@@ -50,6 +81,7 @@ export function buildHomeProjectScopes(input: {
   );
   return buildProjectGroups({
     projects,
+    groupScratchProjects: true,
     settings: {
       sidebarProjectGroupingMode: input.projectGroupingMode,
       sidebarProjectGroupingOverrides: {},
@@ -63,6 +95,24 @@ export function buildHomeProjectScopes(input: {
       projectRefs: group.memberProjectRefs,
     };
   });
+}
+
+export function findHomeProjectScope(
+  scopes: ReadonlyArray<HomeProjectScope>,
+  key: string | null,
+): HomeProjectScope | null {
+  if (key === null) {
+    return null;
+  }
+  return (
+    scopes.find((scope) => scope.key === key) ??
+    scopes.find((scope) =>
+      scope.projectRefs.some(
+        (projectRef) => scopedProjectKey(projectRef.environmentId, projectRef.projectId) === key,
+      ),
+    ) ??
+    null
+  );
 }
 
 export function sortHomeProjectScopes(input: {

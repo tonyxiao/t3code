@@ -24,7 +24,8 @@ concurrency:
 jobs:
   fingerprint:
     name: Native fingerprint diff
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # The private fork has no Blacksmith runner; keep upstream's faster runner.
+    runs-on: ${{ github.repository == 'tonyxiao/t3code' && 'ubuntu-24.04' || 'blacksmith-8vcpu-ubuntu-2404' }}
     permissions:
       contents: read
       issues: write

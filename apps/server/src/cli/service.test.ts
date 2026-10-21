@@ -1,13 +1,13 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, expect, it } from "@effect/vitest";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NetService from "@t3tools/shared/Net";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Terminal from "effect/Terminal";
-import { Command } from "effect/unstable/cli";
+import { Command } from "effect/cli";
 import { afterEach, vi } from "vite-plus/test";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -26,7 +26,7 @@ const status = {
   supported: true,
   installed: true,
   current: true,
-  unitPath: "/home/me/.config/systemd/user/t3code.service",
+  unitPath: "/home/me/.config/systemd/user/t3code-v2.service",
   logPath: "/home/me/.t3/userdata/logs/boot-service.log",
 } as const;
 
@@ -36,7 +36,7 @@ it("reports the installed service version and host paths", () => {
     [
       "TX Code service",
       "  Status: installed · t3@0.0.29",
-      "  Unit: /home/me/.config/systemd/user/t3code.service",
+      "  Unit: /home/me/.config/systemd/user/t3code-v2.service",
       "  Logs: /home/me/.t3/userdata/logs/boot-service.log",
     ].join("\n"),
   );
@@ -102,6 +102,7 @@ function makeTestService(serviceStatus: BootService.BootServiceStatus) {
   const restarts: Array<true> = [];
   const service = BootService.BootService.of({
     status: Effect.succeed(serviceStatus),
+    withStopped: (operation) => operation,
     restart: Effect.sync(() => {
       restarts.push(true);
       return serviceStatus.installed;
@@ -110,7 +111,7 @@ function makeTestService(serviceStatus: BootService.BootServiceStatus) {
       Effect.sync(() => {
         installOptions.push(options);
         return {
-          program: ["/test/t3/runtime/versions/1.0.0/t3", "__service-launcher"],
+          program: ["/test/t3/runtime-v2/versions/1.0.0/t3", "__service-launcher"],
           baseDir: "/test/t3",
           unitPath: serviceStatus.unitPath,
           logPath: serviceStatus.logPath,
@@ -136,7 +137,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
         "--base-dir",
         baseDir,
       ]).pipe(
-        Effect.provideService(HostProcessEnvironment, {}),
+        Effect.provideService(HostProcess.Environment, {}),
         Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
       );
 
@@ -161,7 +162,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
           "--base-dir",
           baseDir,
         ]).pipe(
-          Effect.provideService(HostProcessEnvironment, {}),
+          Effect.provideService(HostProcess.Environment, {}),
           Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
           Effect.flip,
         );
@@ -190,7 +191,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
         baseDir,
         "--allow-downgrade",
       ]).pipe(
-        Effect.provideService(HostProcessEnvironment, {}),
+        Effect.provideService(HostProcess.Environment, {}),
         Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
       );
 

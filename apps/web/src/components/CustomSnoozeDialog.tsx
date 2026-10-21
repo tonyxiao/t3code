@@ -1,9 +1,9 @@
+import { useEffect, useId, useState } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useCustomSnooze } from "../hooks/useCustomSnooze";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { serverEnvironment } from "../state/server";
 import { useAtomCommand } from "../state/use-atom-command";
-import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
 import {
   localSnoozeDate,
@@ -44,7 +44,6 @@ type Request = {
   readonly resolve: (choice: SnoozeChoice | null) => void;
 };
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }));
-
 let nextRequestId = 0;
 
 export function requestCustomSnooze(environmentId: EnvironmentId): Promise<SnoozeChoice | null> {

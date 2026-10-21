@@ -20,7 +20,7 @@ const defaultInput = {
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
-const makeEnvironmentLayer = (
+const layerEnvironment = (
   overrides: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
   env: Record<string, string | undefined> = {},
 ) =>
@@ -36,8 +36,7 @@ const makeEnvironmentLayer = (
 const makeEnvironment = (
   overrides: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
   env: Record<string, string | undefined> = {},
-) =>
-  DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(makeEnvironmentLayer(overrides, env)));
+) => DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(layerEnvironment(overrides, env)));
 
 describe("DesktopEnvironment", () => {
   it.effect("derives state paths and development identity inside Effect", () =>
@@ -69,7 +68,7 @@ describe("DesktopEnvironment", () => {
         environment.savedEnvironmentRegistryPath,
         "/tmp/t3/userdata/saved-environments.json",
       );
-      assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
+      assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings-v2.json");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.rootDir, "/repo");
@@ -77,9 +76,9 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.tonyxiao.txcode.dev");
-      assert.equal(environment.linuxWmClass, "t3code-dev");
-      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.dev.desktop");
+      assert.equal(environment.appUserModelId, "com.tonyxiao.txcode.v2.dev");
+      assert.equal(environment.linuxWmClass, "txcode-v2-dev");
+      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.v2.dev.desktop");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -115,7 +114,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
-      assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
+      assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings-v2.json");
       assert.equal(environment.otlpProtocol, "http/json");
     }),
   );
@@ -151,7 +150,7 @@ describe("DesktopEnvironment", () => {
         resourcesPath: "/tmp/.mount_t3code/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.desktop");
+      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.v2.desktop");
     }),
   );
 

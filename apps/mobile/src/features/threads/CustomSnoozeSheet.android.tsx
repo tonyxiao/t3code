@@ -1,18 +1,16 @@
-import { useSnoozeResolver } from "./useSnoozeResolver";
-import { MaterialSegmentedButtons } from "../../components/MaterialSegmentedButtons.android";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import {
   BasicAlertDialog,
   Column,
   DateTimePicker,
   Host,
   FilledTonalIconButton,
-  OutlinedTextField,
   Row,
+  RNHostView,
   Shape,
   Surface,
   Text,
   TextButton,
-  useNativeState,
 } from "@expo/ui/jetpack-compose";
 import {
   padding,
@@ -25,16 +23,18 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { requireNativeModule } from "expo";
 import { useEffect, useState } from "react";
-import { AppState, useWindowDimensions } from "react-native";
+import { AppState, Text as RNText, TextInput, View, useWindowDimensions } from "react-native";
 
-import { OverlayPortal } from "../../components/OverlayPortal";
+import { OverlayPortal } from "../../components/ui/OverlayPortal";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { CustomSnoozeSheet as SharedCustomSnoozeSheet } from "./CustomSnoozeSheet.shared";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   applySnoozePickerDate,
   applySnoozePickerTime,
@@ -73,7 +73,7 @@ export function CustomSnoozeSheet(props: Props) {
   const bodyTypography = useScaledTextRole("footnote");
   const { width: windowWidth } = useWindowDimensions();
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
-  const text = useNativeState("");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [picker, setPicker] = useState<"date" | "time">("date");
   const [amount, setAmount] = useState(2);
@@ -81,10 +81,10 @@ export function CustomSnoozeSheet(props: Props) {
   const { resolve, error, pending, clearError } = useSnoozeResolver(props.environmentId);
   const submit = async () => {
     const input: CustomSnoozeInput =
-      mode === "text"
-        ? { mode, text: text.get() }
-        : mode === "date"
-          ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+      mode === "date"
+        ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+        : mode === "text"
+          ? { mode, text }
           : { mode, amount: String(amount), unit };
     const snoozedUntil = await resolve(input);
     if (!snoozedUntil) return;
@@ -142,44 +142,60 @@ export function CustomSnoozeSheet(props: Props) {
                 modifiers={[fillMaxWidth(), padding(24, 24, 24, 16)]}
               >
                 <Text style={titleTypography}>Custom snooze</Text>
-                <MaterialSegmentedButtons
-                  options={modes}
-                  selected={mode}
-                  onSelect={(value) => {
-                    setMode(value);
-                    clearError();
-                  }}
-                />
-                {mode === "date" ? (
-                  <MaterialSegmentedButtons
-                    options={[
-                      {
-                        value: "date",
-                        label: date.toLocaleDateString([], { month: "short", day: "numeric" }),
-                      },
-                      {
-                        value: "time",
-                        label: date.toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hourCycle: is24Hour ? "h23" : "h12",
-                        }),
-                      },
-                    ]}
-                    selected={picker}
-                    onSelect={setPicker}
+                <RNHostView matchContents={{ vertical: true }} modifiers={[fillMaxWidth()]}>
+                  <SegmentedControl
+                    options={modes}
+                    selected={mode}
+                    onSelect={(value) => {
+                      setMode(value);
+                      clearError();
+                    }}
                   />
+                </RNHostView>
+                {mode === "date" ? (
+                  <RNHostView matchContents={{ vertical: true }} modifiers={[fillMaxWidth()]}>
+                    <SegmentedControl
+                      options={[
+                        {
+                          value: "date",
+                          label: date.toLocaleDateString([], { month: "short", day: "numeric" }),
+                        },
+                        {
+                          value: "time",
+                          label: date.toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hourCycle: is24Hour ? "h23" : "h12",
+                          }),
+                        },
+                      ]}
+                      selected={picker}
+                      onSelect={setPicker}
+                    />
+                  </RNHostView>
                 ) : null}
               </Column>
               {mode === "text" ? (
-                <Column modifiers={[fillMaxWidth(), padding(24, 8, 24, 16)]}>
-                  <OutlinedTextField value={text} singleLine onValueChange={clearError}>
-                    <OutlinedTextField.Label>
-                      <Text>Snooze until</Text>
-                    </OutlinedTextField.Label>
-                  </OutlinedTextField>
-                  <Text style={bodyTypography}>Try 1w, 30days, or tomorrow at 9am</Text>
-                </Column>
+                <RNHostView matchContents={{ vertical: true }} modifiers={[fillMaxWidth()]}>
+                  <View style={{ paddingHorizontal: 24, gap: 12, minHeight: 180 }}>
+                    <TextInput
+                      accessibilityLabel="Snooze until"
+                      placeholder="1w, 30days, tomorrow at 9am"
+                      placeholderTextColor={colors["--color-foreground-secondary"]}
+                      value={text}
+                      onChangeText={(value) => {
+                        setText(value);
+                        clearError();
+                      }}
+                      style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
+                    />
+                    {resolveNaturalSnooze(text, new Date()) ? (
+                      <RNText style={{ color: colors["--color-foreground-secondary"] }}>
+                        {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                      </RNText>
+                    ) : null}
+                  </View>
+                </RNHostView>
               ) : mode === "date" ? (
                 <Column horizontalAlignment="center" modifiers={[fillMaxWidth()]}>
                   <SnoozeDateTimePicker
@@ -234,7 +250,9 @@ export function CustomSnoozeSheet(props: Props) {
                       <Text style={titleTypography}>+</Text>
                     </FilledTonalIconButton>
                   </Row>
-                  <MaterialSegmentedButtons options={units} selected={unit} onSelect={setUnit} />
+                  <RNHostView matchContents={{ vertical: true }} modifiers={[fillMaxWidth()]}>
+                    <SegmentedControl options={units} selected={unit} onSelect={setUnit} />
+                  </RNHostView>
                 </Column>
               )}
               <Column

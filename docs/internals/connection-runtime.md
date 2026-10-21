@@ -10,17 +10,20 @@ several views need the same environment.
 
 The [supervisor](../../packages/client-runtime/src/connection/supervisor.ts) owns
 transport retry policy; resolving an endpoint and opening an RPC session are single
-attempts. Transient failures retry with capped backoff. Offline states and
-authentication failures wait for a wakeup instead of spending attempts on
-unchanged conditions.
+attempts. Transient failures retry with jittered exponential backoff, capped at
+five minutes, that resets only after a connection stays up. Without jitter, every
+client of a restarted server reconnects in the same second; with a short cap, a
+client that can never connect retries all day. Offline states and authentication
+failures wait for a wakeup instead of spending attempts on unchanged conditions.
 
-Foregrounding needs different treatment depending on the connection's state.
-It wakes a retry immediately, leaves an ordinary in-flight attempt alone, and
-probes an established session before replacing it. Mobile uses a bounded
-three-second probe even after a long background interval: a native background
-task may have kept the socket alive. Failed or timed-out probes trigger immediate
-replacement without backoff. The bound matters because the OS can suspend a socket
-without reporting closure; preserving it without a health check can leave resume stuck.
+Foregrounding, an explicit retry, and an offline report probe the established
+session, and only a failed probe reconnects. Offline reports are often wrong, for
+example for a loopback server. Mobile uses a bounded three-second foreground
+probe even after a long background interval: native background execution may
+have kept the socket alive. A failed or timed-out probe replaces the session
+immediately, since the OS can suspend a socket without reporting closure.
+Foregrounding also wakes a pending retry immediately and leaves an ordinary
+in-flight attempt alone.
 
 The [registry](../../packages/client-runtime/src/connection/registry.ts) scopes
 connections by environment. An involuntary disconnect retains the registration
@@ -70,13 +73,9 @@ the shell can report a stop before the detail loads or catches up. A stopped
 thread stays mounted until its own stream is live and shows the stop, and the
 stream then closes and saves the settled state.
 Mobile adds a consumer for every unsettled, unarchived thread in enabled
-environments, independent of the visible route. iOS 26+ can run an explicitly
-started ten-minute continued-processing session with elapsed-time progress; the
-ordinary grace period remains the fallback. Android caps its foreground data-sync
-service at ten minutes. OS suspension still requires catching up on return. HTTP
-snapshot hydration is limited to four concurrent requests, but the resulting
-live subscriptions and retained histories scale with the number of open threads.
-Web does not add a keep-alive consumer.
+environments, independent of the visible route. Native background execution is
+finite, so the streams still need to catch up after OS suspension. Web does not
+add a keep-alive consumer.
 
 Retain state and cursor together only after an update finishes. Cancellation must
 not advance the cached cursor beyond the applied data, and an old scope must not

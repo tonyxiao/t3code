@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# TX Code Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> TX Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `TX Code Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `TX Code Preview`
+- `production`: store/release build as `TX Code`
 
 Run commands from `apps/mobile`.
 
@@ -121,40 +121,18 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
-### Private distribution
+The fork's `private` profile builds a self-contained `TX Code` app under
+`com.tonyxiao.txcode.v2`, while `tx-code` and `tx-code:remote` target its preview
+identity and optional remote JavaScript launcher. The `tony:*` profiles use
+separate `com.tonyxiao.txcode.tony` identities and embedded-bundle recovery;
+the v1 `com.tonyxiao.t3code` apps remain installed independently.
+Set signing credentials and any associated domains through the matching EAS
+environment; the app config also accepts the `T3CODE_MOBILE_APP_*` and
+`T3CODE_MOBILE_EAS_*` overrides used by the new profiles.
 
-The `private` build profile produces a self-contained APK or ad hoc iOS build named
-**TX Code**, using `com.tonyxiao.txcode` and the `txlforge-t3` URL scheme. OTA updates
-are disabled. Register iOS devices before building; adding devices requires a new
-provisioning profile or a re-signed build.
+Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 
-The profile targets `@txlforge/t3-code-mobile`. To use another Expo project, update
-`T3CODE_MOBILE_EAS_OWNER` and `T3CODE_MOBILE_EAS_PROJECT_ID` in the profile and the
-repository-root `.env.local`. Set `T3CODE_MOBILE_APPLE_TEAM_ID` in `.env.local` and
-the project's EAS `preview` environment once your Apple membership is active.
-For Android push, set the EAS file variable
-`T3CODE_ANDROID_GOOGLE_SERVICES_FILE` to the Firebase configuration for
-`com.tonyxiao.txcode`. Keep signing keys and service-account credentials outside
-the repository. The FCM service-account credential belongs on the relay, not in
-the mobile bundle; see [Android notifications](../../docs/operations/android-notifications.md).
-
-From `apps/mobile`, run `eas build --profile private --platform android` or
-`eas build --profile private --platform ios`. EAS can provision signing credentials
-interactively. If you already have a keystore, upload it with
-`eas credentials:configure-build --profile private --platform android` rather
-than generating a different one. Keep a secure backup for future updates.
-
-For local native builds, set `APP_VARIANT=production`,
-`T3CODE_MOBILE_APP_ID=com.tonyxiao.txcode`, `T3CODE_MOBILE_SCHEME=txlforge-t3`,
-`T3CODE_MOBILE_SLUG=t3-code-mobile`, and `T3CODE_MOBILE_UPDATES_ENABLED=0` as well.
-`T3CODE_MOBILE_ASSOCIATED_DOMAINS` accepts comma-separated entitlement entries if
-you configure your own sign-in domains. Private identities omit upstream signing
-teams and associated domains by default. Native dependencies require rebuilding
-the binary; Expo Go cannot run this app.
-
-All variants use Expo fingerprinting by default so published updates and Metro source preflight identify the same native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
-
-`MOBILE_VERSION_POLICY` can override the policy for both builds and their updates. Changing the policy requires a native rebuild for matching. The JavaScript source settings preflight Metro against the runtime reported by the installed native launcher; older launchers without that bridge retain their native recovery screen.
+The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
 
 For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`

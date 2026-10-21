@@ -7,12 +7,15 @@ import {
 } from "@t3tools/client-runtime/state/sidebar-filters";
 import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
 import { DEFAULT_SIDEBAR_PROJECT_SORT_ORDER } from "@t3tools/contracts";
+import { useAtomSet } from "@effect/atom-react";
 import {
   createContext,
   createElement,
   useCallback,
   useContext,
   useMemo,
+  useEffect,
+  useRef,
   useState,
   type PropsWithChildren,
   type Dispatch,
@@ -20,6 +23,8 @@ import {
 } from "react";
 
 import type { HomeProjectSortOrder } from "./homeThreadList";
+import type { ThreadListFilters } from "../../persistence/mobile-preferences";
+import { updateMobilePreferencesAtom } from "../../state/preferences";
 
 export interface HomeListOptions {
   readonly selectedProjectKeys: readonly string[];
@@ -33,12 +38,20 @@ export interface ResolvedHomeListOptions extends HomeListOptions {
   readonly projectGroupingMode: SidebarProjectGroupingMode;
 }
 
-function defaultHomeListOptions(): HomeListOptions {
+function defaultHomeListOptions(saved?: ThreadListFilters): HomeListOptions {
+  const selectedEnvironmentIds =
+    saved?.environmentIds ?? (saved?.environmentId ? [saved.environmentId] : []);
+  const selectedProjectKeys = saved?.projectKeys ?? (saved?.projectKey ? [saved.projectKey] : []);
   return {
-    selectedEnvironmentIds: [],
-    selectedProjectKeys: [],
-    pinnedFilter: "all",
-    filterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+    selectedEnvironmentIds,
+    selectedProjectKeys,
+    pinnedFilter: saved?.pinnedFilter ?? "all",
+    filterModes: {
+      ...DEFAULT_SIDEBAR_FILTER_MODES,
+      environment:
+        saved?.environmentMode ?? (selectedEnvironmentIds.length ? "include" : "exclude"),
+      project: saved?.projectMode ?? (selectedProjectKeys.length ? "include" : "exclude"),
+    },
     projectSortOrder:
       DEFAULT_SIDEBAR_PROJECT_SORT_ORDER === "manual"
         ? "updated_at"
@@ -58,10 +71,43 @@ const HomeListOptionsContext = createContext<HomeListOptionsContextValue | null>
 export function HomeListOptionsProvider({
   children,
   projectGroupingMode,
+  savedFilters,
 }: PropsWithChildren<{
   readonly projectGroupingMode: SidebarProjectGroupingMode;
+  readonly savedFilters?: ThreadListFilters | undefined;
 }>) {
-  const [options, setOptions] = useState<HomeListOptions>(defaultHomeListOptions);
+  const [options, setOptions] = useState<HomeListOptions>(() =>
+    defaultHomeListOptions(savedFilters),
+  );
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const saved = useRef(savedFilters);
+  useEffect(() => {
+    const next: ThreadListFilters = {
+      environmentIds: [...options.selectedEnvironmentIds],
+      projectKeys: [...options.selectedProjectKeys],
+      environmentMode: options.filterModes.environment,
+      projectMode: options.filterModes.project,
+      pinnedFilter: options.pinnedFilter,
+    };
+    if (
+      saved.current === undefined &&
+      next.environmentIds?.length === 0 &&
+      next.projectKeys?.length === 0 &&
+      next.environmentMode === "exclude" &&
+      next.projectMode === "exclude" &&
+      next.pinnedFilter === "all"
+    )
+      return;
+    if (JSON.stringify(saved.current) === JSON.stringify(next)) return;
+    saved.current = next;
+    savePreferences({ threadListFilters: next });
+  }, [
+    options.selectedEnvironmentIds,
+    options.selectedProjectKeys,
+    options.filterModes,
+    options.pinnedFilter,
+    savePreferences,
+  ]);
   const value = useMemo(
     () => ({ options, setOptions, projectGroupingMode }),
     [options, projectGroupingMode],

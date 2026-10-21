@@ -1,6 +1,5 @@
-import { ElectronUpdates } from "@tonyxiao/electron-updates";
-import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ElectronUpdates } from "@tonyxiao/electron-updates";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -12,13 +11,13 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as DesktopApplicationMenu from "./DesktopApplicationMenu.ts";
-import * as DesktopConfig from "../app/DesktopConfig.ts";
-import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopJavaScriptSource from "../updates/DesktopJavaScriptSource.ts";
 import * as DesktopLifecycle from "../app/DesktopLifecycle.ts";
 import * as DesktopShutdown from "../app/DesktopShutdown.ts";
 import * as DesktopState from "../app/DesktopState.ts";
-import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
+import * as DesktopConfig from "../app/DesktopConfig.ts";
+import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
 
@@ -34,11 +33,12 @@ const environmentInput = {
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
-const electronAppLayer = Layer.succeed(ElectronApp.ElectronApp, {
+const layerElectronApp = Layer.succeed(ElectronApp.ElectronApp, {
   metadata: Effect.die("unexpected metadata read"),
   name: Effect.succeed("TX Code"),
   systemLocale: Effect.succeed("en-US"),
   whenReady: Effect.void,
+  requestSingleInstanceLock: Effect.succeed(true),
   quit: Effect.void,
   exit: () => Effect.void,
   relaunch: () => Effect.void,
@@ -56,14 +56,14 @@ const electronAppLayer = Layer.succeed(ElectronApp.ElectronApp, {
   on: () => Effect.void,
 } satisfies ElectronApp.ElectronApp["Service"]);
 
-const electronDialogLayer = Layer.succeed(ElectronDialog.ElectronDialog, {
+const layerElectronDialog = Layer.succeed(ElectronDialog.ElectronDialog, {
   pickFolder: () => Effect.succeedNone,
   pickFiles: () => Effect.succeed([]),
   showMessageBox: () => Effect.succeed({ response: 0, checkboxChecked: false }),
   showErrorBox: () => Effect.void,
 } satisfies ElectronDialog.ElectronDialog["Service"]);
 
-const desktopUpdatesLayer = Layer.succeed(DesktopUpdates.DesktopUpdates, {
+const layerDesktopUpdates = Layer.succeed(DesktopUpdates.DesktopUpdates, {
   getState: Effect.die("unexpected getState"),
   isActionActive: Effect.succeed(false),
   isInstallActive: Effect.succeed(false),
@@ -78,7 +78,7 @@ const desktopUpdatesLayer = Layer.succeed(DesktopUpdates.DesktopUpdates, {
   installPrepared: () => Effect.die("unexpected installPrepared"),
 } satisfies DesktopUpdates.DesktopUpdates["Service"]);
 
-const makeDesktopWindowLayer = (selectedAction: Deferred.Deferred<string>) =>
+const layerDesktopWindow = (selectedAction: Deferred.Deferred<string>) =>
   Layer.succeed(DesktopWindow.DesktopWindow, {
     createMain: Effect.die("unexpected createMain"),
     ensureMain: Effect.die("unexpected ensureMain"),
@@ -94,10 +94,12 @@ const makeDesktopWindowLayer = (selectedAction: Deferred.Deferred<string>) =>
     dispatchSnapShotEvent: () => Effect.void,
     zoomMain: (direction) =>
       Deferred.succeed(selectedAction, `zoom-${direction}`).pipe(Effect.asVoid),
+    runMainContentsCommand: (command) =>
+      Deferred.succeed(selectedAction, `main-${command}`).pipe(Effect.asVoid),
     syncAppearance: Effect.void,
   } satisfies DesktopWindow.DesktopWindow["Service"]);
 
-const makeElectronMenuLayer = (
+const layerElectronMenu = (
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
 ) =>
   Layer.succeed(ElectronMenu.ElectronMenu, {
@@ -107,87 +109,113 @@ const makeElectronMenuLayer = (
     showContextMenu: () => Effect.succeedNone,
   } satisfies ElectronMenu.ElectronMenu["Service"]);
 
+const sourceStore = new ElectronUpdates({
+  directory: "/unused-source-test",
+  builtInDirectory: "/unused-built-in",
+  runtimeVersion: "test",
+  reload: async () => {},
+});
+
 const configureMenu = (
   selectedAction: Deferred.Deferred<string>,
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
-  options?: {
-    readonly localRendererUrl?: string;
-    readonly relaunchReason?: Deferred.Deferred<string>;
+  environment: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
+  recovery?: {
+    selected: Deferred.Deferred<string>;
+    relaunched: Deferred.Deferred<string>;
   },
-) => {
-  const store = new ElectronUpdates({
-    directory: "/unused-source-test",
-    builtInDirectory: "/unused-built-in",
-    runtimeVersion: "test",
-    reload: async () => {},
-  });
-  return Effect.gen(function* () {
+) =>
+  Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
     yield* menu.configure;
   }).pipe(
     Effect.provide(
       DesktopApplicationMenu.layer.pipe(
-        Layer.provideMerge(makeElectronMenuLayer(applicationMenuTemplate)),
         Layer.provideMerge(
           Layer.mock(DesktopJavaScriptSource.DesktopJavaScriptSource, {
-            store,
-            client: store,
+            store: sourceStore,
+            sourceApi: sourceStore,
             select: (source) =>
-              Effect.sync(() => {
-                assert.deepEqual(source, { kind: "built-in" });
-              }),
-          }),
-        ),
-        Layer.provideMerge(makeDesktopWindowLayer(selectedAction)),
-        Layer.provideMerge(desktopUpdatesLayer),
-        Layer.provideMerge(
-          DesktopAppSettings.layerTest({
-            ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-            localRendererUrl: options?.localRendererUrl ?? null,
+              recovery
+                ? Deferred.succeed(recovery.selected, source.kind).pipe(Effect.asVoid)
+                : Effect.void,
           }),
         ),
         Layer.provideMerge(
           Layer.mock(DesktopLifecycle.DesktopLifecycle, {
             relaunch: (reason) =>
-              options?.relaunchReason
-                ? Deferred.succeed(options.relaunchReason, reason).pipe(Effect.asVoid)
+              recovery
+                ? Deferred.succeed(recovery.relaunched, reason).pipe(Effect.asVoid)
                 : Effect.void,
           }),
         ),
-        Layer.provideMerge(Layer.mock(DesktopShutdown.DesktopShutdown, {})),
+        Layer.provideMerge(DesktopShutdown.layer),
         Layer.provideMerge(DesktopState.layer),
         Layer.provideMerge(Layer.mock(ElectronTheme.ElectronTheme, {})),
-        Layer.provideMerge(electronDialogLayer),
-        Layer.provideMerge(electronAppLayer),
+        Layer.provideMerge(layerElectronMenu(applicationMenuTemplate)),
+        Layer.provideMerge(layerDesktopWindow(selectedAction)),
+        Layer.provideMerge(layerDesktopUpdates),
+        Layer.provideMerge(layerElectronDialog),
+        Layer.provideMerge(layerElectronApp),
         Layer.provideMerge(
-          DesktopEnvironment.layer(environmentInput).pipe(
+          DesktopEnvironment.layer({ ...environmentInput, ...environment }).pipe(
             Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
           ),
         ),
       ),
     ),
   );
-};
 
 describe("DesktopApplicationMenu", () => {
-  it.effect("offers a native way back to bundled UI when local Vite is selected", () =>
+  it.effect("recovers the built-in JavaScript without loading Settings", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
-      const templateResult = yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
-      const relaunchReason = yield* Deferred.make<string>();
-      yield* configureMenu(selectedAction, templateResult, {
-        localRendererUrl: "http://localhost:6233/",
-        relaunchReason,
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+      const selected = yield* Deferred.make<string>();
+      const relaunched = yield* Deferred.make<string>();
+      yield* configureMenu(selectedAction, applicationMenuTemplate, {}, { selected, relaunched });
+      const viewMenu = (yield* Deferred.await(applicationMenuTemplate)).find(
+        (item) => item.label === "View",
+      );
+      if (!Array.isArray(viewMenu?.submenu)) throw new Error("View menu is unavailable.");
+      const recovery = viewMenu.submenu.find((item) => item.label === "Use Built-in JavaScript");
+      if (typeof recovery?.click !== "function") throw new Error("Recovery action is unavailable.");
+      recovery.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+      assert.equal(yield* Deferred.await(selected), "built-in");
+      assert.equal(yield* Deferred.await(relaunched), "javascript-source=built-in");
+    }),
+  );
+  it.effect("keeps display branding in the macOS application menu", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+      yield* configureMenu(selectedAction, applicationMenuTemplate, {
+        platform: "darwin",
+        appVersion: "0.0.43-nightly.20260929.2428",
       });
-      const template = yield* Deferred.await(templateResult);
-      const view = template.find((item) => item.label === "View");
-      assert.isDefined(view);
-      if (!Array.isArray(view.submenu)) throw new Error("Expected View submenu.");
-      const fallback = view.submenu.find((item) => item.label === "Use Built-in JavaScript");
-      assert.isDefined(fallback);
-      assert.isFunction(fallback.click);
-      fallback.click!({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
-      assert.equal(yield* Deferred.await(relaunchReason), "javascript-source=built-in");
+
+      const template = yield* Deferred.await(applicationMenuTemplate);
+      const applicationMenu = template[0];
+      assert.isDefined(applicationMenu);
+      assert.equal(applicationMenu.label, "TX Code (Nightly)");
+      if (!Array.isArray(applicationMenu.submenu)) {
+        throw new Error("Expected application menu submenu to be an array.");
+      }
+      assert.equal(
+        applicationMenu.submenu.find((item) => item.role === "about")?.label,
+        "About TX Code (Nightly)",
+      );
+      assert.equal(
+        applicationMenu.submenu.find((item) => item.role === "hide")?.label,
+        "Hide TX Code (Nightly)",
+      );
+      assert.equal(
+        applicationMenu.submenu.find((item) => item.role === "quit")?.label,
+        "Quit TX Code (Nightly)",
+      );
     }),
   );
 
@@ -247,8 +275,6 @@ describe("DesktopApplicationMenu", () => {
     }),
   );
 
-  // Chromium pastes as plain text for the accelerator on its own. Dispatching
-  // the action as well injects a second paste, which doubles the pasted text.
   it.effect("leaves the accelerator to Chromium instead of injecting a paste", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
@@ -278,9 +304,6 @@ describe("DesktopApplicationMenu", () => {
     }),
   );
 
-  // Zoom must route through DesktopWindow.zoomMain instead of the Electron
-  // zoom roles: the roles zoom whichever webContents has focus, which breaks
-  // app zoom while an embedded preview WebContentsView holds focus.
   it.effect("routes View menu zoom to the main window instead of zoom roles", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
@@ -297,7 +320,9 @@ describe("DesktopApplicationMenu", () => {
       }
 
       assert.isUndefined(
-        viewMenu.submenu.find((item) => item.role?.toLowerCase().includes("zoom")),
+        viewMenu.submenu.find((item) =>
+          ["zoom", "reload", "devtools"].some((role) => item.role?.toLowerCase().includes(role)),
+        ),
       );
 
       const zoomIn = viewMenu.submenu.find((item) => item.label === "Zoom In");
@@ -309,6 +334,61 @@ describe("DesktopApplicationMenu", () => {
 
       zoomIn.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
       assert.equal(yield* Deferred.await(selectedAction), "zoom-in");
+    }),
+  );
+
+  it.effect("zooms from the numeric keypad without listing the commands twice", () =>
+    Effect.gen(function* () {
+      for (const [accelerator, expected] of [
+        ["CmdOrCtrl+numadd", "zoom-in"],
+        ["CmdOrCtrl+numsub", "zoom-out"],
+        ["CmdOrCtrl+num0", "zoom-reset"],
+      ] as const) {
+        const selectedAction = yield* Deferred.make<string>();
+        const applicationMenuTemplate =
+          yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+        yield* configureMenu(selectedAction, applicationMenuTemplate);
+
+        const template = yield* Deferred.await(applicationMenuTemplate);
+        const viewMenu = template.find((item) => item.label === "View");
+        if (!viewMenu || !Array.isArray(viewMenu.submenu)) {
+          throw new Error("Expected View menu submenu to be an array.");
+        }
+        const item = viewMenu.submenu.find((entry) => entry.accelerator === accelerator);
+        assert.isDefined(item);
+        assert.isFalse(item.visible);
+        if (typeof item.click !== "function") {
+          throw new Error(`Expected ${accelerator} menu item to have a click handler.`);
+        }
+
+        item.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+        assert.equal(yield* Deferred.await(selectedAction), expected);
+      }
+    }),
+  );
+
+  it.effect("reloads the main window even while a browser page has focus", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+      yield* configureMenu(selectedAction, applicationMenuTemplate);
+
+      const template = yield* Deferred.await(applicationMenuTemplate);
+      const viewMenu = template.find((item) => item.label === "View");
+      if (!Array.isArray(viewMenu?.submenu)) {
+        throw new Error("Expected View menu submenu to be an array.");
+      }
+      const reload = viewMenu.submenu.find((item) => item.label === "Reload");
+      assert.equal(reload?.accelerator, "CmdOrCtrl+R");
+      if (typeof reload?.click !== "function") {
+        throw new Error("Expected Reload menu item to have a click handler.");
+      }
+
+      reload.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+      assert.equal(yield* Deferred.await(selectedAction), "main-reload");
     }),
   );
 });

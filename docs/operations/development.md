@@ -21,13 +21,6 @@ Use `vp run dev` for server and web, or `vp run dev:desktop` for the Electron cl
 `dev:server` and `dev:web` start those processes separately.
 See the [mobile README](../../apps/mobile/README.md) for native builds and Metro.
 
-To use Vite's UI with the production desktop app's connections, run only `dev:web` and point
-its `--port` at the desktop app's existing backend port. Then set **Settings → General → Desktop UI**
-to the Vite URL. The desktop app reloads its renderer and keeps its production data and backend.
-The sidebar footer can switch between built-in and the last configured local UI. **View → Use
-Built-in UI** restores the bundled renderer if Vite is unavailable. Do not start a second server
-against `~/.t3/userdata`.
-
 Flags go directly after the task name, for example `vp run dev --home-dir /tmp/t3code-dev`.
 Add `--browser` to open a browser automatically.
 
@@ -113,6 +106,17 @@ vp lint <files>
 vp run --filter <package> typecheck
 ```
 
+In `apps/web`, a test that renders React or touches the DOM is named `*.browser.test.{ts,tsx}`
+and runs in headless Chromium with the React Compiler on, like the app. There is no jsdom; other
+`*.test.ts` files run in Node.
+
+TypeScript workspaces typecheck with tsc-rs, which has Effect diagnostics built in.
+Keep `typescript`, `@effect/tsgo`, and the `effect-tsgo patch` prepare step: editors
+still use them for Effect quick fixes and refactors. Keep `@effect/tsgo` on the
+effect-tsgo version that tsc-rs ports (see the tsc-rs README), or the two disagree
+on rule names.
+Marketing keeps `astro check` for Astro files.
+
 Use `vp run lint:mobile` for native mobile changes. CI owns the full suite; see
 [ci.yml](../../.github/workflows/ci.yml) for its current jobs.
 The [manual Windows lane](../../.github/workflows/windows-tests.yml) is available for focused
@@ -146,12 +150,13 @@ vp run dist:desktop:linux
 vp run dist:desktop:win
 ```
 
-On macOS, `vp run dist:desktop:app` writes the unpacked `.app` to `build/`. Quit a
-running copy before rebuilding it.
-
 DMGs default to the host architecture. Use `--arch` to choose another target and `--keep-stage`
 to retain packaging files for inspection. Run `vp run dist:desktop:artifact --help` for other
 options.
+
+For Tony's private macOS build, run `vp run dist:desktop:tony:install` from this checkout.
+It verifies the private bundle identity, refuses to replace a running app, and keeps the
+previous app as a backup in `~/Applications`.
 
 ### Linux AppImage prerequisites
 

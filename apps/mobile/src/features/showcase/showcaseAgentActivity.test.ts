@@ -52,10 +52,11 @@ it("waits until every staged thread and its project have loaded", () => {
 });
 
 it("stages relay-shaped rows against the seeded threads", () => {
-  const activity = buildShowcaseAgentActivity(threads, projects, NOW);
+  const activity = buildShowcaseAgentActivity(threads, projects, NOW, "tony-txcode-preview");
   assert.isNotNull(activity);
   if (!activity) return;
 
+  assert.strictEqual(activity.scheme, "tony-txcode-preview");
   assert.strictEqual(activity.activeCount, 3);
   assert.deepStrictEqual(
     activity.activities.map((row) => [row.threadId, row.status, row.projectTitle, row.updatedAt]),

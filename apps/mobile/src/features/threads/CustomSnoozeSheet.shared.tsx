@@ -1,9 +1,10 @@
-import { useSnoozeResolver } from "./useSnoozeResolver";
-import type { EnvironmentId } from "@t3tools/contracts";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import type { EnvironmentId } from "@t3tools/contracts";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   localSnoozeDate,
   localSnoozeTime,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState } from "react";
@@ -16,8 +17,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { AppText } from "../../components/AppText";
-import { SegmentedControl } from "../../components/SegmentedControl";
+import { AppText } from "../../components/ui/AppText";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 
 export function CustomSnoozeSheet(props: {
   readonly environmentId: EnvironmentId;
@@ -66,18 +67,23 @@ export function CustomSnoozeSheet(props: {
             role="tab"
           />
           {mode === "text" ? (
-            <View className="gap-2">
-              <AppText>Snooze until</AppText>
+            <View className="gap-3">
               <TextInput
                 accessibilityLabel="Snooze until"
-                className="min-h-12 rounded-xl bg-subtle px-3 text-base text-foreground"
                 placeholder="1w, 30days, tomorrow at 9am"
+                placeholderTextColor="#888"
+                className="min-h-12 rounded-xl bg-subtle px-3 text-base text-foreground"
                 value={text}
                 onChangeText={(value) => {
                   setText(value);
                   clearError();
                 }}
               />
+              {resolveNaturalSnooze(text, new Date()) ? (
+                <AppText className="text-foreground-secondary">
+                  Returns {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                </AppText>
+              ) : null}
             </View>
           ) : mode === "date" ? (
             <View className="gap-3">
@@ -174,10 +180,10 @@ export function CustomSnoozeSheet(props: {
               disabled={pending}
               onPress={async () => {
                 const input: CustomSnoozeInput =
-                  mode === "text"
-                    ? { mode, text }
-                    : mode === "date"
-                      ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+                  mode === "date"
+                    ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+                    : mode === "text"
+                      ? { mode, text }
                       : { mode, amount: amount.replace(",", "."), unit };
                 const snoozedUntil = await resolve(input);
                 if (!snoozedUntil) return;

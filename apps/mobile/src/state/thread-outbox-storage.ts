@@ -1,4 +1,5 @@
 import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import { Directory, File, Paths } from "expo-file-system";
 import * as Schema from "effect/Schema";
 
 import { writeFileAtomically } from "../lib/atomic-file";
@@ -60,14 +61,12 @@ function messageFileName(messageId: MessageId): string {
 }
 
 async function getOutboxDirectory() {
-  const { Directory, Paths } = await import("expo-file-system");
   const directory = new Directory(Paths.document, THREAD_OUTBOX_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
   return directory;
 }
 
 async function getMessageFile(messageId: MessageId) {
-  const { File } = await import("expo-file-system");
   return new File(await getOutboxDirectory(), messageFileName(messageId));
 }
 
@@ -76,7 +75,6 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
     const messages: QueuedThreadMessage[] = [];
     const errors: ThreadOutboxStorageError[] = [];
     try {
-      const { File } = await import("expo-file-system");
       const directory = await getOutboxDirectory();
 
       for (const entry of directory.list()) {
@@ -86,8 +84,6 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
         try {
           messages.push(decodeQueuedThreadMessage(JSON.parse(await entry.text()) as unknown));
         } catch (cause) {
-          // Recover readable messages without treating their attachment
-          // owners as the complete inventory needed for cleanup.
           errors.push(
             new ThreadOutboxStorageError({
               operation: "read-message",

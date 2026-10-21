@@ -74,7 +74,7 @@ export const watchThreadRouting = Effect.fn("connection.watchThreadRouting")(fun
                     Effect.gen(function* () {
                       if (config.environment.capabilities.agentThreadRouting !== true)
                         return Stream.empty;
-                      const connectionId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+                      const connectionId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
                       return active.client[WS_METHODS.threadRoutingConnect]({
                         connectionId,
                         connections,

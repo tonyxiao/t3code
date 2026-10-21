@@ -143,8 +143,9 @@ it.effect("uses the selected connection's existing session to create a thread", 
   }),
 );
 
-for (const options of [{ disabled: true }, { offline: true }, { outdated: true }]) {
-  it.effect(`rejects unavailable targets without dispatching: ${JSON.stringify(options)}`, () =>
+it.effect.each([{ disabled: true }, { offline: true }, { outdated: true }])(
+  "rejects unavailable targets without dispatching: %o",
+  (options) =>
     Effect.gen(function* () {
       const h = yield* harness(options);
       const error = yield* executeThreadRoutingRequest(request).pipe(
@@ -154,8 +155,7 @@ for (const options of [{ disabled: true }, { offline: true }, { outdated: true }
       expect(error._tag).toBe("ThreadRoutingError");
       expect(h.targetCalls).toEqual([]);
     }),
-  );
-}
+);
 
 it.effect("the shared lifecycle bridges a source request and replies on its source session", () =>
   Effect.gen(function* () {

@@ -3,6 +3,16 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
+## From the command line
+
+With a local T3 Code server running, use `t3 thread list` to find thread ids and
+`t3 thread show <id>` to read a conversation. `t3 thread new "task"` creates a
+thread in the project containing your current directory; pass `--project` to
+choose another project. Use `t3 thread send <id> "message"` to continue work,
+or add `--follow` to print the reply as it arrives. `t3 thread interrupt <id>`,
+`t3 thread snooze <id> --for 2h`, and `t3 thread wake <id>` manage ongoing work.
+Inside a T3 agent session, commands that take a thread id can use `T3_THREAD_ID`.
+
 ## Start a thread
 
 On web and desktop, a new thread keeps the current project and carries your model
@@ -19,7 +29,9 @@ A thread does not need a project. To start one without a project, click **or
 start without a project** under a new thread's heading, pick **No project** from
 the project menu in that heading or from **New thread in...** in the command
 palette, or press `mod+alt+n`. On mobile, pick **No project** from the project
-list. To move a draft into a project, pick the project in the heading.
+list. It starts on your current machine; before sending, pick another machine
+from the machine menu to move it there. To move a draft into a project, pick the
+project in the heading.
 
 Each thread without a project works in its own folder under `~/.t3/scratch` (the
 `scratch` folder of your T3 data directory), named after its date, the first words
@@ -41,28 +53,25 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Filter the thread list
+
+Use the filter controls beside search to show several environments or projects at once.
+Selections intersect: a thread must match both filters. **Only** narrows a filter to one choice;
+**All** clears it. On web and desktop, switch a selection between **Include selected** and
+**Exclude selected** in its menu. On mobile, the filter menu also lets you show only pinned or
+unpinned conversations. Filters stay on your device when you return to the list.
+
 ## Manage threads together
 
-On web and desktop, hold `Cmd`/`Ctrl` to reveal sidebar selection controls, then select threads
-to act on together. The controls stay visible while threads are selected. `Cmd`/`Ctrl`-click
-toggles individual threads; `Shift`-click selects a range.
+Open **Threads** from the sidebar or **Manage threads** from the command palette to
+search, filter, sort, and group conversations across connected environments, including
+archived threads. Select rows to snooze, settle, pin, or archive them together. Actions
+apply only to selected rows that remain in the current filter; restore archived threads
+before editing or opening them.
 
-Open **Threads** from the sidebar or **Manage threads** from the command palette for a
-full-width table across connected environments, including archived conversations. Search,
-filter, and group threads to narrow the list. Click a column heading to sort; hold
-`Cmd`/`Ctrl` to add another sort. Double-click a live thread's title to edit it, then press
-Enter to save or Escape to cancel.
-
-The table has **Cells** and **Rows** modes. Cells mode navigates or edits individual cells;
-`Cmd`/`Ctrl+A` inside a title editor selects its text. Use **Rows**, a row checkbox, or
-`Shift+Space` to enter row selection. In a grouped table, `Cmd`/`Ctrl+A` first selects the
-focused group; pressing it again selects every thread matching the current filters, across
-all groups. Further presses keep that selection. Escape clears row selection and returns
-to Cells mode. Double-clicking a title also returns to Cells mode for editing.
-
-Select rows to apply actions together. Only threads matching the current filters are acted
-on. Restore archived threads before editing or opening them. Running threads cannot be
-archived, and threads waiting for your input cannot be snoozed.
+The table has **Cells** and **Rows** modes. Use Rows to select threads. In a grouped
+table, `Cmd`/`Ctrl+A` first selects the focused group, then all filtered threads.
+Escape clears the selection.
 
 ## Pin and reorder threads
 
@@ -71,7 +80,8 @@ Pin a thread from its menu to keep it above your active work.
 On web and desktop, unpinning, settling, snoozing, and archiving a thread each show
 a notification with **Undo** for five seconds. Undo restores the thread's previous
 state, including its pinned position, and reopens an archived thread you were
-viewing. `mod+z` triggers the most recent Undo when no text field is focused; see
+viewing. Discarding an unsent draft from the sidebar works the same way: Undo brings
+back its text and attachments. `mod+z` triggers the most recent Undo when no text field is focused; see
 [Keybindings](./keybindings.md#commands-with-special-behavior).
 
 On web and desktop, you can also drag files from your computer onto any thread row:
@@ -105,7 +115,7 @@ spot where the thread will land. Drops into either section keep the position you
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
-or **Settled** to drag a parked thread back into either live section. Each drop saves; **Done** returns to the thread list.
+or **Settled** to drag a parked thread back into either live section. Each drop saves; close the sheet to return to the thread list.
 **Move up** and **Move down** are also available in the thread menu. The server
 saves the order, so it survives a refresh and appears on your other connected devices.
 
@@ -123,15 +133,26 @@ If dragging is unavailable for one environment, update the T3 Code server runnin
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
+To generate a fresh title from the conversation, open a thread's menu and choose
+**Regenerate title**. The action is unavailable while title generation is in progress
+or when the connected environment needs a server update.
+
+Agents connected through T3 Code can use the same server-owned metadata workflow to
+rename a thread, regenerate its title, or link and unlink a pull request. These changes
+appear on web, desktop, and mobile without requiring the originating browser to remain
+open.
+
 ### Fold working threads (beta)
 
-On web and desktop, turn on **Settings → General → Working section (beta)** to move threads that
-are working or monitoring into a collapsed **Working** section at the bottom of the sidebar. A
-thread returns to the active list when it finishes, fails, or needs an approval or
-answer. Pinned threads stay in the pinned section.
+Turn on **Settings → General → Working section (beta)** on web and desktop, or **Settings →
+Thread behavior → Working section** on iOS and Android, to move threads that are working or
+monitoring into a collapsed **Working** section below the active list. A thread returns to the top
+of the active list when it finishes, fails, or needs an approval or answer. The Working section
+lists the thread you last sent work to first. Pinned threads stay in the pinned section. Each
+device keeps its own choice.
 
-The active list keeps your chosen sort order, including **Last action time**. You cannot drag to
-reorder it while the Working section is on.
+While this is on, the active list is ordered by when each thread last came back to you, so you
+cannot drag or move threads within it. Your saved order returns when you turn it off.
 
 ## Settle finished work
 
@@ -143,12 +164,26 @@ sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
 runs a command, such as a dev server, stays open.
 
+To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
+thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
+`t3.json` script, for example `cargo clean`. It runs each time a thread in its own
+worktree settles, manually or automatically, even if a terminal there still runs a
+command such as a dev server. Threads in the project's main checkout skip it. Its terminal
+closes when the command succeeds and stays open when it fails.
+
+On web and desktop, press a thread's **Settle** button and drag up or down to
+settle every thread in that section between it and the one you release on.
+The **Un-settle** and **Wake** buttons work the same way in their sections.
+Press `Escape` while dragging to cancel.
+
 By default, environments settle inactive threads after three days and settle
 threads whose pull request merged. A closed pull request can also settle an idle
 thread. Work in progress, pending questions or approvals, and live background work
 prevent automatic settlement. An open pull request does not prevent inactivity
-settlement, but an old closed or merged pull request does not settle work you
-resumed after it closed.
+settlement unless you turn on **Keep threads with a PR** in **Settings → General**,
+but an old closed or merged pull request does not settle work you
+resumed after it closed. Only your own messages count as resuming. A turn that
+finished background work or a pull request watch starts on its own does not.
 
 To keep one thread out of the settled shelf no matter how long it sits idle, open its menu,
 choose **Auto-settle behavior**, and pick **Disabled**. The current option is checked. Pick
@@ -176,20 +211,9 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
-Use the thread list's environment and project filters to focus your work. **All** starts with
-every entry checked. Uncheck entries to hide them, or use a row's **Only** shortcut to show just
-that entry. On mobile, these shortcuts are in the **Only…** submenu. Selecting All restores every
-entry; unchecking every entry shows no matches. Projects that exist on several computers have
-individual environment rows on web and desktop, plus a project-wide Only shortcut.
-
-Active filters combine, so a thread must match each one. The pin filter works the same way:
-**Pinned** and **Unpinned** are both checked by default. Uncheck either category to hide it, or
-choose Only to show that category.
-
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and
-includes your messages and final agent responses. While viewing a thread, search its
-actions there too, including snooze, title regeneration, and copy options.
+includes your messages and final agent responses.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
@@ -198,7 +222,35 @@ for custom configuration.
 
 ## Inspect agent work
 
+**Limited** means the provider stopped on a usage or rate limit. The conversation
+keeps the provider's explanation. Retry after the limit resets, or switch to
+another provider instance.
+On web and desktop, press **Resume** in an empty composer to continue a limited
+or interrupted turn manually.
+Queued messages stay saved while the limit blocks the thread. They run after
+the continuation finishes. If the queue was held by a restart, resume it then.
+
+When the provider reports a reset time, choose **Resume at reset** to schedule a
+continuation. You can cancel it from the thread. Enable **Auto-resume limited
+threads** in **Settings → General** on web and desktop, or **Settings → Thread
+behavior** on mobile, to schedule limit stops by default.
+The environment must be running when the reset arrives; it resumes overdue
+continuations after a restart. Sending a new message, archiving, or settling the
+thread prevents a pending continuation from starting.
+
+Choose **Snooze until reset** to hide the thread until its allowance returns.
+Snooze and auto-resume are independent: snooze alone wakes the thread without
+sending a message; enabling both wakes and continues it. **Wake now** cancels
+the snooze. Enable **Snooze limited threads** in thread behavior settings to
+snooze limit stops by default. Providers without a reset time offer manual
+retry and the normal snooze choices.
+
 On web and desktop, use **Agents** to follow work delegated to subagents.
+Stop on a thread also stops the subagents it delegated to.
+
+Subagent threads started by the agent can't take messages; message the parent
+thread instead. When such a subagent needs an approval or an answer, the parent
+thread asks for it.
 
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it
@@ -206,9 +258,8 @@ finishes; the call's own result shows its status.
 
 ## Snooze until later
 
-Choose **Snooze → Custom…** from a thread's menu to type a time such as `1w`,
-`30days`, or `tomorrow at 9am`. You can also pick a date and time in your local
-time zone, or a duration in minutes, hours, or days. Durations start when
-you confirm; one day means 24 hours. If a typed date cannot be understood locally, a connected
-Codex account interprets it with Luna using your local timezone. On web and desktop, you can
-also snooze several selected threads together. Choose **Wake thread** to bring a thread back early.
+Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
+local time zone, type a phrase such as “next Friday morning,” or choose a duration
+in minutes, hours, or days. Typed phrases that need interpretation use a connected
+Codex account. Durations start when you confirm; one day means 24 hours. On web and desktop, you can also snooze
+several selected threads together. Choose **Wake thread** to bring a thread back early.

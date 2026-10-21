@@ -61,7 +61,6 @@ public final class T3BackgroundSyncModule: Module {
     }
 
     OnAppBecomesActive {
-      self.requestFailed = false
       self.automatic.didBecomeActive()
       self.emitStatus()
     }

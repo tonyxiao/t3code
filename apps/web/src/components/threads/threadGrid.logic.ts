@@ -41,8 +41,10 @@ export function threadGridStatus(thread: EnvironmentThreadShell): string {
     approval: "Needs approval",
     input: "Needs input",
     working: "Working",
+    waiting: "Waiting",
     monitoring: "Monitoring",
     failed: "Failed",
+    limited: "Usage limit",
     ready: "Ready",
   }[status];
 }
@@ -138,7 +140,7 @@ export type ThreadGridFocusedRow =
   | ThreadGridRow
   | { id: string; childRows: readonly ThreadGridRow[] };
 
-export function threadGridGroupKey(row: ThreadGridRow, groupBy: string): string {
+function threadGridGroupKey(row: ThreadGridRow, groupBy: string): string {
   return groupBy === "project"
     ? row.projectKey
     : groupBy === "environment"

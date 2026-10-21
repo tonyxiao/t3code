@@ -1,6 +1,6 @@
 import "react-data-grid/lib/styles.css";
 import "./threadGrid.css";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   DataGrid,
@@ -29,13 +29,14 @@ import {
 } from "lucide-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import { presentThreadShell, threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   settlePromise,
 } from "@t3tools/client-runtime/state/runtime";
 import { useProjects, useThreadShells, useServerConfigs } from "../../state/entities";
-import { useEnvironments } from "../../state/environments";
+import { useEnvironmentProviders, useEnvironments } from "../../state/environments";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -111,7 +112,7 @@ function GridFilter({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-7 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-7 max-w-44 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <option value="">All</option>
         {options.map((option) => (
@@ -129,13 +130,10 @@ export function ThreadGrid() {
   const projects = useProjects();
   const { environments } = useEnvironments();
   const serverConfigs = useServerConfigs();
-  const environmentIds = useMemo(
-    () =>
-      environments
-        .filter((environment) => environment.serverConfig !== null)
-        .map((environment) => environment.environmentId),
-    [environments],
-  );
+  const providersByEnvironment = useEnvironmentProviders();
+  const environmentIds = environments
+    .filter((environment) => environment.serverConfig !== null)
+    .map((environment) => environment.environmentId);
   const archives = useArchivedThreadSnapshots(environmentIds);
   const actions = useThreadActions();
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, { reportFailure: false });
@@ -161,7 +159,7 @@ export function ThreadGrid() {
   const actionPending = useRef(false);
   const pendingRenames = useRef(new Set<string>());
 
-  const rows = useMemo(() => {
+  const rows = (() => {
     const projectNames = new Map(
       projects.map((project) => [`${project.environmentId}:${project.id}`, project.title]),
     );
@@ -169,7 +167,9 @@ export function ThreadGrid() {
       environments.map((environment) => [environment.environmentId, environment.label]),
     );
     const providerEntries = deriveProviderEntriesByEnvironment(
-      [...serverConfigs].map(([id, config]) => [id, config.providers] as const),
+      [...serverConfigs].map(
+        ([id, config]) => [id, providersByEnvironment.get(id) ?? [], config.settings] as const,
+      ),
     );
     const threads = new Map<string, ThreadGridRow["thread"]>();
     for (const { environmentId, snapshot } of archives.snapshots) {
@@ -178,7 +178,7 @@ export function ThreadGrid() {
           projectNames.set(`${environmentId}:${project.id}`, project.title);
       }
       for (const thread of snapshot.threads) {
-        const scoped = { ...thread, environmentId };
+        const scoped = presentThreadShell(environmentId, thread);
         threads.set(threadGridKey(scoped), scoped);
       }
     }
@@ -195,7 +195,7 @@ export function ThreadGrid() {
       provider:
         providerEntries.get(thread.environmentId)?.get(thread.modelSelection.instanceId)
           ?.displayName ??
-        thread.session?.providerName ??
+        thread.runtime?.providerName ??
         thread.modelSelection.instanceId,
       model: thread.modelSelection.model,
       branch: thread.branch ?? "",
@@ -204,26 +204,17 @@ export function ThreadGrid() {
       updated: thread.updatedAt,
       created: thread.createdAt,
     }));
-  }, [archives.snapshots, environments, liveThreads, now, projects, serverConfigs]);
-  const visibleRows = useMemo(
-    () => sortThreadGridRows(filterThreadGridRows(rows, filters), sortColumns),
-    [filters, rows, sortColumns],
-  );
-  const selectedRows = useMemo(
-    () => visibleRows.filter((row) => selectedKeys.has(row.key)),
-    [selectedKeys, visibleRows],
-  );
+  })();
+  const visibleRows = sortThreadGridRows(filterThreadGridRows(rows, filters), sortColumns);
+  const selectedRows = visibleRows.filter((row) => selectedKeys.has(row.key));
   // The actionable selection always intersects the current filter. Hidden rows never act.
-  const visibleSelection = useMemo(
-    () => new Set(selectedRows.map((row) => row.key)),
-    [selectedRows],
-  );
-  const orderedRowKeys = useMemo(() => {
+  const visibleSelection = new Set(selectedRows.map((row) => row.key));
+  const orderedRowKeys = (() => {
     const ordered = groupBy[0]
       ? Object.values(groupThreadGridRows(visibleRows, groupBy[0])).flat()
       : visibleRows;
     return ordered.map((row) => row.key);
-  }, [groupBy, visibleRows]);
+  })();
   const changeInteractionMode = (mode: ThreadGridInteractionMode) => {
     setInteractionMode(mode);
     selectAllGroup.current = null;
@@ -332,32 +323,21 @@ export function ThreadGrid() {
     setFilters((current) => ({ ...current, [key]: value }));
     setSelectedKeys(new Set());
   };
-  const options = useCallback(
-    (key: "project" | "environment" | "provider" | "status") => {
-      const values = new Map<string, string>();
-      for (const row of rows)
-        values.set(
-          key === "project"
-            ? row.projectKey
-            : key === "environment"
-              ? row.environmentKey
-              : row[key],
-          row[key],
-        );
-      return [...values]
-        .map(([value, label]) => ({ value, label }))
-        .sort((a, b) => a.label.localeCompare(b.label));
-    },
-    [rows],
-  );
+  const options = (key: "project" | "environment" | "provider" | "status") => {
+    const values = new Map<string, string>();
+    for (const row of rows)
+      values.set(
+        key === "project" ? row.projectKey : key === "environment" ? row.environmentKey : row[key],
+        row[key],
+      );
+    return [...values]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  };
   const hasSelection = selectedRows.length > 0;
   const allLive = hasSelection && selectedRows.every((row) => row.state !== "Archived");
   const canArchive =
-    allLive &&
-    selectedRows.every(
-      ({ thread }) =>
-        !(thread.session?.status === "running" && thread.session.activeTurnId != null),
-    );
+    allLive && selectedRows.every(({ thread }) => threadRuntimeCanArchive(thread.runtime));
   const canRestore = hasSelection && selectedRows.every((row) => row.state === "Archived");
   const canSnoozeSelected =
     allLive &&
@@ -395,7 +375,7 @@ export function ThreadGrid() {
     if (actionPending.current || selectedRows.length === 0) return;
     actionPending.current = true;
     setBusy(true);
-    try {
+    await (async () => {
       if (action === "archive" && confirmArchive) {
         const api = readLocalApi();
         if (!api) return;
@@ -448,100 +428,90 @@ export function ThreadGrid() {
           title: `${failed} thread${failed === 1 ? "" : "s"} could not be updated`,
           description: firstError,
         });
-    } finally {
+    })().finally(() => {
       actionPending.current = false;
       setBusy(false);
-    }
+    });
   };
 
-  const rename = useCallback(
-    async (row: ThreadGridRow) => {
-      const title = row.title.trim();
-      if (!title) {
-        toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
-        return;
-      }
-      if (title === row.thread.title || pendingRenames.current.has(row.key)) return;
-      pendingRenames.current.add(row.key);
-      try {
-        const result = await updateMetadata({
-          environmentId: row.thread.environmentId,
-          input: { threadId: row.thread.id, title },
+  const rename = async (row: ThreadGridRow) => {
+    const title = row.title.trim();
+    if (!title) {
+      toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+      return;
+    }
+    if (title === row.thread.title || pendingRenames.current.has(row.key)) return;
+    pendingRenames.current.add(row.key);
+    await (async () => {
+      const result = await updateMetadata({
+        environmentId: row.thread.environmentId,
+        input: { threadId: row.thread.id, title },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Failed to rename thread",
+          description: error instanceof Error ? error.message : "An error occurred.",
         });
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          toastManager.add({
-            type: "error",
-            title: "Failed to rename thread",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          });
-        }
-      } finally {
-        pendingRenames.current.delete(row.key);
       }
-    },
-    [updateMetadata],
-  );
+    })().finally(() => {
+      pendingRenames.current.delete(row.key);
+    });
+  };
 
-  const columns = useMemo<readonly Column<ThreadGridRow>[]>(
-    () => [
-      SelectColumn,
-      {
-        key: "title",
-        name: "Thread",
-        width: 360,
-        minWidth: 220,
-        frozen: true,
-        editable: (row) => row.state !== "Archived",
-        renderEditCell: renderTextEditor,
-      },
-      { key: "state", name: "State", width: 125, renderGroupCell },
-      { key: "status", name: "Agent status", width: 145 },
-      { key: "project", name: "Project", width: 180, renderGroupCell },
-      { key: "environment", name: "Environment", width: 160, renderGroupCell },
-      { key: "provider", name: "Provider", width: 130, renderGroupCell },
-      { key: "model", name: "Model", width: 190 },
-      { key: "branch", name: "Branch", width: 190 },
-      {
-        key: "updated",
-        name: "Last activity",
-        width: 185,
-        renderCell: ({ row }) => new Date(row.updated).toLocaleString(),
-      },
-      {
-        key: "created",
-        name: "Created",
-        width: 185,
-        renderCell: ({ row }) => new Date(row.created).toLocaleString(),
-      },
-      {
-        key: "open",
-        name: "",
-        width: 65,
-        minWidth: 65,
-        sortable: false,
-        resizable: false,
-        renderCell: ({ row }) =>
-          row.state === "Archived" ? null : (
-            <Link
-              to="/$environmentId/$threadId"
-              params={buildThreadRouteParams(
-                scopeThreadRef(row.thread.environmentId, row.thread.id),
-              )}
-              aria-label={`Open ${row.title}`}
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowUpRightIcon className="size-4" />
-            </Link>
-          ),
-      },
-    ],
-    [],
-  );
-  const visibleColumns = useMemo(
-    () =>
-      columns.filter((column) => !hiddenColumns.has(column.key) || groupBy.includes(column.key)),
-    [columns, hiddenColumns, groupBy],
+  const columns: readonly Column<ThreadGridRow>[] = [
+    SelectColumn,
+    {
+      key: "title",
+      name: "Thread",
+      width: 360,
+      minWidth: 220,
+      frozen: true,
+      editable: (row) => row.state !== "Archived",
+      renderEditCell: renderTextEditor,
+    },
+    { key: "state", name: "State", width: 125, renderGroupCell },
+    { key: "status", name: "Agent status", width: 145 },
+    { key: "project", name: "Project", width: 180, renderGroupCell },
+    { key: "environment", name: "Environment", width: 160, renderGroupCell },
+    { key: "provider", name: "Provider", width: 130, renderGroupCell },
+    { key: "model", name: "Model", width: 190 },
+    { key: "branch", name: "Branch", width: 190 },
+    {
+      key: "updated",
+      name: "Last activity",
+      width: 185,
+      renderCell: ({ row }) => new Date(row.updated).toLocaleString(),
+    },
+    {
+      key: "created",
+      name: "Created",
+      width: 185,
+      renderCell: ({ row }) => new Date(row.created).toLocaleString(),
+    },
+    {
+      key: "open",
+      name: "",
+      width: 65,
+      minWidth: 65,
+      sortable: false,
+      resizable: false,
+      renderCell: ({ row }) =>
+        row.state === "Archived" ? null : (
+          <Link
+            to="/$environmentId/$threadId"
+            params={buildThreadRouteParams(scopeThreadRef(row.thread.environmentId, row.thread.id))}
+            aria-label={`Open ${row.title}`}
+            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowUpRightIcon className="size-4" />
+          </Link>
+        ),
+    },
+  ];
+  const visibleColumns = columns.filter(
+    (column) => !hiddenColumns.has(column.key) || groupBy.includes(column.key),
   );
   const gridProps = {
     ref: gridRef,

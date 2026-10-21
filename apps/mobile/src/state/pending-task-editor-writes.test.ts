@@ -3,6 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { QueuedThreadMessage } from "./thread-outbox-model";
 
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = false;
+  },
+  Paths: { document: { uri: "file:///documents" } },
+}));
+
 const harness = vi.hoisted(() => ({
   manager: null as unknown as ReturnType<
     typeof import("./thread-outbox-manager").createThreadOutboxManager

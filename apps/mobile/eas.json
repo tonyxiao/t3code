@@ -5,45 +5,55 @@
     "promptToConfigurePushNotifications": false
   },
   "build": {
-    "private": {
-      "extends": "preview",
-      "channel": "private",
-      "autoIncrement": true,
-      "env": {
-        "APP_VARIANT": "production",
-        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode",
-        "T3CODE_MOBILE_SCHEME": "txlforge-t3",
-        "T3CODE_MOBILE_SLUG": "t3-code-mobile",
-        "T3CODE_MOBILE_EAS_OWNER": "txlforge",
-        "T3CODE_MOBILE_EAS_PROJECT_ID": "2f5c604c-ae7f-48f4-bbdb-bdac2006d47c",
-        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
-      },
-      "android": {
-        "buildType": "apk"
-      }
-    },
     "development": {
-      "corepack": true,
+      "pnpm": "11.10.0",
       "env": {
         "APP_VARIANT": "development",
         "NODE_OPTIONS": "--max-old-space-size=4096"
       },
       "channel": "development",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "tony:development": {
+      "extends": "development",
+      "env": {
+        "APP_VARIANT": "development",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      }
     },
     "preview": {
-      "corepack": true,
+      "pnpm": "11.10.0",
       "env": {
         "APP_VARIANT": "preview",
         "NODE_OPTIONS": "--max-old-space-size=4096"
       },
       "channel": "preview",
       "environment": "preview",
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "tony:preview": {
+      "extends": "preview",
+      "env": {
+        "APP_VARIANT": "preview",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview:dev": {
-      "corepack": true,
+      "pnpm": "11.10.0",
       "env": {
         "APP_VARIANT": "preview",
         "MOBILE_VERSION_POLICY": "fingerprint",
@@ -53,6 +63,54 @@
       "environment": "preview",
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "env": {
+        "T3CODE_MOBILE_VERSION": "3.0.0"
+      }
+    },
+    "production": {
+      "pnpm": "11.10.0",
+      "env": {
+        "APP_VARIANT": "production",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
+      },
+      "channel": "production",
+      "environment": "production",
+      "autoIncrement": true,
+      "ios": {
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
+    "tony:production": {
+      "extends": "production",
+      "env": {
+        "APP_VARIANT": "production",
+        "T3CODE_MOBILE_TONY_BUILD": "1",
+        "T3CODE_MOBILE_REMOTE_JS": "1",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      }
+    },
+    "private": {
+      "extends": "preview",
+      "channel": "private",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.v2",
+        "T3CODE_MOBILE_SCHEME": "txlforge-t3",
+        "T3CODE_MOBILE_SLUG": "t3-code-mobile",
+        "T3CODE_MOBILE_EAS_OWNER": "txlforge",
+        "T3CODE_MOBILE_EAS_PROJECT_ID": "2f5c604c-ae7f-48f4-bbdb-bdac2006d47c",
+        "T3CODE_MOBILE_UPDATES_ENABLED": "0"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -65,16 +123,6 @@
         "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       }
     },
-    "production": {
-      "corepack": true,
-      "env": {
-        "APP_VARIANT": "production",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
-      },
-      "channel": "production",
-      "environment": "production",
-      "autoIncrement": true
-    },
     "tx-code": {
       "extends": "preview",
       "channel": "tx-code",
@@ -82,8 +130,8 @@
       "env": {
         "APP_VARIANT": "preview",
         "T3CODE_MOBILE_APP_NAME": "TX Code",
-        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.preview",
-        "T3CODE_MOBILE_SCHEME": "tony-t3code-preview",
+        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.v2.preview",
+        "T3CODE_MOBILE_SCHEME": "txcode-preview",
         "T3CODE_MOBILE_SLUG": "t3-code",
         "T3CODE_MOBILE_EAS_OWNER": "txlforge-tony",
         "T3CODE_MOBILE_EAS_PROJECT_ID": "f6cd51c6-6875-4ce4-9360-7aefaf9ee333",
@@ -111,12 +159,8 @@
     }
   },
   "submit": {
-    "v2-preview": {
-      "extends": "production",
-      "android": {
-        "track": "alpha",
-        "releaseStatus": "completed"
-      }
+    "testflight": {
+      "extends": "production"
     },
     "production": {
       "ios": {
@@ -124,6 +168,13 @@
       },
       "android": {
         "track": "internal"
+      }
+    },
+    "v2-preview": {
+      "extends": "production",
+      "android": {
+        "track": "alpha",
+        "releaseStatus": "completed"
       }
     }
   }

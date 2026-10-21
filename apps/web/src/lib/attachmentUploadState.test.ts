@@ -9,16 +9,6 @@ import {
 const environmentId = EnvironmentId.make("environment-1");
 
 describe("attachmentUploadBlockReason", () => {
-  it("lets the offline outbox own pending and failed uploads", () => {
-    expect(
-      attachmentUploadBlockReason({
-        imageIds: ["pending", "failed"],
-        environmentId,
-        deferUploads: true,
-        uploadsByImageId: { failed: { status: "failed", environmentId, reason: "Host offline" } },
-      }),
-    ).toBeNull();
-  });
   it("allows uploaded images from the active environment", () => {
     expect(
       attachmentUploadBlockReason({
@@ -47,7 +37,7 @@ describe("attachmentUploadBlockReason", () => {
     ).toBe("Attachments still uploading");
   });
 
-  it("asks the user to retry or remove failed uploads", () => {
+  it("leaves send enabled for failed uploads so sending can retry them", () => {
     expect(
       attachmentUploadBlockReason({
         imageIds: ["image-1"],
@@ -56,7 +46,7 @@ describe("attachmentUploadBlockReason", () => {
           "image-1": { status: "failed", environmentId, reason: "Upload failed" },
         },
       }),
-    ).toBe("Retry or remove the failed attachment");
+    ).toBeNull();
   });
 
   it("does not accept an upload from another environment", () => {

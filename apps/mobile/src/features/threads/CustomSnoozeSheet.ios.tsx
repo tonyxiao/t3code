@@ -1,5 +1,6 @@
-import { useSnoozeResolver } from "./useSnoozeResolver";
+import { Toolbar } from "../../components/ui/Toolbar";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   DatePicker,
   Host,
@@ -9,9 +10,7 @@ import {
   RNHostView,
   Spacer,
   Text,
-  TextField,
   VStack,
-  useNativeState,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
@@ -28,14 +27,15 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState, type ReactNode } from "react";
 import { NavigationContainer, NavigationIndependentTree } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { createV5StackNavigator as createNativeStackNavigator } from "../../native/createV5StackNavigator";
+import { ScrollView, Text as RNText, TextInput, useWindowDimensions, View } from "react-native";
 import { useMobileNavigationTheme } from "../../lib/useMobileNavigationTheme";
-import { NativeHeaderToolbar } from "../../native/StackHeader";
+
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
@@ -59,7 +59,7 @@ export function CustomSnoozeSheet(props: {
 }) {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
-  const text = useNativeState("");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -74,10 +74,10 @@ export function CustomSnoozeSheet(props: {
 
   const submit = async () => {
     const input: CustomSnoozeInput =
-      mode === "text"
-        ? { mode, text: text.get() }
-        : mode === "date"
-          ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+      mode === "date"
+        ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+        : mode === "text"
+          ? { mode, text }
           : { mode, amount: String(amount), unit };
     const snoozedUntil = await resolve(input);
     if (!snoozedUntil) return;
@@ -137,17 +137,26 @@ export function CustomSnoozeSheet(props: {
                   ))}
                 </Picker>
                 {mode === "text" ? (
-                  <VStack
-                    spacing={8}
-                    modifiers={[frame({ maxWidth: Infinity, minHeight: 180, maxHeight: 180 })]}
-                  >
-                    <Text>Snooze until</Text>
-                    <TextField
-                      text={text}
-                      placeholder="1w, 30days, tomorrow at 9am"
-                      onTextChange={clearError}
-                    />
-                  </VStack>
+                  <RNHostView matchContents={{ vertical: true }}>
+                    <View style={{ gap: 12, minHeight: 180 }}>
+                      <TextInput
+                        accessibilityLabel="Snooze until"
+                        placeholder="1w, 30days, tomorrow at 9am"
+                        placeholderTextColor={colors["--color-foreground-secondary"]}
+                        value={text}
+                        onChangeText={(value) => {
+                          setText(value);
+                          clearError();
+                        }}
+                        style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
+                      />
+                      {resolveNaturalSnooze(text, new Date()) ? (
+                        <RNText style={{ color: colors["--color-foreground-secondary"] }}>
+                          {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                        </RNText>
+                      ) : null}
+                    </View>
+                  </RNHostView>
                 ) : mode === "date" ? (
                   <DatePicker
                     title="Snooze until"
@@ -232,7 +241,6 @@ export function CustomSnoozeSheet(props: {
   );
 }
 
-/** The popover owns a native navigation bar, just like the app's sheet screens. */
 function SnoozePopoverNavigation(props: {
   readonly width: number;
   readonly height: number;
@@ -268,20 +276,23 @@ function SnoozePopoverNavigation(props: {
                 <SnoozeStack.Screen name="CustomSnooze">
                   {() => (
                     <>
-                      <NativeHeaderToolbar placement="left">
-                        <NativeHeaderToolbar.Button
+                      <Toolbar placement="left">
+                        <Toolbar.Button
                           accessibilityLabel="Cancel custom snooze"
                           icon="xmark"
                           onPress={props.onClose}
                         />
-                      </NativeHeaderToolbar>
-                      <NativeHeaderToolbar placement="right">
-                        <NativeHeaderToolbar.Button
-                          label={props.pending ? "Interpreting…" : "Snooze"}
+                      </Toolbar>
+                      <Toolbar placement="right">
+                        <Toolbar.Button
+                          accessibilityLabel={props.pending ? "Interpreting date" : "Snooze"}
+                          icon="checkmark"
+                          variant="prominent"
+                          tintColor={colors["--color-prominent-action"]}
                           disabled={props.pending}
                           onPress={props.onSubmit}
                         />
-                      </NativeHeaderToolbar>
+                      </Toolbar>
                       <ScrollView
                         contentInsetAdjustmentBehavior="automatic"
                         showsVerticalScrollIndicator={false}

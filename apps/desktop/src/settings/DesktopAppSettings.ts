@@ -5,6 +5,7 @@ import {
   type DesktopUpdateChannel,
 } from "@t3tools/contracts";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
+import { resolveSymlinkTarget } from "@t3tools/shared/symlink";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -26,8 +27,6 @@ import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
   readonly localEnvironmentEnabled: boolean;
-  readonly localRendererUrl: string | null;
-  readonly lastLocalRendererUrl: string | null;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
   readonly mainWindowBounds: DesktopWindowBounds | null;
   readonly mainWindowMaximized: boolean;
@@ -36,19 +35,9 @@ export interface DesktopSettings {
   readonly tailscaleServePort: number;
   readonly updateChannel: DesktopUpdateChannel;
   readonly updateChannelConfiguredByUser: boolean;
-  // Was a "local" | "wsl" swap mode in an earlier iteration of the WSL
-  // integration. We now run Windows and WSL backends side by side, so the
-  // setting is just whether the WSL backend should be running alongside the
-  // primary. Persisted documents that still carry the legacy `wslMode: "wsl"`
-  // value are migrated to `wslBackendEnabled: true` on load.
   readonly wslBackendEnabled: boolean;
   readonly wslDistro: string | null;
-  // When true (and wslBackendEnabled is also true) the desktop runs only
-  // the WSL backend as the primary, and the Windows-side Node backend is
-  // not started. Designed for users who develop entirely inside WSL and
-  // don't want a second backend process running. Defaults to false so
-  // existing setups stay on the parallel-backends behavior. Changing
-  // this requires a desktop restart because the pool's primary spec is
+  // Changing this requires a desktop restart because the pool's primary spec is
   // chosen once at layer init.
   readonly wslOnly: boolean;
 }
@@ -77,8 +66,6 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   localEnvironmentEnabled: true,
-  localRendererUrl: null,
-  lastLocalRendererUrl: null,
   linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
   mainWindowBounds: null,
   mainWindowMaximized: false,
@@ -101,8 +88,6 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 
 const DesktopSettingsDocument = Schema.Struct({
   localEnvironmentEnabled: Schema.optionalKey(Schema.Boolean),
-  localRendererUrl: Schema.optionalKey(Schema.String),
-  lastLocalRendererUrl: Schema.optionalKey(Schema.String),
   linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
   mainWindowBounds: Schema.optionalKey(Schema.NullOr(DesktopWindowBoundsDocument)),
   mainWindowMaximized: Schema.optionalKey(Schema.Boolean),
@@ -111,9 +96,6 @@ const DesktopSettingsDocument = Schema.Struct({
   tailscaleServePort: Schema.optionalKey(Schema.Number),
   updateChannel: Schema.optionalKey(DesktopUpdateChannelSchema),
   updateChannelConfiguredByUser: Schema.optionalKey(Schema.Boolean),
-  // Newer form of the WSL toggle. `wslMode` is still accepted on load so
-  // existing on-disk settings keep working; on the next persist we write the
-  // new boolean and the legacy key drops out.
   wslBackendEnabled: Schema.optionalKey(Schema.Boolean),
   wslMode: Schema.optionalKey(Schema.Literals(["local", "wsl"])),
   wslDistro: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -136,6 +118,7 @@ const settingsChange = (settings: DesktopSettings, changed: boolean): DesktopSet
 
 const DesktopSettingsWriteOperation = Schema.Literals([
   "create-temporary-file-name",
+  "resolve-symlink",
   "encode-document",
   "create-directory",
   "write-temporary-file",
@@ -156,46 +139,6 @@ export class DesktopSettingsWriteError extends Schema.TaggedError<DesktopSetting
   }
 }
 
-export class InvalidLocalRendererUrlError extends Schema.TaggedError<InvalidLocalRendererUrlError>()(
-  "InvalidLocalRendererUrlError",
-  { url: Schema.String },
-) {
-  override get message(): string {
-    return "Local UI URL must be an HTTP loopback address with an explicit port.";
-  }
-}
-
-export function normalizeLocalRendererUrl(raw: string): string | null {
-  try {
-    const url = new URL(raw.trim());
-    if (
-      url.protocol !== "http:" ||
-      !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ||
-      url.port === "" ||
-      url.username !== "" ||
-      url.password !== "" ||
-      url.pathname !== "/" ||
-      url.search !== "" ||
-      url.hash !== ""
-    ) {
-      return null;
-    }
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
-const parseLocalRendererUrl = (
-  url: string | null,
-): Effect.Effect<string | null, InvalidLocalRendererUrlError> => {
-  if (url === null) return Effect.succeed(null);
-  const normalized = normalizeLocalRendererUrl(url);
-  return normalized === null
-    ? Effect.fail(new InvalidLocalRendererUrlError({ url }))
-    : Effect.succeed(normalized);
-};
-
 export class DesktopAppSettings extends Context.Service<
   DesktopAppSettings,
   {
@@ -204,12 +147,6 @@ export class DesktopAppSettings extends Context.Service<
     readonly setLocalEnvironmentEnabled: (
       enabled: boolean,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
-    readonly setLocalRendererUrl: (
-      url: string | null,
-    ) => Effect.Effect<
-      DesktopSettingsChange,
-      DesktopSettingsWriteError | InvalidLocalRendererUrlError
-    >;
     readonly setMainWindowBounds: (
       bounds: DesktopWindowBounds,
       isMaximized: boolean,
@@ -274,24 +211,12 @@ function normalizeDesktopSettingsDocument(
     parsed.updateChannelConfiguredByUser === true ||
     (isLegacySettings && Option.contains(parsedUpdateChannel, "nightly"));
 
-  // Newer form wins when both are present; otherwise fall back to the legacy
-  // `wslMode === "wsl"` signal so users coming off the swap-mode build keep
-  // their WSL backend enabled.
   const wslBackendEnabled =
     parsed.wslBackendEnabled === true ||
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
-  const localRendererUrl =
-    parsed.localRendererUrl === undefined
-      ? null
-      : normalizeLocalRendererUrl(parsed.localRendererUrl);
 
   return {
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,
-    localRendererUrl,
-    lastLocalRendererUrl:
-      parsed.lastLocalRendererUrl === undefined
-        ? localRendererUrl
-        : normalizeLocalRendererUrl(parsed.lastLocalRendererUrl),
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
     mainWindowBounds,
     mainWindowMaximized: mainWindowBounds !== null && parsed.mainWindowMaximized === true,
@@ -317,12 +242,6 @@ function toDesktopSettingsDocument(
 
   if (settings.localEnvironmentEnabled !== defaults.localEnvironmentEnabled) {
     document.localEnvironmentEnabled = settings.localEnvironmentEnabled;
-  }
-  if (settings.localRendererUrl !== null) {
-    document.localRendererUrl = settings.localRendererUrl;
-  }
-  if (settings.lastLocalRendererUrl !== null) {
-    document.lastLocalRendererUrl = settings.lastLocalRendererUrl;
   }
 
   if (settings.linuxPasswordStore !== defaults.linuxPasswordStore) {
@@ -454,20 +373,6 @@ function setLocalEnvironmentEnabled(settings: DesktopSettings, enabled: boolean)
     : { ...settings, localEnvironmentEnabled: enabled };
 }
 
-function setLocalRendererUrl(settings: DesktopSettings, url: string | null): DesktopSettings {
-  if (
-    settings.localRendererUrl === url &&
-    (url === null || settings.lastLocalRendererUrl === url)
-  ) {
-    return settings;
-  }
-  return {
-    ...settings,
-    localRendererUrl: url,
-    lastLocalRendererUrl: url ?? settings.lastLocalRendererUrl,
-  };
-}
-
 function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
   return setWslOnly(setWslBackendEnabled(settings, false), false);
 }
@@ -502,8 +407,20 @@ const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (inp
   readonly defaultSettings: DesktopSettings;
   readonly suffix: string;
 }): Effect.fn.Return<void, DesktopSettingsWriteError> {
-  const directory = input.path.dirname(input.settingsPath);
-  const tempPath = `${input.settingsPath}.${process.pid}.${input.suffix}.tmp`;
+  const targetPath = yield* resolveSymlinkTarget(input.settingsPath).pipe(
+    Effect.provideService(FileSystem.FileSystem, input.fileSystem),
+    Effect.provideService(Path.Path, input.path),
+    Effect.mapError(
+      (cause) =>
+        new DesktopSettingsWriteError({
+          operation: "resolve-symlink",
+          path: input.settingsPath,
+          cause,
+        }),
+    ),
+  );
+  const directory = input.path.dirname(targetPath);
+  const tempPath = `${targetPath}.${process.pid}.${input.suffix}.tmp`;
   const encoded = yield* encodeDesktopSettingsJson(
     toDesktopSettingsDocument(input.settings, input.defaultSettings),
   ).pipe(
@@ -536,7 +453,7 @@ const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (inp
         }),
     ),
   );
-  yield* input.fileSystem.rename(tempPath, input.settingsPath).pipe(
+  yield* input.fileSystem.rename(tempPath, targetPath).pipe(
     Effect.mapError(
       (cause) =>
         new DesktopSettingsWriteError({
@@ -548,6 +465,7 @@ const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (inp
   );
 });
 
+/** @public */
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -571,7 +489,7 @@ export const make = Effect.gen(function* () {
         return Effect.succeed([settingsChange(settings, false), settings] as const);
       }
 
-      return crypto.randomUUIDv4.pipe(
+      return crypto.randomUUIDv4().pipe(
         Effect.map((uuid) => uuid.replace(/-/g, "")),
         Effect.mapError(
           (cause) =>
@@ -647,13 +565,6 @@ export const make = Effect.gen(function* () {
       persist((settings) => setLocalEnvironmentEnabled(settings, enabled)).pipe(
         Effect.withSpan("desktop.settings.setLocalEnvironmentEnabled", { attributes: { enabled } }),
       ),
-    setLocalRendererUrl: (url) =>
-      parseLocalRendererUrl(url).pipe(
-        Effect.flatMap((normalized) =>
-          persist((settings) => setLocalRendererUrl(settings, normalized)),
-        ),
-        Effect.withSpan("desktop.settings.setLocalRendererUrl"),
-      ),
     applyWslWindowsFallback: persist(applyWslWindowsFallback).pipe(
       Effect.withSpan("desktop.settings.applyWslWindowsFallback"),
     ),
@@ -697,12 +608,6 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
         setWslOnly: (enabled) => update((settings) => setWslOnly(settings, enabled)),
         setLocalEnvironmentEnabled: (enabled) =>
           update((settings) => setLocalEnvironmentEnabled(settings, enabled)),
-        setLocalRendererUrl: (url) =>
-          parseLocalRendererUrl(url).pipe(
-            Effect.flatMap((normalized) =>
-              update((settings) => setLocalRendererUrl(settings, normalized)),
-            ),
-          ),
         applyWslWindowsFallback: update(applyWslWindowsFallback),
         applyWslWindowsFallbackInMemory: update(applyWslWindowsFallback),
       });

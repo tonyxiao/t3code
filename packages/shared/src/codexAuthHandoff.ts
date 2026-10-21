@@ -23,7 +23,6 @@ const decodeHandoff = Schema.decodeUnknownSync(Schema.fromJsonString(CodexAuthHa
 const encodeDelivery = Schema.encodeSync(Schema.fromJsonString(Delivery));
 const decodeDelivery = Schema.decodeUnknownSync(Schema.fromJsonString(Delivery));
 
-/** The helper only opens OpenAI's authorize endpoint and receives a loopback callback. */
 export function codexAuthorizationRequest(value: string) {
   const url = new URL(value);
   if (
@@ -56,7 +55,6 @@ export function codexAuthorizationRequest(value: string) {
   return { authorizationUrl: url.toString(), redirectUri, state };
 }
 
-/** Validation is shared by the desktop listener and the environment receiving the code. */
 export function codexCallbackUrl(value: string, redirectUri: string, state: string) {
   const callback = new URL(value);
   const expected = new URL(redirectUri);
@@ -85,7 +83,13 @@ export function codexCallbackUrl(value: string, redirectUri: string, state: stri
 }
 
 export function codexAuthHandoffUrl(input: CodexAuthHandoff, development = false) {
-  const url = new URL(`${development ? "t3code-dev" : "t3code"}://auth/codex`);
+  const returnScheme = new URL(input.returnUrl).protocol.slice(0, -1);
+  const scheme = ["txcode", "txcode-dev", "tony-txcode", "tony-txcode-dev"].includes(returnScheme)
+    ? returnScheme
+    : development
+      ? "txcode-dev"
+      : "txcode";
+  const url = new URL(`${scheme}://auth/codex`);
   url.searchParams.set("request", encodeHandoff(input));
   return url.toString();
 }
@@ -95,7 +99,9 @@ export function readCodexAuthHandoff(value: string, development: boolean) {
     const url = new URL(value);
     if (
       value.length > 32_768 ||
-      url.protocol !== (development ? "t3code-dev:" : "t3code:") ||
+      !(development
+        ? ["txcode-dev:", "tony-txcode-dev:"].includes(url.protocol)
+        : ["txcode:", "tony-txcode:"].includes(url.protocol)) ||
       url.host !== "auth" ||
       url.pathname !== "/codex" ||
       url.username ||

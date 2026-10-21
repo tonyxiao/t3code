@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
 import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source";
 
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
-import { ScreenScrollView } from "../../components/ScreenScrollView";
+import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
+import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import { flushComposerDrafts } from "../../state/use-composer-drafts";
+import { flushThreadOutbox } from "../../state/thread-outbox";
 import { createMobileJavaScriptSourceClient } from "./javascript-source";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { runAppUpdateCheck, type AppUpdateCheckState } from "../updates/app-updates";
-import { flushPendingUpdateWrites } from "../updates/app-updates";
 
 export function SettingsJavaScriptSourceRouteScreen() {
   const client = useMemo(() => createMobileJavaScriptSourceClient(), []);
@@ -39,13 +40,21 @@ export function SettingsJavaScriptSourceRouteScreen() {
     setError(null);
     try {
       await client.select(source);
-      await flushPendingUpdateWrites();
-      await client.reload();
+      // Keep both flush functions loaded so offline recovery does not fetch
+      // lazy JavaScript modules before switching back to the embedded bundle.
+      const writes = await Promise.allSettled([flushComposerDrafts(), flushThreadOutbox()]);
+      const failure = writes.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failure) {
+        setError(String(failure.reason));
+      } else {
+        await client.reload();
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
   const confirm = (source: JavaScriptSource) =>
     Alert.alert(

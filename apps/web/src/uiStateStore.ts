@@ -1,10 +1,3 @@
-import {
-  DEFAULT_SIDEBAR_FILTER_MODES,
-  sanitizeSidebarFilterModes,
-  type SidebarFilterModes,
-  type SidebarFilterKind,
-  type SidebarFilterMode,
-} from "@t3tools/client-runtime/state/sidebar-filters";
 import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
@@ -12,15 +5,6 @@ import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
-export type SidebarThreadStatusFilter =
-  | "all"
-  | "active"
-  | "pinned"
-  | "unpinned"
-  | "none"
-  | "snoozed"
-  | "settled";
-// Version 1 stored card visibility, not folder expansion.
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
 const LEGACY_PERSISTED_STATE_KEYS = [
   "t3code:renderer-state:v8",
@@ -43,15 +27,12 @@ export interface PersistedUiState {
   expandedProjectCwds?: string[];
   projectOrderCwds?: string[];
   defaultAdvertisedEndpointKey?: string | null;
-  sidebarFilterModes?: SidebarFilterModes;
-  sidebarFilterSelectionVersion?: number;
+  sidebarProjectScopeKey?: string | null;
   sidebarEnvironmentScopeIds?: string[];
   sidebarProjectScopeKeys?: string[];
-  // Read only for migration from the single-selection sidebar.
-  sidebarEnvironmentScopeId?: string | null;
-  sidebarProjectScopeKey?: string | null;
+  sidebarEnvironmentScopeMode?: "include" | "exclude";
+  sidebarProjectScopeMode?: "include" | "exclude";
   sidebarThreadSortOrder?: string;
-  sidebarThreadStatusFilter?: string;
   threadChangedFilesExpansionVersion?: number;
   threadChangedFilesExpandedById?: Record<string, Record<string, boolean>>;
   pullRequestMergeMethod?: string;
@@ -60,12 +41,12 @@ export interface PersistedUiState {
 export interface UiProjectState {
   projectExpandedById: Record<string, boolean>;
   projectOrder: string[];
-  // Empty selections show all. These persist across routes and app restarts.
-  sidebarFilterModes: SidebarFilterModes;
+  sidebarProjectScopeKey: string | null;
   sidebarEnvironmentScopeIds: string[];
   sidebarProjectScopeKeys: string[];
+  sidebarEnvironmentScopeMode: "include" | "exclude";
+  sidebarProjectScopeMode: "include" | "exclude";
   sidebarThreadSortOrder: SidebarThreadSortOrder;
-  sidebarThreadStatusFilter: SidebarThreadStatusFilter;
 }
 
 export interface UiThreadState {
@@ -87,11 +68,12 @@ export interface UiState
 const initialState: UiState = {
   projectExpandedById: {},
   projectOrder: [],
-  sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+  sidebarProjectScopeKey: null,
   sidebarEnvironmentScopeIds: [],
   sidebarProjectScopeKeys: [],
+  sidebarEnvironmentScopeMode: "exclude",
+  sidebarProjectScopeMode: "exclude",
   sidebarThreadSortOrder: "created_at",
-  sidebarThreadStatusFilter: "all",
   threadLastVisitedAtById: {},
   threadChangedFilesExpandedById: {},
   defaultAdvertisedEndpointKey: null,
@@ -130,21 +112,6 @@ function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
 
 function sanitizeOptionalKey(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function sanitizeSidebarThreadSortOrder(value: unknown): SidebarThreadSortOrder {
-  return value === "updated_at" || value === "created_at" ? value : "created_at";
-}
-
-function sanitizeSidebarThreadStatusFilter(value: unknown): SidebarThreadStatusFilter {
-  return value === "active" ||
-    value === "pinned" ||
-    value === "unpinned" ||
-    value === "none" ||
-    value === "snoozed" ||
-    value === "settled"
-    ? value
-    : "all";
 }
 
 function sanitizeTimestampRecord(value: unknown): Record<string, string> {
@@ -190,22 +157,6 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
       ? sanitizeStringArray(parsed.projectOrderCwds).map(legacyProjectCwdPreferenceKey)
       : sanitizeStringArray(parsed.projectOrder);
 
-  const environmentIds = Array.isArray(parsed.sidebarEnvironmentScopeIds)
-    ? sanitizeStringArray(parsed.sidebarEnvironmentScopeIds)
-    : sanitizeStringArray([parsed.sidebarEnvironmentScopeId]);
-  const projectKeys = Array.isArray(parsed.sidebarProjectScopeKeys)
-    ? sanitizeStringArray(parsed.sidebarProjectScopeKeys)
-    : sanitizeStringArray([parsed.sidebarProjectScopeKey]);
-  const storedModes = sanitizeSidebarFilterModes(parsed.sidebarFilterModes);
-  const modes = {
-    ...storedModes,
-    ...(parsed.sidebarFilterSelectionVersion !== 1 && environmentIds.length === 0
-      ? { environment: "exclude" as const }
-      : {}),
-    ...(parsed.sidebarFilterSelectionVersion !== 1 && projectKeys.length === 0
-      ? { project: "exclude" as const }
-      : {}),
-  };
   return {
     projectExpandedById,
     projectOrder,
@@ -215,16 +166,20 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
         ? sanitizePersistedThreadChangedFilesExpanded(parsed.threadChangedFilesExpandedById)
         : {},
     defaultAdvertisedEndpointKey: sanitizeOptionalKey(parsed.defaultAdvertisedEndpointKey),
-    sidebarFilterModes: modes,
-    sidebarEnvironmentScopeIds: environmentIds,
-    sidebarProjectScopeKeys: projectKeys,
-    sidebarThreadSortOrder: sanitizeSidebarThreadSortOrder(parsed.sidebarThreadSortOrder),
-    sidebarThreadStatusFilter:
-      parsed.sidebarFilterSelectionVersion !== 1 &&
-      parsed.sidebarThreadStatusFilter === "pinned" &&
-      modes.pinned === "exclude"
-        ? "unpinned"
-        : sanitizeSidebarThreadStatusFilter(parsed.sidebarThreadStatusFilter),
+    sidebarProjectScopeKey: sanitizeOptionalKey(parsed.sidebarProjectScopeKey),
+    sidebarEnvironmentScopeIds: sanitizeStringArray(parsed.sidebarEnvironmentScopeIds),
+    sidebarProjectScopeKeys: Array.isArray(parsed.sidebarProjectScopeKeys)
+      ? sanitizeStringArray(parsed.sidebarProjectScopeKeys)
+      : sanitizeStringArray([parsed.sidebarProjectScopeKey]),
+    sidebarEnvironmentScopeMode:
+      parsed.sidebarEnvironmentScopeMode === "include" ? "include" : "exclude",
+    sidebarProjectScopeMode:
+      parsed.sidebarProjectScopeMode === "include" ||
+      (!Array.isArray(parsed.sidebarProjectScopeKeys) && parsed.sidebarProjectScopeKey)
+        ? "include"
+        : "exclude",
+    sidebarThreadSortOrder:
+      parsed.sidebarThreadSortOrder === "updated_at" ? "updated_at" : "created_at",
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,
@@ -298,12 +253,12 @@ export function persistState(state: UiState): void {
         projectOrder: state.projectOrder,
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
-        sidebarFilterModes: state.sidebarFilterModes,
-        sidebarFilterSelectionVersion: 1,
+        sidebarProjectScopeKey: state.sidebarProjectScopeKey,
         sidebarEnvironmentScopeIds: state.sidebarEnvironmentScopeIds,
         sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
+        sidebarEnvironmentScopeMode: state.sidebarEnvironmentScopeMode,
+        sidebarProjectScopeMode: state.sidebarProjectScopeMode,
         sidebarThreadSortOrder: state.sidebarThreadSortOrder,
-        sidebarThreadStatusFilter: state.sidebarThreadStatusFilter,
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
         threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
         pullRequestMergeMethod: state.pullRequestMergeMethod,
@@ -315,9 +270,7 @@ export function persistState(state: UiState): void {
         window.localStorage.removeItem(legacyKey);
       }
     }
-  } catch {
-    // Ignore quota/storage errors to avoid breaking chat UX.
-  }
+  } catch {}
 }
 
 const debouncedPersistState = new Debouncer(persistState, { wait: 500 });
@@ -404,76 +357,56 @@ export function setDefaultAdvertisedEndpointKey(state: UiState, key: string | nu
   };
 }
 
-export function toggleSidebarScopeSelection(keys: readonly string[], key: string): string[] {
-  return keys.includes(key) ? keys.filter((selected) => selected !== key) : [...keys, key];
+export function setSidebarProjectScopeKey(state: UiState, projectKey: string | null): UiState {
+  const nextKey = sanitizeOptionalKey(projectKey);
+  if (
+    state.sidebarProjectScopeKey === nextKey &&
+    state.sidebarProjectScopeKeys.length === (nextKey === null ? 0 : 1) &&
+    (nextKey === null || state.sidebarProjectScopeKeys[0] === nextKey)
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    sidebarProjectScopeKey: nextKey,
+    sidebarProjectScopeKeys: nextKey === null ? [] : [nextKey],
+    sidebarProjectScopeMode: nextKey === null ? "exclude" : "include",
+  };
 }
 
-function sameSelection(current: readonly string[], next: readonly string[]): boolean {
-  return current.length === next.length && current.every((key, index) => key === next[index]);
-}
-
-export function setSidebarFilterMode(
+export function setSidebarScopeSelection(
   state: UiState,
-  kind: SidebarFilterKind,
-  mode: SidebarFilterMode,
+  kind: "environment" | "project",
+  keys: readonly string[],
+  mode: "include" | "exclude",
 ): UiState {
-  return state.sidebarFilterModes[kind] === mode
+  const nextKeys = sanitizeStringArray(keys);
+  const keysField =
+    kind === "environment" ? "sidebarEnvironmentScopeIds" : "sidebarProjectScopeKeys";
+  const modeField =
+    kind === "environment" ? "sidebarEnvironmentScopeMode" : "sidebarProjectScopeMode";
+  if (
+    state[modeField] === mode &&
+    state[keysField].length === nextKeys.length &&
+    state[keysField].every((key, index) => key === nextKeys[index])
+  )
+    return state;
+  return {
+    ...state,
+    [keysField]: nextKeys,
+    [modeField]: mode,
+    ...(kind === "project"
+      ? {
+          sidebarProjectScopeKey: mode === "include" && nextKeys.length === 1 ? nextKeys[0]! : null,
+        }
+      : {}),
+  };
+}
+
+function setSidebarThreadSortOrder(state: UiState, order: SidebarThreadSortOrder): UiState {
+  return state.sidebarThreadSortOrder === order
     ? state
-    : {
-        ...state,
-        sidebarFilterModes: { ...state.sidebarFilterModes, [kind]: mode },
-      };
-}
-
-export function setSidebarProjectScopeKeys(
-  state: UiState,
-  projectKeys: readonly string[],
-): UiState {
-  const nextKeys = sanitizeStringArray(projectKeys);
-  if (sameSelection(state.sidebarProjectScopeKeys, nextKeys)) {
-    return state;
-  }
-  return {
-    ...state,
-    sidebarProjectScopeKeys: nextKeys,
-  };
-}
-
-export function setSidebarEnvironmentScopeIds(
-  state: UiState,
-  environmentIds: readonly string[],
-): UiState {
-  const nextIds = sanitizeStringArray(environmentIds);
-  if (sameSelection(state.sidebarEnvironmentScopeIds, nextIds)) {
-    return state;
-  }
-  return {
-    ...state,
-    sidebarEnvironmentScopeIds: nextIds,
-  };
-}
-
-export function setSidebarThreadSortOrder(
-  state: UiState,
-  sortOrder: SidebarThreadSortOrder,
-): UiState {
-  if (state.sidebarThreadSortOrder === sortOrder) {
-    return state;
-  }
-  return {
-    ...state,
-    sidebarThreadSortOrder: sortOrder,
-  };
-}
-
-export function setSidebarThreadStatusFilter(
-  state: UiState,
-  filter: SidebarThreadStatusFilter,
-): UiState {
-  if (state.sidebarThreadStatusFilter === filter) {
-    return state;
-  }
-  return { ...state, sidebarThreadStatusFilter: filter };
+    : { ...state, sidebarThreadSortOrder: order };
 }
 
 function setPullRequestMergeMethod(state: UiState, method: PullRequestMergeMethod): UiState {
@@ -564,11 +497,13 @@ interface UiStateStore extends UiState {
   markThreadUnread: (threadId: string, latestTurnCompletedAt: string | null | undefined) => void;
   setThreadChangedFilesExpanded: (threadId: string, turnId: string, expanded: boolean) => void;
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
-  setSidebarFilterMode: (kind: SidebarFilterKind, mode: SidebarFilterMode) => void;
-  setSidebarEnvironmentScopeIds: (environmentIds: readonly string[]) => void;
-  setSidebarProjectScopeKeys: (projectKeys: readonly string[]) => void;
-  setSidebarThreadSortOrder: (sortOrder: SidebarThreadSortOrder) => void;
-  setSidebarThreadStatusFilter: (filter: SidebarThreadStatusFilter) => void;
+  setSidebarProjectScopeKey: (projectKey: string | null) => void;
+  setSidebarScopeSelection: (
+    kind: "environment" | "project",
+    keys: readonly string[],
+    mode: "include" | "exclude",
+  ) => void;
+  setSidebarThreadSortOrder: (order: SidebarThreadSortOrder) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
   setProjectExpanded: (projectIds: string | readonly string[], expanded: boolean) => void;
   reorderProjects: (
@@ -588,15 +523,11 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     set((state) => setThreadChangedFilesExpanded(state, threadId, turnId, expanded)),
   setDefaultAdvertisedEndpointKey: (key) =>
     set((state) => setDefaultAdvertisedEndpointKey(state, key)),
-  setSidebarFilterMode: (kind, mode) => set((state) => setSidebarFilterMode(state, kind, mode)),
-  setSidebarEnvironmentScopeIds: (environmentIds) =>
-    set((state) => setSidebarEnvironmentScopeIds(state, environmentIds)),
-  setSidebarProjectScopeKeys: (projectKeys) =>
-    set((state) => setSidebarProjectScopeKeys(state, projectKeys)),
-  setSidebarThreadSortOrder: (sortOrder) =>
-    set((state) => setSidebarThreadSortOrder(state, sortOrder)),
-  setSidebarThreadStatusFilter: (filter) =>
-    set((state) => setSidebarThreadStatusFilter(state, filter)),
+  setSidebarProjectScopeKey: (projectKey) =>
+    set((state) => setSidebarProjectScopeKey(state, projectKey)),
+  setSidebarScopeSelection: (kind, keys, mode) =>
+    set((state) => setSidebarScopeSelection(state, kind, keys, mode)),
+  setSidebarThreadSortOrder: (order) => set((state) => setSidebarThreadSortOrder(state, order)),
   setPullRequestMergeMethod: (method) => set((state) => setPullRequestMergeMethod(state, method)),
   setProjectExpanded: (projectIds, expanded) =>
     set((state) => setProjectExpanded(state, projectIds, expanded)),

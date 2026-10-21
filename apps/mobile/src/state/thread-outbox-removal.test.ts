@@ -1,6 +1,16 @@
 import { CommandId, EnvironmentId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = false;
+  },
+  Paths: { document: { uri: "file:///documents" } },
+}));
+
 const harness = vi.hoisted(() => ({
   cleanup: vi.fn(),
   clearDraft: vi.fn<typeof import("./use-composer-drafts").clearComposerDraft>(),

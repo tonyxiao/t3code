@@ -9,15 +9,17 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const isTonyBuild = repoEnv.T3CODE_MOBILE_TONY_BUILD === "1";
+const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
-const runtimeVersionPolicy = process.env.MOBILE_VERSION_POLICY ?? "fingerprint";
+const runtimeVersionPolicy =
+  process.env.MOBILE_VERSION_POLICY ??
+  (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
-// Android layers are rendered by scripts/export-android-icons.ts from the Icon Composer sources.
-// The wordmark sits inside the adaptive safe zone; the variant artwork is a full-bleed background.
 const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
 
 if (
@@ -72,24 +74,48 @@ const RELEASE_ASSETS = {
 const VARIANT_CONFIG = {
   development: {
     appName: "TX Code Dev",
-    scheme: "t3code-dev",
-    iosBundleIdentifier: "com.tonyxiao.txcode.dev",
-    androidPackage: "com.tonyxiao.txcode.dev",
+    scheme: "txcode-dev",
+    iosBundleIdentifier: "com.tonyxiao.txcode.v2.dev",
+    androidPackage: "com.tonyxiao.txcode.v2.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "TX Code Preview",
-    scheme: "t3code-preview",
-    iosBundleIdentifier: "com.tonyxiao.txcode.preview",
-    androidPackage: "com.tonyxiao.txcode.preview",
+    scheme: "txcode-preview",
+    iosBundleIdentifier: "com.tonyxiao.txcode.v2.preview",
+    androidPackage: "com.tonyxiao.txcode.v2.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "TX Code",
-    scheme: "t3code",
-    iosBundleIdentifier: "com.tonyxiao.txcode",
-    androidPackage: "com.tonyxiao.txcode",
+    scheme: "txcode",
+    iosBundleIdentifier: "com.tonyxiao.txcode.v2",
+    androidPackage: "com.tonyxiao.txcode.v2",
     assets: RELEASE_ASSETS,
+  },
+} as const;
+
+const TONY_VARIANT_CONFIG = {
+  development: {
+    ...VARIANT_CONFIG.development,
+    appName: "Tony TX Code Dev",
+    scheme: "tony-txcode-dev",
+    iosBundleIdentifier: "com.tonyxiao.txcode.tony.dev",
+    androidPackage: "com.tonyxiao.txcode.tony.dev",
+  },
+  preview: {
+    ...VARIANT_CONFIG.preview,
+    appName: "Tony TX Code Preview",
+    scheme: "tony-txcode-preview",
+    iosBundleIdentifier: "com.tonyxiao.txcode.tony.preview",
+    androidPackage: "com.tonyxiao.txcode.tony.preview",
+  },
+  production: {
+    ...VARIANT_CONFIG.production,
+    appName: "Tony TX Code",
+    scheme: "tony-txcode",
+    iosBundleIdentifier: "com.tonyxiao.txcode.tony",
+    androidPackage: "com.tonyxiao.txcode.tony",
   },
 } as const;
 
@@ -104,11 +130,12 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = VARIANT_CONFIG[APP_VARIANT];
+const variant = isTonyBuild ? TONY_VARIANT_CONFIG[APP_VARIANT] : VARIANT_CONFIG[APP_VARIANT];
 const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
 const privateAppName = repoEnv.T3CODE_MOBILE_APP_NAME?.trim();
-const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
-const easProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim();
+const easProjectId =
+  repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim() ??
+  (isTonyBuild ? "f6cd51c6-6875-4ce4-9360-7aefaf9ee333" : "d763fcb8-d37c-41ea-a773-b54a0ab4a454");
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : (privateAppId ?? variant.iosBundleIdentifier);
@@ -185,7 +212,6 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
         name: "AgentActivity",
         displayName: "Agent Activity",
         description: "Shows the current state of active TX Code agents.",
-        // Live Activity companion; there is no Android presentation for it.
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
       },
@@ -228,46 +254,60 @@ const config: ExpoConfig = {
   slug: repoEnv.T3CODE_MOBILE_SLUG?.trim() ?? "t3-code",
   platforms: ["ios", "android"],
   scheme: repoEnv.T3CODE_MOBILE_SCHEME?.trim() ?? variant.scheme,
-  version: "1.4.0",
+  version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.0.0",
   runtimeVersion: {
-    // Metro preflight and published updates must identify the same native runtime.
+    // Development manifests resolve on every launch, so avoid fingerprint's
+    // expensive native-project calculation there. Preview and production stay
+    // fingerprinted so OTAs only reach binaries with matching native projects.
     policy: runtimeVersionPolicy,
   },
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    // Only load updates from an explicitly configured project for this bundle.
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0" && Boolean(easProjectId),
-    url: easProjectId ? `https://u.expo.dev/${easProjectId}` : undefined,
+    enabled: isTonyBuild
+      ? repoEnv.T3CODE_MOBILE_UPDATES_ENABLED === "1"
+      : repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    url: `https://u.expo.dev/${easProjectId}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
-    // Multitasking-capable iPad apps cannot rotate programmatically, so the
-    // showcase capture build requires full screen (see infoPlist below).
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    appleTeamId: repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim(),
+    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
+    // does not fall back to a personal team (which cannot sign app groups,
+    // Sign in with Apple, or push notification entitlements).
+    appleTeamId:
+      repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ?? (isTonyBuild ? "H82Z395PDV" : "ARK85ZXQ4Z"),
     associatedDomains: repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS
       ? repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS.split(",")
           .map((domain) => domain.trim())
           .filter(Boolean)
-      : [],
+      : isTonyBuild
+        ? ["applinks:clerk.t3.codes", "webcredentials:clerk.t3.codes"]
+        : [],
     entitlements: {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       BGTaskSchedulerPermittedIdentifiers: [`${iosBundleIdentifier}.background-sync`],
-      UIBackgroundModes: ["processing"],
+      UISupportedInterfaceOrientations: [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight",
+      ],
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
         "Allow TX Code to connect to TX Code servers on your local network or tailnet.",
       NSPhotoLibraryAddUsageDescription: "Allow TX Code to save images to your photo library.",
+      // "Audio, AirPlay, and Picture in Picture": the browser screen's system
+      // picture in picture needs it to start and to stay up outside the app.
+      UIBackgroundModes: ["audio", "processing"],
       ITSAppUsesNonExemptEncryption: false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
@@ -304,6 +344,8 @@ const config: ExpoConfig = {
     // JS back handling survives it via react-native's Android 16 shim plus
     // withAndroidPredictiveBackCompat on Android 13-15.
     predictiveBackGestureEnabled: true,
+    // expo-sensors declares this for its pedometer, which the app does not use.
+    blockedPermissions: ["android.permission.ACTIVITY_RECOGNITION"],
   },
   web: {
     favicon: variant.assets.appIcon,
@@ -319,6 +361,7 @@ const config: ExpoConfig = {
         ] satisfies NonNullable<ExpoConfig["plugins"]>)
       : []),
     "expo-asset",
+    "react-native-pdf-jsi",
     [
       "expo-font",
       {
@@ -421,11 +464,17 @@ const config: ExpoConfig = {
       "expo-build-properties",
       {
         android: {
-          // Keep the supported floor explicit and covered by native notification tests.
           minSdkVersion: 24,
           // kotlinx-io uses Kotlin 2.3's return-value checker annotation, while
           // SDK 58 builds with Kotlin 2.2. It has no runtime behavior.
-          extraProguardRules: "-dontwarn kotlin.MustUseReturnValues",
+          // WorkManager 2.9 keeps InputMerger classes but not their constructors,
+          // and R8 full mode no longer keeps a default constructor implicitly.
+          // Without it no work request can start, so the Glance session behind
+          // the widget never renders and it stays on "Loading widget".
+          extraProguardRules: [
+            "-dontwarn kotlin.MustUseReturnValues",
+            "-keep class * extends androidx.work.InputMerger { <init>(); }",
+          ].join("\n"),
         },
         ios: {
           deploymentTarget: "18.0",
@@ -438,6 +487,9 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/withIosCocoaPodsUuidCache.cjs",
+    // Only the accelerometer is used (device viewer shake). Compile out the
+    // pedometer so iOS needs no motion purpose string.
+    ["expo-sensors", { motionPermission: false }],
     // Must be listed BEFORE expo-widgets: same-type mods run last-registered-
     // first, so registering earlier makes this plugin's mods run AFTER
     // expo-widgets' — its dangerous mod wipes ios/ExpoWidgetsTarget/ (which
@@ -446,6 +498,7 @@ const config: ExpoConfig = {
     ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
     "./plugins/withAndroidCleartextTraffic.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
+    "./plugins/withAndroidFbjniVersion.cjs",
     "./plugins/withAndroidInputBackground.cjs",
     "./plugins/withAndroidModernPopupMenu.cjs",
     "./plugins/withAndroidModernAlertDialog.cjs",
@@ -463,7 +516,7 @@ const config: ExpoConfig = {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
       jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,
     },
-    // Native Google sign-in credentials. @clerk/expo reads these from `extra`
+    // @clerk/expo reads these from `extra`
     // under their exact env-var names (not nested), and its config plugin reads
     // the iOS URL scheme at prebuild to register it in Info.plist.
     // Unset values must be omitted (not null): the public manifest serializes
@@ -477,9 +530,15 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: easProjectId ? { projectId: easProjectId } : {},
+    eas: {
+      projectId: easProjectId,
+    },
   },
-  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim(),
+  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ?? (isTonyBuild ? "txlforge-tony" : "pingdotgg"),
+  experiments: {
+    // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
+    reactCompiler: true,
+  },
 };
 
 export default config;

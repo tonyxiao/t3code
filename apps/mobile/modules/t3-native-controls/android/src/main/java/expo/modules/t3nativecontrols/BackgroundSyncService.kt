@@ -61,8 +61,7 @@ class BackgroundSyncService : HeadlessJsTaskService() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    // Every startForegroundService request needs an acknowledgement, including
-    // a repeated start or a request cancelled before Android creates the service.
+    // A start cancelled before creation still needs foreground acknowledgement.
     promoteToForeground()
     if (pendingStarts > 0) pendingStarts -= 1
     running = true
@@ -118,8 +117,11 @@ class BackgroundSyncService : HeadlessJsTaskService() {
       pendingStarts += 1
       val intent = Intent(context, BackgroundSyncService::class.java)
       try {
-        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
-        else context.startService(intent)
+        if (Build.VERSION.SDK_INT >= 26) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
       } catch (_: IllegalStateException) {
         requested = wasRequested
         pendingStarts -= 1
@@ -131,16 +133,18 @@ class BackgroundSyncService : HeadlessJsTaskService() {
 
     fun stop(context: Context) = onMain {
       requested = false
-      // Stopping an uncreated service can leave Android's foreground-start
-      // deadline outstanding. Let onStartCommand promote and stop it instead.
+      // Let onStartCommand acknowledge a foreground start that Android has not delivered yet.
       if (running && pendingStarts == 0) {
         context.stopService(Intent(context, BackgroundSyncService::class.java))
       }
     }
 
     private fun onMain(action: () -> Unit) {
-      if (Looper.myLooper() == Looper.getMainLooper()) action()
-      else mainHandler.post { action() }
+      if (Looper.myLooper() == Looper.getMainLooper()) {
+        action()
+      } else {
+        mainHandler.post { action() }
+      }
     }
 
     fun waitUntilStopped(promise: Promise) {

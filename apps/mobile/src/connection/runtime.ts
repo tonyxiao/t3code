@@ -1,33 +1,28 @@
 import { Connection } from "@t3tools/client-runtime/connection";
-import { shellSnapshotLoaderLayer } from "@t3tools/client-runtime/state/shell";
+import { ShellSnapshotLoader } from "@t3tools/client-runtime/state/shell";
+import { PullRequestDiffLoader } from "@t3tools/client-runtime/state/pull-requests";
 import {
+  BoundedThreadSnapshotLoader,
   ThreadSnapshotLoader,
-  threadSnapshotLoaderLayer,
+  ThreadHistoryController,
 } from "@t3tools/client-runtime/state/threads";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Semaphore from "effect/Semaphore";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import type { FoundationHotModule } from "../lib/foundation-fast-refresh";
 import { hotSwappableAtomRuntime } from "../lib/hot-swappable-atom-runtime";
-import { runtimeContextLayer } from "../lib/runtime";
+import * as Runtime from "../lib/runtime";
 import { appAtomRegistry } from "../state/atom-registry";
-import {
-  mobileBackgroundActivityObserverLayer,
-  mobileBackgroundActivityReporterLayer,
-} from "./background-activity";
-import { connectionPlatformLayer } from "./platform";
+import * as BackgroundActivity from "./background-activity";
+import * as ConnectionPlatform from "./platform";
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
-const providedConnectionPlatformLayer = connectionPlatformLayer.pipe(
-  Layer.provide(runtimeContextLayer),
-);
+const layerProvidedConnectionPlatform = ConnectionPlatform.layer.pipe(Layer.provide(Runtime.layer));
 
-// Proactive subscriptions share a small hydration budget instead of issuing a
-// snapshot request for every open thread simultaneously on launch/reconnect.
-const mobileThreadSnapshotLoaderLayer = Layer.effect(
+const layerMobileThreadSnapshotLoader = Layer.effect(
   ThreadSnapshotLoader,
   Effect.gen(function* () {
     const loader = yield* ThreadSnapshotLoader;
@@ -36,33 +31,38 @@ const mobileThreadSnapshotLoaderLayer = Layer.effect(
       load: (...args) => loader.load(...args).pipe(hydration.withPermits(1)),
     });
   }),
-).pipe(Layer.provide(threadSnapshotLoaderLayer));
+).pipe(Layer.provide(BoundedThreadSnapshotLoader.layer));
 
-const snapshotLoaderLayer = Layer.merge(mobileThreadSnapshotLoaderLayer, shellSnapshotLoaderLayer);
+const layerSnapshotLoader = Layer.mergeAll(
+  PullRequestDiffLoader.layer,
+  layerMobileThreadSnapshotLoader,
+  ShellSnapshotLoader.layer,
+  ThreadHistoryController.layer,
+);
 
 type ConnectionLayerSource =
   | typeof Connection.layer
-  | typeof snapshotLoaderLayer
-  | typeof runtimeContextLayer
-  | typeof connectionPlatformLayer
-  | typeof mobileBackgroundActivityObserverLayer
-  | typeof mobileBackgroundActivityReporterLayer;
+  | typeof layerSnapshotLoader
+  | typeof Runtime.layer
+  | typeof ConnectionPlatform.layer
+  | typeof BackgroundActivity.layerObserver
+  | typeof BackgroundActivity.layerReporter;
 
-const providedClientConnectionLayer = snapshotLoaderLayer.pipe(
+const layerProvidedClientConnection = layerSnapshotLoader.pipe(
   Layer.provideMerge(
     Connection.layerWithOptions({ usageLimitSources: true, usageLimitsCommand: true }),
   ),
   Layer.provideMerge(
     Layer.mergeAll(
-      runtimeContextLayer,
-      providedConnectionPlatformLayer,
-      mobileBackgroundActivityObserverLayer,
+      Runtime.layer,
+      layerProvidedConnectionPlatform,
+      BackgroundActivity.layerObserver,
     ),
   ),
 );
 
-const connectionLayer = mobileBackgroundActivityReporterLayer.pipe(
-  Layer.provideMerge(providedClientConnectionLayer),
+const layerConnection = BackgroundActivity.layerReporter.pipe(
+  Layer.provideMerge(layerProvidedClientConnection),
 );
 
 export const connectionAtomRuntime: Atom.AtomRuntime<
@@ -72,5 +72,5 @@ export const connectionAtomRuntime: Atom.AtomRuntime<
   id: "t3.mobile.connection-runtime",
   hotModule: typeof module === "undefined" ? undefined : module.hot,
   registry: appAtomRegistry,
-  layer: connectionLayer,
+  layer: layerConnection,
 });

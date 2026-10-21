@@ -1,7 +1,7 @@
-import { buildHomeListFilterNativeMenu } from "./home-list-filter-menu";
 import { useCallback, useMemo } from "react";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
-import { MaterialThreadListToolbar } from "./MaterialThreadListToolbar";
+import { ThreadListToolbar } from "./ThreadListToolbar";
+import { buildHomeListFilterNativeMenu } from "./home-list-filter-menu";
 import type { HomeHeaderProps } from "./HomeHeader.types";
 
 export type { HomeHeaderEnvironment } from "./HomeHeader.types";
@@ -15,16 +15,14 @@ export function HomeHeader(props: HomeHeaderProps) {
     props.pinnedFilter !== "all";
   const menu = useMemo(() => buildHomeListFilterNativeMenu(props), [props]);
   const handleMenuAction = useCallback(
-    (event: { nativeEvent: { event: string } }) => {
-      menu.onAction(event.nativeEvent.event);
-    },
+    (event: { nativeEvent: { event: string } }) => menu.onAction(event.nativeEvent.event),
     [menu],
   );
 
   return (
     <>
       <NativeStackScreenOptions options={{ headerShown: false }} />
-      <MaterialThreadListToolbar
+      <ThreadListToolbar
         searchQuery={props.searchQuery}
         onSearchQueryChange={props.onSearchQueryChange}
         filterActions={menu.actions}

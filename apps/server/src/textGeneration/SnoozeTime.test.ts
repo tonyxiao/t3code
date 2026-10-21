@@ -5,11 +5,13 @@ import * as Layer from "effect/Layer";
 import * as Result from "effect/Result";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import type { ProviderInstance } from "../provider/ProviderDriver.ts";
-import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
+import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ServerConfig from "../config.ts";
 import * as SnoozeTime from "./SnoozeTime.ts";
-import type { SnoozeTimeGenerationInput } from "./TextGeneration.ts";
+type SnoozeTimeGenerationInput = Parameters<
+  NonNullable<ProviderInstance["textGeneration"]["generateSnoozeTime"]>
+>[0];
 
 const input = { text: "oct 23", now: "2026-10-14T10:00:00.000Z", timeZone: "Asia/Hong_Kong" };
 const makeLayer = (instances: readonly ProviderInstance[]) =>
@@ -41,12 +43,13 @@ function instance(
     },
     displayName: undefined,
     snapshot: {} as ProviderInstance["snapshot"],
-    adapter: {} as ProviderInstance["adapter"],
+    orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
     textGeneration: {
       generateCommitMessage: () => Effect.die("unused"),
       generatePrContent: () => Effect.die("unused"),
       generateBranchName: () => Effect.die("unused"),
       generateThreadTitle: () => Effect.die("unused"),
+      generateReviewGuide: () => Effect.die("unused"),
       generateSnoozeTime,
     },
   };
@@ -69,15 +72,15 @@ it.effect("resolves a natural date with Luna using the client's clock and timezo
     ),
   ),
 );
-for (const snoozedUntil of [null, "invalid", "2026-10-13T09:00:00Z", "2026-10-23T09:00:00"]) {
-  it.effect(`rejects an unusable generated date: ${snoozedUntil}`, () =>
+it.effect.each([null, "invalid", "2026-10-13T09:00:00Z", "2026-10-23T09:00:00"])(
+  "rejects an unusable generated date: %s",
+  (snoozedUntil) =>
     Effect.gen(function* () {
       const service = yield* SnoozeTime.SnoozeTime;
       const result = yield* Effect.result(service.resolve(input));
       expect(Result.isFailure(result)).toBe(true);
     }).pipe(Effect.provide(makeLayer([instance(() => Effect.succeed({ snoozedUntil }))]))),
-  );
-}
+);
 it.effect("reports unavailable Luna without using a disabled account", () =>
   Effect.gen(function* () {
     const service = yield* SnoozeTime.SnoozeTime;
