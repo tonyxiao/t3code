@@ -22,6 +22,11 @@ export const initializeV2Database = Effect.fn("initializeV2Database")(function* 
   const path = yield* Path.Path;
   const directory = path.dirname(destinationPath);
   const sourcePath = path.join(directory, "state.sqlite");
+  const sourceSettingsPath = path.join(directory, "settings.json");
+  const destinationSettingsPath = path.join(directory, "settings-v2.json");
+  if (!(yield* fs.exists(destinationSettingsPath)) && (yield* fs.exists(sourceSettingsPath))) {
+    yield* fs.copyFile(sourceSettingsPath, destinationSettingsPath);
+  }
   yield* Effect.gen(function* () {
     if (yield* fs.exists(destinationPath)) return;
     if (!(yield* fs.exists(sourcePath))) return;
@@ -36,6 +41,31 @@ export const initializeV2Database = Effect.fn("initializeV2Database")(function* 
         await NodeSqlite.backup(database, snapshotPath);
       } finally {
         database.close();
+      }
+    });
+    // Fork V1 used migration 55 for snooze state; V2 needs that id for its
+    // orchestration schema. Keep V1's column but free the id in this copy only.
+    yield* Effect.sync(() => {
+      const snapshot = new NodeSqlite.DatabaseSync(snapshotPath);
+      try {
+        const migrationsTable = snapshot
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'",
+          )
+          .get();
+        if (!migrationsTable) return;
+        const later = snapshot
+          .prepare("SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id >= 55")
+          .all();
+        if (
+          later.length === 1 &&
+          later[0]?.migration_id === 55 &&
+          later[0]?.name === "ProjectionThreadsSnoozedThroughTurn"
+        ) {
+          snapshot.exec("DELETE FROM effect_sql_migrations WHERE migration_id = 55");
+        }
+      } finally {
+        snapshot.close();
       }
     });
     // Publish only a complete snapshot, without replacing an existing V2 database.

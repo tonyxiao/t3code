@@ -129,8 +129,8 @@ export const deriveServerPaths = Effect.fn(function* (
   return {
     stateDir,
     dbPath,
-    keybindingsConfigPath: join(stateDir, "keybindings.json"),
-    settingsPath: join(stateDir, "settings.json"),
+    keybindingsConfigPath: join(stateDir, "keybindings-v2.json"),
+    settingsPath: join(stateDir, "settings-v2.json"),
     environmentThemesDir: join(stateDir, "themes"),
     providerStatusCacheDir,
     worktreesDir: join(baseDir, "worktrees"),
@@ -142,7 +142,7 @@ export const deriveServerPaths = Effect.fn(function* (
     providerEventLogPath: join(providerLogsDir, "events.log"),
     terminalLogsDir: join(logsDir, "terminals"),
     anonymousIdPath: join(stateDir, "anonymous-id"),
-    environmentIdPath: join(stateDir, "environment-id"),
+    environmentIdPath: join(stateDir, "environment-id-v2"),
     serverRuntimeStatePath: join(stateDir, "server-runtime-v2.json"),
     secretsDir: join(stateDir, "secrets"),
   };

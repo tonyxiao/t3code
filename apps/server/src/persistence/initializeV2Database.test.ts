@@ -163,11 +163,89 @@ it.effect("uses statev2.sqlite for default and explicit development paths", () =
         });
         assert.equal(NodePath.basename(paths.dbPath), "statev2.sqlite");
         assert.equal(NodePath.basename(paths.serverRuntimeStatePath), "server-runtime-v2.json");
-        assert.equal(paths.settingsPath, NodePath.join(paths.stateDir, "settings.json"));
+        assert.equal(NodePath.basename(paths.keybindingsConfigPath), "keybindings-v2.json");
+        assert.equal(NodePath.basename(paths.environmentIdPath), "environment-id-v2");
+        assert.equal(paths.settingsPath, NodePath.join(paths.stateDir, "settings-v2.json"));
       }
     }
   }).pipe(Effect.provide(NodeServices.layer)),
 );
+
+it.effect("copies V1 settings once without sharing later writes", () => {
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-settings-"));
+  const sourcePath = NodePath.join(directory, "settings.json");
+  const destinationPath = NodePath.join(directory, "settings-v2.json");
+  return Effect.gen(function* () {
+    NodeFS.writeFileSync(sourcePath, '{"theme":"light"}');
+    yield* initializeV2Database(NodePath.join(directory, "statev2.sqlite"));
+    assert.equal(NodeFS.readFileSync(destinationPath, "utf8"), '{"theme":"light"}');
+    NodeFS.writeFileSync(sourcePath, '{"theme":"dark"}');
+    yield* initializeV2Database(NodePath.join(directory, "statev2.sqlite"));
+    assert.equal(NodeFS.readFileSync(destinationPath, "utf8"), '{"theme":"light"}');
+  }).pipe(
+    Effect.provide(NodeServices.layer),
+    Effect.ensuring(Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true }))),
+  );
+});
+
+it.effect("imports a fork V1 database whose snooze migration used V2's migration id", () => {
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v1-fork-"));
+  const sourcePath = NodePath.join(directory, "state.sqlite");
+  const destinationPath = NodePath.join(directory, "statev2.sqlite");
+  return Effect.gen(function* () {
+    yield* runMigrations({ toMigrationInclusive: 54 }).pipe(
+      Effect.provide(NodeSqliteClient.layer({ filename: sourcePath })),
+    );
+    const v1 = new NodeSqlite.DatabaseSync(sourcePath);
+    try {
+      v1.exec("ALTER TABLE projection_threads ADD COLUMN snoozed_through_turn_id TEXT");
+      v1.exec(
+        "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (55, 'ProjectionThreadsSnoozedThroughTurn')",
+      );
+    } finally {
+      v1.close();
+    }
+    yield* initializeV2Database(destinationPath);
+    const config = yield* ServerConfig.ServerConfig;
+    yield* runMigrations().pipe(
+      Effect.provide(
+        SqlitePersistence.layerConfig.pipe(
+          Layer.provide(ServerConfig.layer({ ...config, dbPath: destinationPath })),
+        ),
+      ),
+    );
+    const source = new NodeSqlite.DatabaseSync(sourcePath, { readOnly: true });
+    const destination = new NodeSqlite.DatabaseSync(destinationPath, { readOnly: true });
+    try {
+      assert.equal(
+        source.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 55").get()
+          ?.name,
+        "ProjectionThreadsSnoozedThroughTurn",
+      );
+      assert.equal(
+        destination.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 55").get()
+          ?.name,
+        "OrchestrationV2",
+      );
+      assert.equal(
+        destination
+          .prepare(
+            "SELECT count(*) AS count FROM sqlite_master WHERE name = 'orchestration_v2_events'",
+          )
+          .get()?.count,
+        1,
+      );
+    } finally {
+      source.close();
+      destination.close();
+    }
+  }).pipe(
+    Effect.provide(
+      ServerConfig.layerTest(directory, directory).pipe(Layer.provideMerge(NodeServices.layer)),
+    ),
+    Effect.ensuring(Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true }))),
+  );
+});
 
 it.effect("starts fresh without V1 and never imports over existing V2 state", () => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-fresh-"));
