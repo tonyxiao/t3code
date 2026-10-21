@@ -41,7 +41,7 @@ async function run<W, A, E>(command: AtomCommand<W, A, E>, input: W): Promise<A>
   return result.value;
 }
 
-export function isRetryableOfflineOutboxError(error: unknown): boolean {
+function isRetryableOfflineOutboxError(error: unknown): boolean {
   if (typeof error === "object" && error !== null && "_tag" in error) {
     return [
       "ConnectionTransientError",

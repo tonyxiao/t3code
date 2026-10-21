@@ -140,7 +140,7 @@ export type ThreadGridFocusedRow =
   | ThreadGridRow
   | { id: string; childRows: readonly ThreadGridRow[] };
 
-export function threadGridGroupKey(row: ThreadGridRow, groupBy: string): string {
+function threadGridGroupKey(row: ThreadGridRow, groupBy: string): string {
   return groupBy === "project"
     ? row.projectKey
     : groupBy === "environment"

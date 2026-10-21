@@ -9,6 +9,7 @@ import { primaryServerKeybindingsAtom } from "../state/server";
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
+  useRouter: () => ({ navigate: vi.fn() }),
   useParams: () => null,
   useLocation: () => "/settings",
 }));
@@ -33,7 +34,10 @@ vi.mock("../hooks/useScratchProject", () => ({
   useScratchProject: () => ({ scratchEnvironmentId: () => null }),
 }));
 vi.mock("../hooks/useNewProject", () => ({ useNewProject: () => vi.fn() }));
-vi.mock("../hooks/useHandleNewThread", () => ({ useHandleNewThread: () => ({}) }));
+vi.mock("../hooks/useHandleNewThread", () => ({
+  useHandleNewThread: () => ({}),
+  useNewThreadHandler: () => ({}),
+}));
 vi.mock("../hooks/useOpenPanelPullRequestUrl", () => ({ useOpenPanelPullRequestUrl: () => null }));
 vi.mock("../connection/useDesktopLocalBootstraps", () => ({ useDesktopLocalBootstraps: () => [] }));
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
@@ -149,7 +153,8 @@ describe("command palette focus restoration", () => {
       field.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "p",
-          ctrlKey: true,
+          ctrlKey: !/Mac/i.test(navigator.platform),
+          metaKey: /Mac/i.test(navigator.platform),
           bubbles: true,
           cancelable: true,
         }),

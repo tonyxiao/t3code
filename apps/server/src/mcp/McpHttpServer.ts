@@ -1003,7 +1003,7 @@ export const layerOrchestratorToolkit = toolkitRegistration(
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
-export const layerThreadRoutingToolkit = toolkitRegistration(
+const layerThreadRoutingToolkit = toolkitRegistration(
   ThreadRoutingToolkit,
   ThreadRoutingHandlers.layer,
 ).pipe(Layer.provide(AgentThreadRouting.layer));

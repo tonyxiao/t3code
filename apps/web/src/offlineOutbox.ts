@@ -66,7 +66,7 @@ export interface OfflineOutboxStorage {
 const DATABASE_NAME = "t3code-message-outbox";
 const STORE_NAME = "messages";
 
-export function createOfflineOutboxStorage(): OfflineOutboxStorage {
+function createOfflineOutboxStorage(): OfflineOutboxStorage {
   let database: Promise<IDBDatabase> | null = null;
   const open = () => {
     database ??= new Promise<IDBDatabase>((resolve, reject) => {

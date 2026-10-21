@@ -403,7 +403,7 @@ export function setSidebarScopeSelection(
   };
 }
 
-export function setSidebarThreadSortOrder(state: UiState, order: SidebarThreadSortOrder): UiState {
+function setSidebarThreadSortOrder(state: UiState, order: SidebarThreadSortOrder): UiState {
   return state.sidebarThreadSortOrder === order
     ? state
     : { ...state, sidebarThreadSortOrder: order };
