@@ -1,4 +1,14 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = false;
+  },
+  Paths: { document: { uri: "file:///documents" } },
+}));
 import {
   ChatAttachmentId,
   ComposerContextId,

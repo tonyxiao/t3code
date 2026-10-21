@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = false;
+  },
+  Paths: { document: { uri: "file:///documents" } },
+}));
+
 import { appAtomRegistry } from "./atom-registry";
 import { modelOptionMemoryAtom } from "./use-composer-drafts";
 import {

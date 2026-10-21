@@ -46,13 +46,15 @@ export function SettingsJavaScriptSourceRouteScreen() {
       const failure = writes.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",
       );
-      if (failure) throw failure.reason;
-      await client.reload();
+      if (failure) {
+        setError(String(failure.reason));
+      } else {
+        await client.reload();
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   };
   const confirm = (source: JavaScriptSource) =>
     Alert.alert(

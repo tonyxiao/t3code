@@ -8,6 +8,16 @@ import { AsyncResult } from "effect/reactivity";
 import { isValidElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+  },
+  File: class {
+    exists = false;
+  },
+  Paths: { document: { uri: "file:///documents" } },
+}));
+
 const state = vi.hoisted(() => ({
   scopes: new Set<string>(),
   otherScopes: new Set<string>(),
