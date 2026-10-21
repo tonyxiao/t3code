@@ -260,7 +260,7 @@ describe("getChangedBrowserSettingLabels", () => {
       "Recording mouse presses",
       "Open links in",
       "Floating preview",
-      "Open pull requests in txcode",
+      "Open pull requests in TX Code",
     ]);
   });
 });
