@@ -6,10 +6,11 @@ transcripts imported as needed. You do not need to run an import command.
 
 V1 continues using its original database while V2 uses the copy. The database import can run while
 V1 is open. Opening V2 again resumes your V2 history. The copy happens only once: later conversations
-and changes in either version do not sync to the other. Settings and keybindings are copied once
-into V2 files, then stay separate. Attachments and workspace files remain shared. V2 has separate
-pairing and cloud-link credentials, so pair devices and link T3 Connect again for V2. Provider and
-source-control credentials are copied once; later credential changes do not sync between versions.
+and changes in either version do not sync to the other. Server settings and keybindings are copied
+once into V2 files, then stay separate. Desktop shell preferences, saved remote connections,
+attachments, and workspace files remain shared. V2 has separate pairing and cloud-link credentials,
+so pair devices and link T3 Connect again for V2. Provider and source-control credentials are copied
+once; later credential changes do not sync between versions.
 
 The V2 desktop app uses a separate browser profile, so browser cookies and caches do not carry
 over from V1. You may need to sign in again to websites opened inside the app. On its first launch,
