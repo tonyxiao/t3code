@@ -229,7 +229,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.tonyxiao.txcode.v2.dev" : "com.tonyxiao.txcode.v2",
+      isTonyDesktop
+        ? isDevelopment
+          ? "com.tonyxiao.txcode.tony.dev"
+          : "com.tonyxiao.txcode.tony"
+        : isDevelopment
+          ? "com.tonyxiao.txcode.v2.dev"
+          : "com.tonyxiao.txcode.v2",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxWmClass: isDevelopment ? "txcode-v2-dev" : "txcode-v2",

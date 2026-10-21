@@ -14,6 +14,7 @@ it.effect("isolates private desktop state and URL handling from the installed up
     const paths = yield* Effect.promise(() => import("./DesktopStatePaths.ts"));
     const protocol = yield* Effect.promise(() => import("../electron/ElectronProtocol.ts"));
     const environment = yield* Effect.promise(() => import("./DesktopEnvironment.ts"));
+    const early = yield* Effect.promise(() => import("./DesktopEarlyElectronStartup.ts"));
     const userData = yield* Effect.promise(() => import("./DesktopUserData.ts"));
     assert.equal(
       paths.resolveDesktopBaseDir({
@@ -37,5 +38,6 @@ it.effect("isolates private desktop state and URL handling from the installed up
         .displayName,
       "Tony txcode (Alpha)",
     );
+    assert.equal(early.resolveLinuxDesktopEntryName(false), "com.tonyxiao.txcode.tony.desktop");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
