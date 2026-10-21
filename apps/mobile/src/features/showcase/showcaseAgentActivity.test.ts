@@ -29,7 +29,7 @@ const thread = (environmentId: string, id: string, projectId: string, title: str
   }) as EnvironmentThreadShell;
 
 const projects = [
-  project("moonbase-terminal", "t3code", "txcode"),
+  project("moonbase-terminal", "t3code", "TX Code"),
   project("suspense-station", "react", "React"),
   project("kernel-cabin", "linux", "Linux"),
 ];
@@ -61,10 +61,10 @@ it("stages relay-shaped rows against the seeded threads", () => {
   assert.deepStrictEqual(
     activity.activities.map((row) => [row.threadId, row.status, row.projectTitle, row.updatedAt]),
     [
-      ["pocket-command-center", "Approval", "txcode", "2026-07-16T08:59:00.000Z"],
+      ["pocket-command-center", "Approval", "TX Code", "2026-07-16T08:59:00.000Z"],
       ["beautiful-boot", "Input", "Linux", "2026-07-16T08:56:00.000Z"],
       ["buttery-suspense", "Working", "React", "2026-07-16T08:58:00.000Z"],
-      ["remote-command-center", "Done", "txcode", "2026-07-16T08:57:00.000Z"],
+      ["remote-command-center", "Done", "TX Code", "2026-07-16T08:57:00.000Z"],
     ],
   );
   assert.strictEqual(
@@ -85,10 +85,10 @@ it("encodes the Android Live Update and its alert like a relay push", () => {
   assert.strictEqual(data.activity_title, "3 active agents · 2 need attention");
   assert.strictEqual(
     data.activity_line_0,
-    "Approval\tPut the command center in your pocket\ttxcode",
+    "Approval\tPut the command center in your pocket\tTX Code",
   );
-  assert.strictEqual(data.activity_line_3, "Done\tMake remote coding feel local\ttxcode");
+  assert.strictEqual(data.activity_line_3, "Done\tMake remote coding feel local\tTX Code");
   assert.strictEqual(data.alert_title, "Put the command center in your pocket");
-  assert.strictEqual(data.alert_body, "Approval: txcode");
+  assert.strictEqual(data.alert_body, "Approval: TX Code");
   assert.strictEqual(data.alert_path, "/threads/moonbase-terminal/pocket-command-center");
 });

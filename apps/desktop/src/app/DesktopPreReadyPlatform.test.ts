@@ -175,7 +175,7 @@ describe("DesktopPreReadyPlatform", () => {
         const identity = yield* Effect.promise(() => portalIdentity);
         assert.equal(identity.desktopName, "com.tonyxiao.txcode.v2.desktop");
         assert.include(identity.desktopEntry ?? "", 'Exec="/Applications/current.AppImage" %U');
-        assert.include(identity.desktopEntry ?? "", "Name=txcode (Alpha)");
+        assert.include(identity.desktopEntry ?? "", "Name=TX Code (Alpha)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/txcode;");
         assert.include(
           identity.desktopEntry ?? "",

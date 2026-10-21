@@ -70,7 +70,7 @@ export function buildShowcaseAgentActivity(
   }
   return {
     scheme,
-    title: "txcode",
+    title: "TX Code",
     subtitle: "Agent work in progress",
     activeCount: rows.filter((row) => ACTIVE_PHASES.has(row.phase)).length,
     updatedAt: new Date(now).toISOString(),

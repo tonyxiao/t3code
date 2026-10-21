@@ -35,7 +35,7 @@ const environmentInput = {
 
 const layerElectronApp = Layer.succeed(ElectronApp.ElectronApp, {
   metadata: Effect.die("unexpected metadata read"),
-  name: Effect.succeed("txcode"),
+  name: Effect.succeed("TX Code"),
   systemLocale: Effect.succeed("en-US"),
   whenReady: Effect.void,
   requestSingleInstanceLock: Effect.succeed(true),
@@ -200,21 +200,21 @@ describe("DesktopApplicationMenu", () => {
       const template = yield* Deferred.await(applicationMenuTemplate);
       const applicationMenu = template[0];
       assert.isDefined(applicationMenu);
-      assert.equal(applicationMenu.label, "txcode (Nightly)");
+      assert.equal(applicationMenu.label, "TX Code (Nightly)");
       if (!Array.isArray(applicationMenu.submenu)) {
         throw new Error("Expected application menu submenu to be an array.");
       }
       assert.equal(
         applicationMenu.submenu.find((item) => item.role === "about")?.label,
-        "About txcode (Nightly)",
+        "About TX Code (Nightly)",
       );
       assert.equal(
         applicationMenu.submenu.find((item) => item.role === "hide")?.label,
-        "Hide txcode (Nightly)",
+        "Hide TX Code (Nightly)",
       );
       assert.equal(
         applicationMenu.submenu.find((item) => item.role === "quit")?.label,
-        "Quit txcode (Nightly)",
+        "Quit TX Code (Nightly)",
       );
     }),
   );

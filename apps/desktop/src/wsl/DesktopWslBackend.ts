@@ -136,7 +136,7 @@ export const layer = Layer.effect(
                 Ref.set(
                   preflightErrorRef,
                   Option.some(
-                    "Another txcode server is using this distro's T3 home. Stop it, or pair with it instead.",
+                    "Another TX Code server is using this distro's T3 home. Stop it, or pair with it instead.",
                   ),
                 ),
               ),

@@ -36,7 +36,7 @@ it.effect("isolates private desktop state and URL handling from the installed up
     assert.equal(
       environment.resolveDesktopAppBranding({ isDevelopment: false, appVersion: "1.0.0" })
         .displayName,
-      "Tony txcode (Alpha)",
+      "Tony TX Code (Alpha)",
     );
     assert.equal(early.resolveLinuxDesktopEntryName(false), "com.tonyxiao.txcode.tony.desktop");
   }).pipe(Effect.provide(NodeServices.layer)),

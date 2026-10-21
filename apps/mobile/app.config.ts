@@ -73,21 +73,21 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "txcode Dev",
+    appName: "TX Code Dev",
     scheme: "txcode-dev",
     iosBundleIdentifier: "com.tonyxiao.txcode.v2.dev",
     androidPackage: "com.tonyxiao.txcode.v2.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "txcode Preview",
+    appName: "TX Code Preview",
     scheme: "txcode-preview",
     iosBundleIdentifier: "com.tonyxiao.txcode.v2.preview",
     androidPackage: "com.tonyxiao.txcode.v2.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "txcode",
+    appName: "TX Code",
     scheme: "txcode",
     iosBundleIdentifier: "com.tonyxiao.txcode.v2",
     androidPackage: "com.tonyxiao.txcode.v2",
@@ -98,21 +98,21 @@ const VARIANT_CONFIG = {
 const TONY_VARIANT_CONFIG = {
   development: {
     ...VARIANT_CONFIG.development,
-    appName: "Tony txcode Dev",
+    appName: "Tony TX Code Dev",
     scheme: "tony-txcode-dev",
     iosBundleIdentifier: "com.tonyxiao.txcode.tony.dev",
     androidPackage: "com.tonyxiao.txcode.tony.dev",
   },
   preview: {
     ...VARIANT_CONFIG.preview,
-    appName: "Tony txcode Preview",
+    appName: "Tony TX Code Preview",
     scheme: "tony-txcode-preview",
     iosBundleIdentifier: "com.tonyxiao.txcode.tony.preview",
     androidPackage: "com.tonyxiao.txcode.tony.preview",
   },
   production: {
     ...VARIANT_CONFIG.production,
-    appName: "Tony txcode",
+    appName: "Tony TX Code",
     scheme: "tony-txcode",
     iosBundleIdentifier: "com.tonyxiao.txcode.tony",
     androidPackage: "com.tonyxiao.txcode.tony",
@@ -160,7 +160,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected txcode environments.",
+        description: "Subscription quotas from your connected TX Code environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -211,7 +211,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active txcode agents.",
+        description: "Shows the current state of active TX Code agents.",
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
       },
@@ -303,8 +303,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow txcode to connect to txcode servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow txcode to save images to your photo library.",
+        "Allow TX Code to connect to TX Code servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow TX Code to save images to your photo library.",
       // "Audio, AirPlay, and Picture in Picture": the browser screen's system
       // picture in picture needs it to start and to stay up outside the app.
       UIBackgroundModes: ["audio", "processing"],
@@ -422,7 +422,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow txcode to use your microphone for voice input.",
+        microphonePermission: "Allow TX Code to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -431,7 +431,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow txcode to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow TX Code to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,

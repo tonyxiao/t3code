@@ -2680,10 +2680,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
-  if (isTonyDesktopBuild) return "Tony txcode (Alpha)";
+  if (isTonyDesktopBuild) return "Tony TX Code (Alpha)";
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "txcode (Nightly)"
-    : (desktopPackageJson.productName ?? "txcode");
+    ? "TX Code (Nightly)"
+    : (desktopPackageJson.productName ?? "TX Code");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2761,8 +2761,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       extendInfo: {
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
-        NSLocalNetworkUsageDescription: `${isTonyDesktopBuild ? "Tony txcode" : "txcode"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
-        NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony txcode" : "txcode"} captures the active window when you use the window capture shortcut.`,
+        NSLocalNetworkUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
+        NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} captures the active window when you use the window capture shortcut.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2776,7 +2776,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: isTonyDesktopBuild ? "Tony txcode" : "txcode",
+          name: isTonyDesktopBuild ? "Tony TX Code" : "TX Code",
           schemes: isTonyDesktopBuild
             ? ["tony-txcode", "tony-txcode-dev"]
             : ["txcode", "txcode-dev"],
@@ -2835,7 +2835,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
         {
-          name: isTonyDesktopBuild ? "Tony txcode" : "txcode",
+          name: isTonyDesktopBuild ? "Tony TX Code" : "TX Code",
           schemes: isTonyDesktopBuild
             ? ["tony-txcode", "tony-txcode-dev"]
             : ["txcode", "txcode-dev"],
@@ -3759,7 +3759,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     ...(macWebAuthn ? { t3codeWebAuthn: macWebAuthn } : {}),
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: `${isTonyDesktopBuild ? "Tony txcode" : "txcode"} is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.`,
+    description: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.`,
     license: "MIT",
     homepage: "https://t3.codes",
     author: "T3 Tools",
@@ -4033,7 +4033,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for txcode."),
+  Command.withDescription("Build a desktop artifact for TX Code."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

@@ -82,7 +82,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
       return yield* new ProviderSetupError({
         instanceId,
         operation,
-        detail: "Choose managed setup to install Codex in txcode.",
+        detail: "Choose managed setup to install Codex in TX Code.",
       });
     }
     if (managedOnly && config.binaryPath && (!isCodex || config.binaryPath !== "codex")) {
@@ -90,7 +90,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
         instanceId,
         operation,
         detail:
-          "This instance uses a custom executable. Clear its binary path to manage installation in txcode.",
+          "This instance uses a custom executable. Clear its binary path to manage installation in TX Code.",
       });
     }
     return { installation, driver: instance.driverKind };

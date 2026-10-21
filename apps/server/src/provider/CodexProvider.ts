@@ -395,7 +395,7 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
       name: CODEX_CLIENT_NAME,
-      title: "txcode",
+      title: "TX Code",
       version: packageJson.version,
     },
     capabilities: {
@@ -558,7 +558,7 @@ const makePendingCodexProvider = (
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Codex is disabled in txcode settings.",
+          message: "Codex is disabled in TX Code settings.",
         },
       });
     }
@@ -649,7 +649,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in txcode settings.",
+        message: "Codex is disabled in TX Code settings.",
       },
     });
   }

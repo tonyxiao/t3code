@@ -263,9 +263,9 @@ function FullDiskAccessStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Let txcode read {source.name}&rsquo;s cookies</DialogTitle>
+        <DialogTitle>Let TX Code read {source.name}&rsquo;s cookies</DialogTitle>
         <DialogDescription>
-          To import cookies from {source.name}, txcode needs Full Disk Access. Turn it on in System
+          To import cookies from {source.name}, TX Code needs Full Disk Access. Turn it on in System
           Settings, then come back to finish the import — you can revoke it again once the import is
           done.
         </DialogDescription>
@@ -297,8 +297,8 @@ function FullDiskAccessStep({
         {!permission.isReady(["fullDiskAccess"]) ? (
           <p className="mt-3 text-xs text-muted-foreground">
             {stillRequired
-              ? "Access is still required. Quit and reopen txcode if you just allowed it, then retry the import."
-              : "If access doesn't update after you allow it, quit and reopen txcode, then retry the import."}
+              ? "Access is still required. Quit and reopen TX Code if you just allowed it, then retry the import."
+              : "If access doesn't update after you allow it, quit and reopen TX Code, then retry the import."}
           </p>
         ) : null}
       </DialogPanel>

@@ -1,5 +1,5 @@
 export function showBootError(error: unknown) {
-  console.error("txcode failed to start.", error);
+  console.error("TX Code failed to start.", error);
   const bootShell = document.getElementById("boot-shell");
   if (!bootShell) return;
 
@@ -8,7 +8,7 @@ export function showBootError(error: unknown) {
   content.setAttribute("role", "alert");
 
   const message = document.createElement("p");
-  message.textContent = "txcode could not load.";
+  message.textContent = "TX Code could not load.";
   content.append(message);
 
   if (import.meta.env.DEV && error instanceof Error) {

@@ -110,7 +110,7 @@ describe("fetchEnvironmentPullRequestDiff", () => {
         traceId: "trace-auth-test",
       });
       expect(error.message).toBe(
-        "This environment session is no longer valid (invalid_credential). Refresh the page or quit and reopen txcode.",
+        "This environment session is no longer valid (invalid_credential). Refresh the page or quit and reopen TX Code.",
       );
     }),
   );

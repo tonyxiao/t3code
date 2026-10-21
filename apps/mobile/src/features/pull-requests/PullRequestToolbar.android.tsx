@@ -77,7 +77,7 @@ export function PullRequestToolbar(props: {
               brand={
                 <CompactBrandTitle
                   allowFontScaling={false}
-                  accessibilityLabel="txcode, Pull requests"
+                  accessibilityLabel="TX Code, Pull requests"
                   fit
                 />
               }

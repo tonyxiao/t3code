@@ -1,7 +1,7 @@
-# txcode Mobile
+# TX Code Mobile
 
 > [!WARNING]
-> txcode Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> TX Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `txcode Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `txcode Preview`
-- `production`: store/release build as `txcode`
+- `development`: Expo dev client, installable side-by-side as `TX Code Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `TX Code Preview`
+- `production`: store/release build as `TX Code`
 
 Run commands from `apps/mobile`.
 
@@ -121,7 +121,7 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
-The fork's `private` profile builds a self-contained `txcode` app under
+The fork's `private` profile builds a self-contained `TX Code` app under
 `com.tonyxiao.txcode.v2`, while `tx-code` and `tx-code:remote` target its preview
 identity and optional remote JavaScript launcher. The `tony:*` profiles use
 separate `com.tonyxiao.txcode.tony` identities and embedded-bundle recovery;

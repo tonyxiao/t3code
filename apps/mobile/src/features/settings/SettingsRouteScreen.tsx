@@ -223,7 +223,7 @@ function SettingsIndexSections() {
           target="SettingsJavaScriptSource"
         />
         <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
-        <SettingsRow icon="info.circle" label="About txcode" target="SettingsAbout" />
+        <SettingsRow icon="info.circle" label="About TX Code" target="SettingsAbout" />
       </SettingsSection>
     </>
   );

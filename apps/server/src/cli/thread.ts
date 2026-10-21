@@ -199,7 +199,7 @@ const runCli = Effect.fn("cli.thread.run")(function* <A, E, R>(
   return yield* Effect.gen(function* () {
     const state = yield* readPersistedServerRuntimeState(config.serverRuntimeStatePath);
     if (Option.isNone(state))
-      return yield* new ThreadCliError({ detail: "No running txcode server is available." });
+      return yield* new ThreadCliError({ detail: "No running TX Code server is available." });
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     return yield* Effect.acquireUseRelease(
       auth.issueSession({

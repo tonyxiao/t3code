@@ -271,7 +271,7 @@ const SettingsContentStack = createV5SheetStackNavigator({
     SettingsAbout: createNativeStackScreen({
       screen: SettingsAboutRouteScreen,
       linking: "about",
-      options: { title: "About txcode" },
+      options: { title: "About TX Code" },
     }),
     SettingsJavaScriptSource: createNativeStackScreen({
       screen: SettingsJavaScriptSourceRouteScreen,

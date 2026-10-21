@@ -446,7 +446,7 @@ export async function persistScopedSettingsPatch(
       return [
         {
           ...environment,
-          message: "This environment does not support this setting. Update txcode on it.",
+          message: "This environment does not support this setting. Update TX Code on it.",
         },
       ];
     }

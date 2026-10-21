@@ -20,7 +20,7 @@ it("keeps v2 builds separate from Tony's v1 mobile identities", async () => {
   vi.stubEnv("T3CODE_MOBILE_TONY_BUILD", "1");
   vi.stubEnv("T3CODE_MOBILE_REMOTE_JS", "1");
   const tony = (await import("./app.config.ts")).default;
-  expect(tony.name).toBe("Tony txcode");
+  expect(tony.name).toBe("Tony TX Code");
   expect(tony.scheme).toBe("tony-txcode");
   expect(tony.ios?.bundleIdentifier).toBe("com.tonyxiao.txcode.tony");
   expect(tony.android?.package).toBe("com.tonyxiao.txcode.tony");

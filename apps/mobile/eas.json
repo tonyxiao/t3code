@@ -129,7 +129,7 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "preview",
-        "T3CODE_MOBILE_APP_NAME": "txcode",
+        "T3CODE_MOBILE_APP_NAME": "TX Code",
         "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.v2.preview",
         "T3CODE_MOBILE_SCHEME": "txcode-preview",
         "T3CODE_MOBILE_SLUG": "t3-code",

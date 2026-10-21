@@ -13,7 +13,7 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "txcode (Dev)" : "txcode (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "TX Code (Dev)" : "TX Code (Alpha)";
 const APP_BUNDLE_ID = isDevelopment
   ? `com.tonyxiao.txcode.v2.dev.${devBundleIdSuffix || "local"}`
   : "com.tonyxiao.txcode.v2";
@@ -268,8 +268,8 @@ export function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "txcode captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "txcode reads project files you open in the desktop app.",
+      "TX Code captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "TX Code reads project files you open in the desktop app.",
   };
 }
 

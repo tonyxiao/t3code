@@ -212,7 +212,7 @@ function itemSummary({
   }
 
   if (isProviderDiscoveryItem(item) && item.enabled === false) {
-    return <span>Disabled. txcode will not run {item.label} operations.</span>;
+    return <span>Disabled. TX Code will not run {item.label} operations.</span>;
   }
 
   if (item.status !== "available") {

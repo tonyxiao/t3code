@@ -34,7 +34,7 @@ case $(uname -m) in
   *) echo "Unsupported Mac architecture." >&2; exit 1 ;;
 esac
 
-app_name='Tony txcode (Alpha).app'
+app_name='Tony TX Code (Alpha).app'
 install_dir="$HOME/Applications"
 destination="$install_dir/$app_name"
 if [[ -d "$destination" ]] && lsof -t "$destination/Contents/MacOS/${app_name%.app}" >/dev/null 2>&1; then
@@ -83,7 +83,7 @@ if [[ -d "$destination" ]] && lsof -t "$destination/Contents/MacOS/${app_name%.a
 fi
 backup=''
 if [[ -e "$destination" ]]; then
-  backup="$install_dir/Tony txcode (Alpha) Backup $(date +%Y%m%d-%H%M%S)-$$.app"
+  backup="$install_dir/Tony TX Code (Alpha) Backup $(date +%Y%m%d-%H%M%S)-$$.app"
   mv "$destination" "$backup"
   echo "Previous app saved as $backup"
 fi

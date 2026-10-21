@@ -30,7 +30,7 @@ final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
     // willResignActive is still a foreground transition. Waiting until the
     // background notification is too late to request continued processing.
     guard UIApplication.shared.applicationState != .background else {
-      throw failure("Start a sync session while txcode is open.")
+      throw failure("Start a sync session while TX Code is open.")
     }
     if endsAt != nil { return }
     if !registered {

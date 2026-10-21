@@ -1000,9 +1000,9 @@ it.effect.each(["win32", "darwin", "linux"] as const)(
     const bounds = { x: 10, y: 20, width: 800, height: 600 };
     const t3 = {
       id: 42,
-      title: "txcode",
+      title: "TX Code",
       appIdentifier: "com.tonyxiao.txcode.desktop",
-      owner: { name: "txcode", processId: 123 },
+      owner: { name: "TX Code", processId: 123 },
       bounds,
       png: Buffer.from([1, 2, 3]),
     };
@@ -1676,7 +1676,7 @@ it.effect(
     focusedWindowMock.mockReturnValue(undefined);
     const destination = {
       getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }),
-      getTitle: () => "txcode",
+      getTitle: () => "TX Code",
       isDestroyed: () => false,
       isVisible: () => true,
       isMinimized: () => false,
@@ -1692,7 +1692,7 @@ it.effect(
         const warning = logs.find(
           (message) =>
             Array.isArray(message) &&
-            message[0] === "The compositor could not activate txcode after the snapshot",
+            message[0] === "The compositor could not activate TX Code after the snapshot",
         );
         assert.strictEqual(Array.isArray(warning) ? warning[1] : undefined, activationFailure);
         const pending = yield* decodePendingMetadata(saved);
@@ -3228,7 +3228,7 @@ it.effect("flags revoked macOS permissions on read and re-registers once they re
       const revoked = yield* service.state;
       assert.equal(
         revoked.message,
-        "Allow Screen Recording in System Settings, then restart txcode.",
+        "Allow Screen Recording in System Settings, then restart TX Code.",
       );
       assert.deepEqual(revoked.macPermissions, { screenRecording: false, accessibility: true });
 
@@ -3241,7 +3241,7 @@ it.effect("flags revoked macOS permissions on read and re-registers once they re
       const blocked = yield* service.state;
       assert.equal(
         blocked.message,
-        "Allow Screen Recording in System Settings, then restart txcode.",
+        "Allow Screen Recording in System Settings, then restart TX Code.",
       );
       assert.isFalse(blocked.shortcutRegistered);
 
@@ -3947,7 +3947,7 @@ it.effect.each([false, true])(
       platform: "macos",
       id: 42,
       title: "Setup",
-      owner: { name: "txcode", processId: 123, path: "/Applications/txcode.app" },
+      owner: { name: "TX Code", processId: 123, path: "/Applications/TX Code.app" },
       bounds: { x: 0, y: 0, width: 800, height: 600 },
     };
     activeWindowMock.mockReset().mockResolvedValue(active);

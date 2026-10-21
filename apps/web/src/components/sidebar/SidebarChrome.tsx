@@ -118,7 +118,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <T3Wordmark
-      aria-label="txcode"
+      aria-label="TX Code"
       className={cn("h-4 w-auto shrink-0", onBackdrop ? "text-white" : "text-foreground")}
     />
   );

@@ -144,9 +144,9 @@ function HostedStaticOnboardingState() {
               <div className="mx-auto mb-5 flex size-11 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-muted-foreground">
                 <LinkIcon className="size-5" />
               </div>
-              <EmptyTitle>Connect to a computer running txcode</EmptyTitle>
+              <EmptyTitle>Connect to a computer running TX Code</EmptyTitle>
               <EmptyDescription>
-                This app connects to txcode running on your computer or a server. Start the txcode
+                This app connects to TX Code running on your computer or a server. Start the TX Code
                 desktop app or command-line server on that machine and keep it running.
               </EmptyDescription>
               <EmptyDescription>{description}</EmptyDescription>

@@ -506,7 +506,7 @@ function armAgentAwarenessLiveActivityForLocalWorkNow(input: {
     const activity = startAgentLiveActivity(
       {
         scheme: appScheme,
-        title: "txcode",
+        title: "TX Code",
         subtitle: "Agent work in progress",
         activeCount: 1,
         updatedAt: nowIso,

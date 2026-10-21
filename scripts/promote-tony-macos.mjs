@@ -86,7 +86,7 @@ if (manifest.path)
 NodeFS.writeFileSync(`${latestPath}.tmp`, yaml.stringify(manifest));
 NodeFS.renameSync(`${latestPath}.tmp`, latestPath);
 const installers = NodeFS.readdirSync(releasePath).filter((name) => name.endsWith(".dmg"));
-const html = `<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tony txcode for Mac</title><h1>Tony txcode ${manifest.version}</h1><ul>${installers.map((name) => `<li><a href="releases/${manifest.version}/${encodeURIComponent(name)}">${name}</a></li>`).join("")}</ul><p>Install in Applications. Keep Tailscale connected to check for and download updates. Download and restart are currently explicit actions in the app.</p><p><a href="../">All platforms</a></p></html>`;
+const html = `<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tony TX Code for Mac</title><h1>Tony TX Code ${manifest.version}</h1><ul>${installers.map((name) => `<li><a href="releases/${manifest.version}/${encodeURIComponent(name)}">${name}</a></li>`).join("")}</ul><p>Install in Applications. Keep Tailscale connected to check for and download updates. Download and restart are currently explicit actions in the app.</p><p><a href="../">All platforms</a></p></html>`;
 NodeFS.writeFileSync(NodePath.join(destination, "index.html.tmp"), html);
 NodeFS.renameSync(
   NodePath.join(destination, "index.html.tmp"),
