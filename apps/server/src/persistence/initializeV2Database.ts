@@ -14,6 +14,54 @@ export class V2DatabaseImportError extends Schema.TaggedError<V2DatabaseImportEr
   }
 }
 
+function normalizeForkV1Snapshot(databasePath: string, freshSnapshot = false): void {
+  const snapshot = new NodeSqlite.DatabaseSync(databasePath);
+  try {
+    const migrationsTable = snapshot
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'",
+      )
+      .get();
+    const later = migrationsTable
+      ? snapshot
+          .prepare(
+            "SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id >= 55 ORDER BY migration_id",
+          )
+          .all()
+      : [];
+    const forkMigrations =
+      later[0]?.migration_id === 55 &&
+      later[0]?.name === "ProjectionThreadsSnoozedThroughTurn" &&
+      (later.length === 1 ||
+        (later.length === 2 &&
+          later[1]?.migration_id === 56 &&
+          later[1]?.name === "PairedBearerSessionsWithoutExpiry"));
+    if (!forkMigrations && !freshSnapshot) return;
+
+    // These ids belong to different migrations in V2. Keep the V1 tables for
+    // lazy thread import, but do not carry V1 auth sessions into a new identity.
+    snapshot.exec("BEGIN IMMEDIATE");
+    try {
+      if (forkMigrations) {
+        snapshot.exec("DELETE FROM effect_sql_migrations WHERE migration_id IN (55, 56)");
+      }
+      if (
+        snapshot
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_sessions'")
+          .get()
+      ) {
+        snapshot.exec("DELETE FROM auth_sessions");
+      }
+      snapshot.exec("COMMIT");
+    } catch (cause) {
+      snapshot.exec("ROLLBACK");
+      throw cause;
+    }
+  } finally {
+    snapshot.close();
+  }
+}
+
 /** Its copied legacy tables remain the source for lazy transcript import. */
 export const initializeV2Database = Effect.fn("initializeV2Database")(function* (
   destinationPath: string,
@@ -27,8 +75,21 @@ export const initializeV2Database = Effect.fn("initializeV2Database")(function* 
   if (!(yield* fs.exists(destinationSettingsPath)) && (yield* fs.exists(sourceSettingsPath))) {
     yield* fs.copyFile(sourceSettingsPath, destinationSettingsPath);
   }
+  const sourceKeybindingsPath = path.join(directory, "keybindings.json");
+  const destinationKeybindingsPath = path.join(directory, "keybindings-v2.json");
+  if (
+    !(yield* fs.exists(destinationKeybindingsPath)) &&
+    (yield* fs.exists(sourceKeybindingsPath))
+  ) {
+    yield* fs.copyFile(sourceKeybindingsPath, destinationKeybindingsPath);
+  }
   yield* Effect.gen(function* () {
-    if (yield* fs.exists(destinationPath)) return;
+    if (yield* fs.exists(destinationPath)) {
+      // Repair snapshots published by earlier migration builds before their
+      // first successful V2 schema migration.
+      yield* Effect.sync(() => normalizeForkV1Snapshot(destinationPath));
+      return;
+    }
     if (!(yield* fs.exists(sourcePath))) return;
     const temporaryDirectory = yield* fs.makeTempDirectoryScoped({
       directory,
@@ -43,31 +104,7 @@ export const initializeV2Database = Effect.fn("initializeV2Database")(function* 
         database.close();
       }
     });
-    // Fork V1 used migration 55 for snooze state; V2 needs that id for its
-    // orchestration schema. Keep V1's column but free the id in this copy only.
-    yield* Effect.sync(() => {
-      const snapshot = new NodeSqlite.DatabaseSync(snapshotPath);
-      try {
-        const migrationsTable = snapshot
-          .prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'",
-          )
-          .get();
-        if (!migrationsTable) return;
-        const later = snapshot
-          .prepare("SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id >= 55")
-          .all();
-        if (
-          later.length === 1 &&
-          later[0]?.migration_id === 55 &&
-          later[0]?.name === "ProjectionThreadsSnoozedThroughTurn"
-        ) {
-          snapshot.exec("DELETE FROM effect_sql_migrations WHERE migration_id = 55");
-        }
-      } finally {
-        snapshot.close();
-      }
-    });
+    yield* Effect.sync(() => normalizeForkV1Snapshot(snapshotPath, true));
     // Publish only a complete snapshot, without replacing an existing V2 database.
     yield* fs
       .link(snapshotPath, destinationPath)

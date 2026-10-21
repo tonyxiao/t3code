@@ -247,7 +247,7 @@ describe("releaseManagedTunnelOnShutdown", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const config = yield* ServerConfigModule.ServerConfig;
-      const statePath = path.join(config.baseDir, "runtime", SERVICE_STATE_FILE);
+      const statePath = path.join(config.baseDir, "runtime-v2", SERVICE_STATE_FILE);
       yield* Effect.promise(() =>
         writeServiceState(statePath, {
           protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -261,7 +261,7 @@ describe("releaseManagedTunnelOnShutdown", () => {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const config = yield* ServerConfigModule.ServerConfig;
-    const runtimeDir = path.join(config.baseDir, "runtime");
+    const runtimeDir = path.join(config.baseDir, "runtime-v2");
     const markerPath = path.join(runtimeDir, DESKTOP_UPDATE_RESTART_MARKER_FILE);
     yield* fs.makeDirectory(runtimeDir, { recursive: true });
     yield* fs.writeFileString(markerPath, "");
@@ -518,7 +518,10 @@ describe("releaseManagedTunnelOnShutdown", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const config = yield* ServerConfigModule.ServerConfig;
-      yield* fs.writeFileString(path.join(config.baseDir, "runtime", SERVICE_STOP_MARKER_FILE), "");
+      yield* fs.writeFileString(
+        path.join(config.baseDir, "runtime-v2", SERVICE_STOP_MARKER_FILE),
+        "",
+      );
 
       expect(yield* pendingServiceUpdateExists).toBe(true);
       const released = yield* link.releaseManagedTunnelOnShutdown();

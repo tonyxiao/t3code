@@ -211,7 +211,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       assert.deepEqual(progress.at(-1), { stage: "download", received: 4, total: undefined });
       assert.isTrue(progress.every((event) => event.stage === "download"));
       assert.isTrue(cancelled);
-      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions")), []);
+      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime-v2", "versions")), []);
     }),
   );
 
@@ -235,7 +235,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       assert.instanceOf(error, PinnedRuntimeInstallError);
       assert.equal(error.step, "verifying the t3 release archive checksum");
       assert.deepEqual(commands, []);
-      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime", "versions")), []);
+      assert.deepEqual(yield* fs.readDirectory(path.join(baseDir, "runtime-v2", "versions")), []);
     }),
   );
 
@@ -387,7 +387,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
 
       yield* Deferred.await(started);
       yield* Fiber.interrupt(install);
-      const versionsDir = path.join(baseDir, "runtime", "versions");
+      const versionsDir = path.join(baseDir, "runtime-v2", "versions");
       assert.deepEqual(yield* fs.readDirectory(versionsDir), []);
     }),
   );

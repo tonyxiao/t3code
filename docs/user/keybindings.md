@@ -78,7 +78,8 @@ behavior in Settings → Keyboard.
 ## Edit the configuration file
 
 Keybindings live on the environment's machine, in
-`~/.t3/userdata/keybindings.json` by default. You can edit this file directly.
+`~/.t3/userdata/keybindings-v2.json` by default. V2 copies your V1 keybindings once on first
+launch; you can edit the V2 file directly.
 It is a JSON array of rules:
 
 ```json

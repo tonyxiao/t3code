@@ -20,7 +20,7 @@ import {
 
 import * as ProcessRunner from "../processRunner.ts";
 
-const PINNED_RUNTIME_DIR = "runtime";
+const PINNED_RUNTIME_DIR = "runtime-v2";
 const PINNED_RUNTIME_INSTALL_TIMEOUT = Duration.minutes(10);
 const PINNED_RUNTIME_ARCHIVE_FILE = "t3-runtime-archive";
 // Boot-service setup and remote update can construct separate layers. Serialize

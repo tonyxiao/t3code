@@ -55,3 +55,27 @@ it.effect(
       assert.deepEqual(calls, ["pause", "compact", "resume"]);
     }),
 );
+
+it.effect("does not offer V1 database deletion during V2 repair", () =>
+  runDoctor("/test/statev2.sqlite", { fix: false, dryRun: false, interactive: true }).pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        Layer.mock(BootService.BootService)({
+          withStopped: () => Effect.die("unexpected service stop"),
+        }),
+        Layer.succeed(DatabaseMaintenance, {
+          inspect: () =>
+            Effect.succeed({
+              databaseBytes: 2000,
+              reclaimableBytes: 0,
+              incrementalVacuumEnabled: true,
+              legacyDatabaseBytes: 4000,
+            }),
+          compact: () => Effect.die("unexpected compaction"),
+          removeLegacyDatabase: () => Effect.die("V1 database must be preserved"),
+        }),
+      ),
+    ),
+  ),
+);

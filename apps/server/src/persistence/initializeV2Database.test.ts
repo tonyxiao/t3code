@@ -171,24 +171,30 @@ it.effect("uses statev2.sqlite for default and explicit development paths", () =
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
-it.effect("copies V1 settings once without sharing later writes", () => {
+it.effect("copies V1 settings and keybindings once without sharing later writes", () => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-settings-"));
   const sourcePath = NodePath.join(directory, "settings.json");
   const destinationPath = NodePath.join(directory, "settings-v2.json");
+  const sourceKeybindingsPath = NodePath.join(directory, "keybindings.json");
+  const destinationKeybindingsPath = NodePath.join(directory, "keybindings-v2.json");
   return Effect.gen(function* () {
     NodeFS.writeFileSync(sourcePath, '{"theme":"light"}');
+    NodeFS.writeFileSync(sourceKeybindingsPath, '{"open":"Ctrl+O"}');
     yield* initializeV2Database(NodePath.join(directory, "statev2.sqlite"));
     assert.equal(NodeFS.readFileSync(destinationPath, "utf8"), '{"theme":"light"}');
+    assert.equal(NodeFS.readFileSync(destinationKeybindingsPath, "utf8"), '{"open":"Ctrl+O"}');
     NodeFS.writeFileSync(sourcePath, '{"theme":"dark"}');
+    NodeFS.writeFileSync(sourceKeybindingsPath, '{"open":"Ctrl+P"}');
     yield* initializeV2Database(NodePath.join(directory, "statev2.sqlite"));
     assert.equal(NodeFS.readFileSync(destinationPath, "utf8"), '{"theme":"light"}');
+    assert.equal(NodeFS.readFileSync(destinationKeybindingsPath, "utf8"), '{"open":"Ctrl+O"}');
   }).pipe(
     Effect.provide(NodeServices.layer),
     Effect.ensuring(Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true }))),
   );
 });
 
-it.effect("imports a fork V1 database whose snooze migration used V2's migration id", () => {
+it.effect("imports a current fork V1 database with both conflicting migrations", () => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v1-fork-"));
   const sourcePath = NodePath.join(directory, "state.sqlite");
   const destinationPath = NodePath.join(directory, "statev2.sqlite");
@@ -202,6 +208,28 @@ it.effect("imports a fork V1 database whose snooze migration used V2's migration
       v1.exec(
         "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (55, 'ProjectionThreadsSnoozedThroughTurn')",
       );
+      v1.exec(
+        "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (56, 'PairedBearerSessionsWithoutExpiry')",
+      );
+      v1.exec(
+        "INSERT INTO auth_sessions (session_id, subject, scopes, method, issued_at, expires_at) VALUES ('v1-session', 'user', '[]', 'browser-session-cookie', '2026-01-01T00:00:00.000Z', '2036-01-01T00:00:00.000Z')",
+      );
+      // Match fork migration 56, which rebuilt the table with nullable expiry.
+      v1.exec(`
+        CREATE TABLE auth_sessions_without_expiry (
+          session_id TEXT PRIMARY KEY, subject TEXT NOT NULL, scopes TEXT NOT NULL,
+          method TEXT NOT NULL, client_label TEXT, client_ip_address TEXT,
+          client_user_agent TEXT, client_device_type TEXT NOT NULL DEFAULT 'unknown',
+          client_os TEXT, client_browser TEXT, issued_at TEXT NOT NULL,
+          expires_at TEXT, last_connected_at TEXT, revoked_at TEXT,
+          client_surface TEXT, client_app_version TEXT
+        );
+        INSERT INTO auth_sessions_without_expiry SELECT * FROM auth_sessions;
+        DROP TABLE auth_sessions;
+        ALTER TABLE auth_sessions_without_expiry RENAME TO auth_sessions;
+        CREATE INDEX idx_auth_sessions_active ON auth_sessions(revoked_at, expires_at, issued_at);
+        UPDATE auth_sessions SET expires_at = NULL WHERE session_id = 'v1-session';
+      `);
     } finally {
       v1.close();
     }
@@ -223,9 +251,29 @@ it.effect("imports a fork V1 database whose snooze migration used V2's migration
         "ProjectionThreadsSnoozedThroughTurn",
       );
       assert.equal(
+        source.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 56").get()
+          ?.name,
+        "PairedBearerSessionsWithoutExpiry",
+      );
+      assert.equal(source.prepare("SELECT count(*) AS count FROM auth_sessions").get()?.count, 1);
+      assert.equal(
+        source.prepare("SELECT expires_at FROM auth_sessions WHERE session_id = 'v1-session'").get()
+          ?.expires_at,
+        null,
+      );
+      assert.equal(
         destination.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 55").get()
           ?.name,
         "OrchestrationV2",
+      );
+      assert.equal(
+        destination.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 56").get()
+          ?.name,
+        "RemoveRedundantProjectionIndexes",
+      );
+      assert.equal(
+        destination.prepare("SELECT count(*) AS count FROM auth_sessions").get()?.count,
+        0,
       );
       assert.equal(
         destination
@@ -234,6 +282,58 @@ it.effect("imports a fork V1 database whose snooze migration used V2's migration
           )
           .get()?.count,
         1,
+      );
+    } finally {
+      source.close();
+      destination.close();
+    }
+  }).pipe(
+    Effect.provide(
+      ServerConfig.layerTest(directory, directory).pipe(Layer.provideMerge(NodeServices.layer)),
+    ),
+    Effect.ensuring(Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true }))),
+  );
+});
+
+it.effect("repairs an earlier V2 snapshot blocked by fork migration ids", () => {
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-v2-fork-repair-"));
+  const sourcePath = NodePath.join(directory, "state.sqlite");
+  const destinationPath = NodePath.join(directory, "statev2.sqlite");
+  return Effect.gen(function* () {
+    yield* runMigrations({ toMigrationInclusive: 54 }).pipe(
+      Effect.provide(NodeSqliteClient.layer({ filename: sourcePath })),
+    );
+    const v1 = new NodeSqlite.DatabaseSync(sourcePath);
+    try {
+      v1.exec("ALTER TABLE projection_threads ADD COLUMN snoozed_through_turn_id TEXT");
+      v1.exec(
+        "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (55, 'ProjectionThreadsSnoozedThroughTurn'), (56, 'PairedBearerSessionsWithoutExpiry')",
+      );
+    } finally {
+      v1.close();
+    }
+    NodeFS.copyFileSync(sourcePath, destinationPath);
+    yield* initializeV2Database(destinationPath);
+    const config = yield* ServerConfig.ServerConfig;
+    yield* runMigrations().pipe(
+      Effect.provide(
+        SqlitePersistence.layerConfig.pipe(
+          Layer.provide(ServerConfig.layer({ ...config, dbPath: destinationPath })),
+        ),
+      ),
+    );
+    const source = new NodeSqlite.DatabaseSync(sourcePath, { readOnly: true });
+    const destination = new NodeSqlite.DatabaseSync(destinationPath, { readOnly: true });
+    try {
+      assert.equal(
+        source.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 56").get()
+          ?.name,
+        "PairedBearerSessionsWithoutExpiry",
+      );
+      assert.equal(
+        destination.prepare("SELECT name FROM effect_sql_migrations WHERE migration_id = 56").get()
+          ?.name,
+        "RemoveRedundantProjectionIndexes",
       );
     } finally {
       source.close();

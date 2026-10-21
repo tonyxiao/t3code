@@ -583,7 +583,7 @@ export const make = Effect.gen(function* () {
     );
   }).pipe(Effect.withSpan("desktop.updates.downloadAvailableUpdate"));
 
-  const updateRestartMarkerDir = environment.path.join(environment.baseDir, "runtime");
+  const updateRestartMarkerDir = environment.path.join(environment.baseDir, "runtime-v2");
   const updateRestartMarkerPath = environment.path.join(
     updateRestartMarkerDir,
     DESKTOP_UPDATE_RESTART_MARKER_FILE,

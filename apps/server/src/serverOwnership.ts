@@ -49,7 +49,7 @@ const isSqliteBusy = (cause: unknown) =>
     ("code" in cause && cause.code === "SQLITE_BUSY"));
 
 /**
- * Servers from before this lock only publish `server-runtime-v2.json`. Treat
+ * Servers from before this lock only publish `server-runtime.json`. Treat
  * their record as stale only when the process start time proves PID reuse.
  */
 const legacyOwnerIsLive = Effect.fn("legacyOwnerIsLive")(function* (

@@ -6,8 +6,10 @@ transcripts imported as needed. You do not need to run an import command.
 
 V1 continues using its original database while V2 uses the copy. The database import can run while
 V1 is open. Opening V2 again resumes your V2 history. The copy happens only once: later conversations
-and changes in either version do not sync to the other. Settings, attachments, and workspace files
-remain shared.
+and changes in either version do not sync to the other. Settings and keybindings are copied once
+into V2 files, then stay separate. Attachments and workspace files remain shared. V2 has separate
+pairing and cloud-link credentials, so pair devices and link T3 Connect again for V2. Provider and
+source-control credentials are copied once; later credential changes do not sync between versions.
 
 The V2 desktop app uses a separate browser profile, so browser cookies and caches do not carry
 over from V1. You may need to sign in again to websites opened inside the app. On its first launch,
@@ -15,9 +17,10 @@ the V2 desktop app copies stashed prompts, unsent drafts, layout, and theme from
 change in V2 afterwards stays in V2.
 
 The migrated thread keeps its title, project, provider and model selection, permission and
-interaction modes, branch or worktree, archive state, settlement state, snooze and pin state, and
+interaction modes, branch or worktree, archive state, settlement state, time-based snooze and pin state, and
 linked pull request. T3 Code also brings over user and assistant messages, their timestamps, and
 supported attachments. Large histories may appear in stages while the server imports transcripts.
+V1's snooze-until-turn option is not available in V2; a thread using it needs a new time-based snooze.
 
 The migration does not recreate the old provider's live session. It also does not convert old run
 records, checkpoints and diffs, tool activity, approval history, or proposed plan history into the

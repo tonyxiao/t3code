@@ -51,7 +51,7 @@ interface ManagedChild {
 }
 
 const runtimePaths = (baseDir: string, version: string) => {
-  const versionDir = NodePath.join(baseDir, "runtime", "versions", version);
+  const versionDir = NodePath.join(baseDir, "runtime-v2", "versions", version);
   // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher has no Effect runtime.
   const executableName = process.platform === "win32" ? "t3.exe" : "t3";
   return {
@@ -70,7 +70,7 @@ const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
 const RESTORE_MARKER = ".restore-pending";
 
 const databaseBackupDir = (baseDir: string, updateId: string) =>
-  NodePath.join(baseDir, "runtime", "db-backup", updateId);
+  NodePath.join(baseDir, "runtime-v2", "db-backup", updateId);
 
 const databaseBackupFile = (backupDir: string, suffix: (typeof DB_FILE_SUFFIXES)[number]) =>
   NodePath.join(backupDir, suffix === "" ? "database" : `database${suffix}`);
@@ -214,7 +214,7 @@ export async function databaseBackupBlocker(
   probe: Partial<BackupSpaceProbe> = {},
 ): Promise<string | undefined> {
   const { readFreeBytes, canClone } = { ...filesystemBackupSpaceProbe, ...probe };
-  const backupRoot = NodePath.join(baseDir, "runtime", "db-backup");
+  const backupRoot = NodePath.join(baseDir, "runtime-v2", "db-backup");
   await NodeFSP.mkdir(backupRoot, { recursive: true, mode: 0o700 });
   const [files, free] = await Promise.all([statDatabaseFiles(dbPath), readFreeBytes(backupRoot)]);
   const size = files.reduce((total, file) => total + file.size, 0);
@@ -427,9 +427,9 @@ async function terminateChild(
 }
 
 const stopMarkerPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_STOP_MARKER_FILE);
+  NodePath.join(baseDir, "runtime-v2", SERVICE_STOP_MARKER_FILE);
 const restartPendingPath = (baseDir: string) =>
-  NodePath.join(baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
+  NodePath.join(baseDir, "runtime-v2", SERVICE_RESTART_PENDING_FILE);
 
 export class Launcher {
   readonly #baseDir: string;
@@ -451,7 +451,7 @@ export class Launcher {
   ) {
     this.#baseDir = baseDir;
     this.#backupSpaceProbe = options.backupSpaceProbe;
-    this.#statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
+    this.#statePath = NodePath.join(baseDir, "runtime-v2", SERVICE_STATE_FILE);
     this.#state = state;
   }
 
@@ -829,7 +829,7 @@ export async function main(): Promise<void> {
   if (baseDir === undefined || baseDir === "") {
     throw new Error("T3CODE_HOME is required by the TX Code service launcher.");
   }
-  const statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
+  const statePath = NodePath.join(baseDir, "runtime-v2", SERVICE_STATE_FILE);
   const state = await readServiceState(statePath);
   await new Launcher(baseDir, state).run();
 }

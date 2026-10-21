@@ -647,7 +647,11 @@ describe("DesktopUpdates", () => {
 
         assert.isTrue((yield* updates.install).accepted);
         assert.deepEqual(markersAtStop, [
-          environment.path.join(environment.baseDir, "runtime", DESKTOP_UPDATE_RESTART_MARKER_FILE),
+          environment.path.join(
+            environment.baseDir,
+            "runtime-v2",
+            DESKTOP_UPDATE_RESTART_MARKER_FILE,
+          ),
         ]);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
