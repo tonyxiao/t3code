@@ -83,7 +83,13 @@ export function codexCallbackUrl(value: string, redirectUri: string, state: stri
 }
 
 export function codexAuthHandoffUrl(input: CodexAuthHandoff, development = false) {
-  const url = new URL(`${development ? "t3code-dev" : "t3code"}://auth/codex`);
+  const returnScheme = new URL(input.returnUrl).protocol.slice(0, -1);
+  const scheme = ["txcode", "txcode-dev", "tony-txcode", "tony-txcode-dev"].includes(returnScheme)
+    ? returnScheme
+    : development
+      ? "txcode-dev"
+      : "txcode";
+  const url = new URL(`${scheme}://auth/codex`);
   url.searchParams.set("request", encodeHandoff(input));
   return url.toString();
 }
@@ -93,7 +99,9 @@ export function readCodexAuthHandoff(value: string, development: boolean) {
     const url = new URL(value);
     if (
       value.length > 32_768 ||
-      url.protocol !== (development ? "t3code-dev:" : "t3code:") ||
+      !(development
+        ? ["txcode-dev:", "tony-txcode-dev:"].includes(url.protocol)
+        : ["txcode:", "tony-txcode:"].includes(url.protocol)) ||
       url.host !== "auth" ||
       url.pathname !== "/codex" ||
       url.username ||

@@ -375,7 +375,7 @@ export function ThreadGrid() {
     if (actionPending.current || selectedRows.length === 0) return;
     actionPending.current = true;
     setBusy(true);
-    try {
+    await (async () => {
       if (action === "archive" && confirmArchive) {
         const api = readLocalApi();
         if (!api) return;
@@ -428,10 +428,10 @@ export function ThreadGrid() {
           title: `${failed} thread${failed === 1 ? "" : "s"} could not be updated`,
           description: firstError,
         });
-    } finally {
+    })().finally(() => {
       actionPending.current = false;
       setBusy(false);
-    }
+    });
   };
 
   const rename = async (row: ThreadGridRow) => {
@@ -442,7 +442,7 @@ export function ThreadGrid() {
     }
     if (title === row.thread.title || pendingRenames.current.has(row.key)) return;
     pendingRenames.current.add(row.key);
-    try {
+    await (async () => {
       const result = await updateMetadata({
         environmentId: row.thread.environmentId,
         input: { threadId: row.thread.id, title },
@@ -455,9 +455,9 @@ export function ThreadGrid() {
           description: error instanceof Error ? error.message : "An error occurred.",
         });
       }
-    } finally {
+    })().finally(() => {
       pendingRenames.current.delete(row.key);
-    }
+    });
   };
 
   const columns: readonly Column<ThreadGridRow>[] = [

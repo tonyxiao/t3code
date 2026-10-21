@@ -6594,9 +6594,8 @@ export default function ChatView(props: ChatViewProps) {
           threadIdForSend,
           error instanceof Error ? error.message : "Could not save the offline message.",
         );
-      } finally {
-        sendInFlightRef.current = false;
       }
+      sendInFlightRef.current = false;
       return;
     }
 

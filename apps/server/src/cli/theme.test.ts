@@ -27,7 +27,7 @@ const runCli = (args: ReadonlyArray<string>) =>
 
 const makeBaseDir = () => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-theme-cli-"));
 
-const settingsPathFor = (baseDir: string) => NodePath.join(baseDir, "userdata", "settings.json");
+const settingsPathFor = (baseDir: string) => NodePath.join(baseDir, "userdata", "settings-v2.json");
 
 const NIGHTFALL_THEME_JSON = `${JSON.stringify({
   name: "Nightfall",

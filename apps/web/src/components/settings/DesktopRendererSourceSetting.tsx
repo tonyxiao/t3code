@@ -52,9 +52,8 @@ export function DesktopRendererSourceSetting() {
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setPending(false);
     }
+    setPending(false);
   };
   const select = async (source: JavaScriptSource) => {
     await bridge.selectJavaScriptSource!(source);
