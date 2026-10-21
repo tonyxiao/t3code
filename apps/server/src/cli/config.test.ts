@@ -94,6 +94,28 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
     devAllowedOrigins: [],
   } as const;
 
+  it.effect("uses the v2 listening port while honoring an explicit v1 port", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "txcode-v2-port-" });
+      const flags = { ...minimalDesktopFlags(baseDir), port: Option.none<number>() };
+      const configLayer = Layer.mergeAll(
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+        NetService.layer,
+      );
+      const defaultConfig = yield* resolveServerConfig(flags, Option.none()).pipe(
+        Effect.provide(configLayer),
+      );
+      const explicitConfig = yield* resolveServerConfig(
+        { ...flags, port: Option.some(3773) },
+        Option.none(),
+      ).pipe(Effect.provide(configLayer));
+      assert.equal(defaultConfig.port, 3774);
+      assert.equal(explicitConfig.port, 3773);
+      assert.equal(defaultConfig.baseDir, explicitConfig.baseDir);
+    }).pipe(Effect.scoped),
+  );
+
   const openBootstrapFd = Effect.fn(function* (payload: DesktopBackendBootstrapValue) {
     const fs = yield* FileSystem.FileSystem;
     const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
@@ -131,7 +153,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         const stateDir = path.join(baseDir, "userdata");
         yield* fs.makeDirectory(stateDir, { recursive: true });
         yield* fs.writeFileString(
-          path.join(stateDir, "server-runtime.json"),
+          path.join(stateDir, "server-runtime-v2.json"),
           yield* encodeUnknownJson({
             version: 1,
             pid,
@@ -178,7 +200,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         const stateDir = path.join(baseDir, "userdata");
         yield* fs.makeDirectory(stateDir, { recursive: true });
         yield* fs.writeFileString(
-          path.join(stateDir, "server-runtime.json"),
+          path.join(stateDir, "server-runtime-v2.json"),
           yield* encodeUnknownJson({
             version: 1,
             pid: child.pid,

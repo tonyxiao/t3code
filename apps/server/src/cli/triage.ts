@@ -72,7 +72,7 @@ export const describeServerProcess = Effect.fn("triage.describeServerProcess")(f
 ) {
   const state = yield* readPersistedServerRuntimeState(serverRuntimeStatePath);
   if (Option.isNone(state)) {
-    return "not running (no server-runtime.json; the server may never have started here)";
+    return "not running (no server-runtime-v2.json; the server may never have started here)";
   }
   const version =
     state.value.serverVersion === undefined

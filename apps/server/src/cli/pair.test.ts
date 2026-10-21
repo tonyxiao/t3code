@@ -147,7 +147,7 @@ describe("t3 pair", () => {
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-test-"));
         const port = Number(new URL(origin).port);
-        const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+        const statePath = NodePath.join(baseDir, "userdata", "server-runtime-v2.json");
         yield* persistServerRuntimeState({
           path: statePath,
           state: yield* makePersistedServerRuntimeState({
@@ -200,7 +200,7 @@ describe("t3 pair", () => {
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-scopes-test-"));
         yield* persistServerRuntimeState({
-          path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+          path: NodePath.join(baseDir, "userdata", "server-runtime-v2.json"),
           state: yield* makePersistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
@@ -237,7 +237,7 @@ describe("t3 pair", () => {
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-dev-test-"));
         const port = Number(new URL(origin).port);
-        const statePath = NodePath.join(baseDir, "dev", "server-runtime.json");
+        const statePath = NodePath.join(baseDir, "dev", "server-runtime-v2.json");
         yield* persistServerRuntimeState({
           path: statePath,
           state: yield* makePersistedServerRuntimeState({
@@ -274,7 +274,7 @@ describe("t3 pair", () => {
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-pid-test-"));
-        const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+        const statePath = NodePath.join(baseDir, "userdata", "server-runtime-v2.json");
         const state = yield* makePersistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: Number(new URL(origin).port),
@@ -299,7 +299,7 @@ describe("t3 pair", () => {
   it.effect("ignores stale runtime state pointing at a dead server", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-stale-test-"));
-      const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+      const statePath = NodePath.join(baseDir, "userdata", "server-runtime-v2.json");
       yield* persistServerRuntimeState({
         path: statePath,
         state: yield* makePersistedServerRuntimeState({

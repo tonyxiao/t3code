@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Keyboard, View } from "react-native";
+import Constants from "expo-constants";
 import {
   CommonActions,
   type NavigationState,
@@ -283,7 +284,11 @@ function EnabledShowcaseCaptureCoordinator(props: { readonly pathname: string })
       async () => {
         const now = Date.now();
         const { threads: latestThreads, projects: latestProjects } = entitiesRef.current;
-        const activity = buildShowcaseAgentActivity(latestThreads, latestProjects, now);
+        const configuredScheme = Constants.expoConfig?.scheme;
+        const scheme = Array.isArray(configuredScheme)
+          ? (configuredScheme[0] ?? "txcode")
+          : (configuredScheme ?? "txcode");
+        const activity = buildShowcaseAgentActivity(latestThreads, latestProjects, now, scheme);
         const outcome =
           activity === null
             ? "fixture threads not loaded"

@@ -42,10 +42,10 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const path = yield* Path.Path;
     const names = isTonyDesktop
       ? input.isDevelopment
-        ? { current: "tony-t3code-dev", legacy: "Tony T3 Code (Dev)" }
-        : { current: "tony-t3code", legacy: "Tony T3 Code (Alpha)" }
+        ? { current: "tony-txcode-v2-dev", legacy: "Tony T3 Code (Dev)" }
+        : { current: "tony-txcode-v2", legacy: "Tony T3 Code (Alpha)" }
       : input.isDevelopment
-        ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
+        ? { current: "txcode-v2-dev", legacy: "T3 Code (Dev)" }
         : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
@@ -57,9 +57,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
             DesktopUserDataInitializationError.fromFileSystem(cause, "inspect", resourcePath),
           ),
         );
-    if (input.isDevelopment) {
-      return (yield* inspect(legacyPath)) ? legacyPath : destinationPath;
-    }
+    if (input.isDevelopment) return destinationPath;
     // Chromium databases require their own profile for each running version.
     if (input.platform !== "win32") return destinationPath;
     const destinationState = path.join(destinationPath, "Local State");

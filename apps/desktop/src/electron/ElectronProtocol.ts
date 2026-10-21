@@ -15,8 +15,8 @@ import * as Electron from "electron";
 import { isTonyDesktop } from "../app/TonyDesktop.ts";
 
 export const DESKTOP_HOST = "app";
-const DESKTOP_PRODUCTION_SCHEME = isTonyDesktop ? "tony-t3code" : "t3code";
-const DESKTOP_DEVELOPMENT_SCHEME = isTonyDesktop ? "tony-t3code-dev" : "t3code-dev";
+const DESKTOP_PRODUCTION_SCHEME = isTonyDesktop ? "tony-txcode" : "txcode";
+const DESKTOP_DEVELOPMENT_SCHEME = isTonyDesktop ? "tony-txcode-dev" : "txcode-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;

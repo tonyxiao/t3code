@@ -76,9 +76,9 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.tonyxiao.txcode.dev");
-      assert.equal(environment.linuxWmClass, "t3code-dev");
-      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.dev.desktop");
+      assert.equal(environment.appUserModelId, "com.tonyxiao.txcode.v2.dev");
+      assert.equal(environment.linuxWmClass, "txcode-v2-dev");
+      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.v2.dev.desktop");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -150,7 +150,7 @@ describe("DesktopEnvironment", () => {
         resourcesPath: "/tmp/.mount_t3code/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.desktop");
+      assert.equal(environment.linuxDesktopEntryName, "com.tonyxiao.txcode.v2.desktop");
     }),
   );
 

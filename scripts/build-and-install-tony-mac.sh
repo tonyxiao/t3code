@@ -34,7 +34,7 @@ case $(uname -m) in
   *) echo "Unsupported Mac architecture." >&2; exit 1 ;;
 esac
 
-app_name='Tony T3 Code (Alpha).app'
+app_name='Tony txcode (Alpha).app'
 install_dir="$HOME/Applications"
 destination="$install_dir/$app_name"
 if [[ -d "$destination" ]] && lsof -t "$destination/Contents/MacOS/${app_name%.app}" >/dev/null 2>&1; then
@@ -45,7 +45,7 @@ fi
 build_dir="$repo_root/tmp/tony-local-macos"
 mkdir -p "$build_dir" "$install_dir"
 T3CODE_DESKTOP_TONY_BUILD=1 \
-T3CODE_DESKTOP_UPDATE_URL=https://cs-mini.meteor-ruffe.ts.net/t3-downloads/macos/ \
+T3CODE_DESKTOP_UPDATE_URL=https://cs-mini.meteor-ruffe.ts.net/txcode-v2-downloads/macos/ \
 node scripts/build-desktop-artifact.ts \
   --platform mac --target dmg --arch "$build_arch" --output-dir "$build_dir"
 
@@ -64,7 +64,7 @@ if [[ ! -f "$app/Contents/Resources/app.asar" ]]; then
 fi
 bundle_id=$(plutil -extract CFBundleIdentifier raw "$app/Contents/Info.plist")
 built_version=$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")
-if [[ "$bundle_id" != com.tonyxiao.t3code.desktop || "$built_version" != "$version" ]]; then
+if [[ "$bundle_id" != com.tonyxiao.txcode.tony || "$built_version" != "$version" ]]; then
   echo "The built app has an unexpected identity or version." >&2
   exit 1
 fi
@@ -83,7 +83,7 @@ if [[ -d "$destination" ]] && lsof -t "$destination/Contents/MacOS/${app_name%.a
 fi
 backup=''
 if [[ -e "$destination" ]]; then
-  backup="$install_dir/Tony T3 Code (Alpha) Backup $(date +%Y%m%d-%H%M%S)-$$.app"
+  backup="$install_dir/Tony txcode (Alpha) Backup $(date +%Y%m%d-%H%M%S)-$$.app"
   mv "$destination" "$backup"
   echo "Previous app saved as $backup"
 fi

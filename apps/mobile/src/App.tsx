@@ -1,4 +1,5 @@
 import { PermissionUpdateNotice } from "./features/connection/PermissionUpdateNotice";
+import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -37,8 +38,16 @@ if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
+const configuredSchemes = Constants.expoConfig?.scheme;
 const appLinking = {
-  prefixes: [Linking.createURL("/"), "t3code://", "t3code-dev://", "t3code-preview://"],
+  prefixes: [
+    Linking.createURL("/"),
+    ...(Array.isArray(configuredSchemes)
+      ? configuredSchemes.map((scheme) => `${scheme}://`)
+      : configuredSchemes
+        ? [`${configuredSchemes}://`]
+        : []),
+  ],
   config: { initialRouteName: "Home" },
   filter: shouldHandleAppLink,
 };

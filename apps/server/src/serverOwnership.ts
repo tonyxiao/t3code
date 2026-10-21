@@ -49,7 +49,7 @@ const isSqliteBusy = (cause: unknown) =>
     ("code" in cause && cause.code === "SQLITE_BUSY"));
 
 /**
- * Servers from before this lock only publish `server-runtime.json`. Treat
+ * Servers from before this lock only publish `server-runtime-v2.json`. Treat
  * their record as stale only when the process start time proves PID reuse.
  */
 const legacyOwnerIsLive = Effect.fn("legacyOwnerIsLive")(function* (
@@ -85,7 +85,7 @@ const legacyOwnerIsLive = Effect.fn("legacyOwnerIsLive")(function* (
 
 /**
  * Hold an exclusive lock on the state directory until the scope closes. The
- * lock is an exclusive transaction on `server-owner.sqlite`, which never holds
+ * lock is an exclusive transaction on `server-owner-v2.sqlite`, which never holds
  * data and must never be unlinked: the OS releases it when the process exits,
  * even on SIGKILL, so a crashed owner never blocks the next start.
  */
@@ -101,7 +101,7 @@ export const acquireServerOwnership = Effect.fn("acquireServerOwnership")(functi
     Effect.try({
       try: () => {
         NodeFS.mkdirSync(stateDir, { recursive: true });
-        const db = new NodeSqlite.DatabaseSync(NodePath.join(stateDir, "server-owner.sqlite"));
+        const db = new NodeSqlite.DatabaseSync(NodePath.join(stateDir, "server-owner-v2.sqlite"));
         try {
           db.exec("PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE;");
         } catch (cause) {

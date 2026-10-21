@@ -23,19 +23,19 @@ it.effect("isolates private desktop state and URL handling from the installed up
       }),
       "/Users/tony/.t3-tony",
     );
-    assert.equal(protocol.getDesktopUrl(false), "tony-t3code://app/");
+    assert.equal(protocol.getDesktopUrl(false), "tony-txcode://app/");
     assert.equal(
       yield* userData.resolveUserDataPath({
         appDataDirectory: "/Users/tony/Library/Application Support",
         isDevelopment: false,
         platform: "darwin",
       }),
-      "/Users/tony/Library/Application Support/tony-t3code",
+      "/Users/tony/Library/Application Support/tony-txcode-v2",
     );
     assert.equal(
       environment.resolveDesktopAppBranding({ isDevelopment: false, appVersion: "1.0.0" })
         .displayName,
-      "Tony T3 Code (Alpha)",
+      "Tony txcode (Alpha)",
     );
   }).pipe(Effect.provide(NodeServices.layer)),
 );

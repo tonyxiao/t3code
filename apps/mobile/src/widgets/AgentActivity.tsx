@@ -41,6 +41,7 @@ export interface AgentActivityRowProps {
 }
 
 export interface AgentActivityProps {
+  readonly scheme: string;
   readonly title: string;
   readonly subtitle: string;
   readonly activeCount: number;
@@ -151,12 +152,14 @@ export function AgentActivity(
       : `${props.activeCount} active`;
   const summary = attentionSuffix || activeLabel;
 
-  // Any registered scheme variant routes back to this app; taps are delivered
-  // to the widget's containing app, so the prod scheme is safe for all builds.
+  // Widget taps must use this build's registered scheme so v1 stays separate.
   const deepLinkRow = attentionRow ?? row0;
   const deepLink =
-    deepLinkRow && deepLinkRow.deepLink.startsWith("/") && !deepLinkRow.deepLink.startsWith("//")
-      ? `t3code://${deepLinkRow.deepLink.slice(1)}`
+    props.scheme &&
+    deepLinkRow &&
+    deepLinkRow.deepLink.startsWith("/") &&
+    !deepLinkRow.deepLink.startsWith("//")
+      ? `${props.scheme}://${deepLinkRow.deepLink.slice(1)}`
       : null;
 
   type SFName = NonNullable<ComponentProps<typeof Image>["systemName"]>;

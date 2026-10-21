@@ -104,7 +104,7 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
-        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode",
+        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.v2",
         "T3CODE_MOBILE_SCHEME": "txlforge-t3",
         "T3CODE_MOBILE_SLUG": "t3-code-mobile",
         "T3CODE_MOBILE_EAS_OWNER": "txlforge",
@@ -130,8 +130,8 @@
       "env": {
         "APP_VARIANT": "preview",
         "T3CODE_MOBILE_APP_NAME": "txcode",
-        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.preview",
-        "T3CODE_MOBILE_SCHEME": "tony-t3code-preview",
+        "T3CODE_MOBILE_APP_ID": "com.tonyxiao.txcode.v2.preview",
+        "T3CODE_MOBILE_SCHEME": "txcode-preview",
         "T3CODE_MOBILE_SLUG": "t3-code",
         "T3CODE_MOBILE_EAS_OWNER": "txlforge-tony",
         "T3CODE_MOBILE_EAS_PROJECT_ID": "f6cd51c6-6875-4ce4-9360-7aefaf9ee333",

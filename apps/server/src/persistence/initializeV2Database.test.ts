@@ -162,6 +162,7 @@ it.effect("uses statev2.sqlite for default and explicit development paths", () =
           baseDirIsExplicit,
         });
         assert.equal(NodePath.basename(paths.dbPath), "statev2.sqlite");
+        assert.equal(NodePath.basename(paths.serverRuntimeStatePath), "server-runtime-v2.json");
         assert.equal(paths.settingsPath, NodePath.join(paths.stateDir, "settings.json"));
       }
     }

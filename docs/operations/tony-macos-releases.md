@@ -14,7 +14,7 @@ The build creates a signed, notarized DMG, updater ZIP, blockmaps, and
 `latest-mac.yml` in `release/`. To publish the verified artifacts:
 
 ```sh
-node scripts/promote-tony-macos.mjs release /Users/claudia/hub/projects/t3-distribution/site/macos
+node scripts/promote-tony-macos.mjs release /Users/claudia/hub/projects/t3-distribution/site/txcode-v2/macos
 ```
 
 Promotion checks hashes, Tony's signing identity, the notarization staple, and
@@ -22,15 +22,19 @@ Gatekeeper acceptance. It keeps immutable version directories and replaces the
 feed manifest atomically. It refuses version downgrades. Keep the ZIP and its
 blockmap alongside the DMG; the macOS updater installs from the ZIP.
 
-The feed is `https://cs-mini.meteor-ruffe.ts.net/t3-downloads/macos/`.
+The v2 feed is `https://cs-mini.meteor-ruffe.ts.net/txcode-v2-downloads/macos/`.
+Provision and verify that separate feed before publishing a v2 release; the v1
+feed must keep serving v1 artifacts.
 Tailscale must be connected for downloads and update checks. The static server
 binds to loopback and is exposed with Tailscale Serve, not Funnel. Download
 access follows the tailnet's existing access rules. Mac updates currently check
 in the background and require explicit download/restart. Do not embed a shared
 GitHub token or other download credential in the app.
 
-The private build uses `com.tonyxiao.t3code.desktop`, the `tony-t3code` URL
-scheme, `~/.t3-tony`, and a separate Electron user-data directory. It supports
+The private v2 build uses `com.tonyxiao.txcode.tony`, the `tony-txcode` URL
+scheme, `~/.t3-tony`, and its own Electron user-data directory. The T3 home
+remains shared with v1 for the existing one-time thread migration. The server
+ownership lock permits only one server in that home at a time. It supports
 direct server pairing. Hosted Clerk passkeys are disabled until this fork has
 its own associated-domain configuration. Other builds keep upstream defaults.
 

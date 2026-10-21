@@ -7,6 +7,23 @@ import * as PlatformError from "effect/PlatformError";
 
 import { resolveUserDataPath } from "./DesktopUserData.ts";
 
+it.effect("does not reuse a v1 development browser profile", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "txcode-v2-profile-" });
+    yield* fs.makeDirectory(path.join(directory, "T3 Code (Dev)"));
+    assert.equal(
+      yield* resolveUserDataPath({
+        appDataDirectory: directory,
+        isDevelopment: true,
+        platform: "darwin",
+      }),
+      path.join(directory, "txcode-v2-dev"),
+    );
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
 it.effect("identifies a failed source read and preserves its cause", () => {
   const sourceState = "/profiles/t3code/Local State";
   const cause = PlatformError.systemError({

@@ -183,7 +183,7 @@ describe("t3 server command safety", () => {
       Effect.gen(function* () {
         const baseDir = NodePath.join(root, "home");
         const stateDir = NodePath.join(baseDir, "userdata");
-        const statePath = NodePath.join(stateDir, "server-runtime.json");
+        const statePath = NodePath.join(stateDir, "server-runtime-v2.json");
         const child = yield* liveProcess;
         assert(child.pid !== undefined);
         const record = yield* encodeRuntimeState({
@@ -218,7 +218,7 @@ describe("t3 server command safety", () => {
           expect(yield* Effect.promise(() => NodeFSP.readFile(statePath, "utf8"))).toBe(record);
           expect(yield* pathExists(newDirectory)).toBe(false);
           expect(yield* Effect.promise(() => NodeFSP.readdir(stateDir))).toEqual([
-            "server-runtime.json",
+            "server-runtime-v2.json",
           ]);
         }
       }),

@@ -43,6 +43,10 @@ import { supportsAgentAwarenessPush } from "./capabilities";
 import { makeRelayDeviceRegistrationRequest, resolveApsEnvironment } from "./registrationPayload";
 
 const REMOTE_ACTIVITY_REGISTRATION_RETRY_MS = 15_000;
+const configuredAppScheme = Constants.expoConfig?.scheme;
+const appScheme = Array.isArray(configuredAppScheme)
+  ? (configuredAppScheme[0] ?? "txcode")
+  : (configuredAppScheme ?? "txcode");
 
 const AgentAwarenessOperation = Schema.Literals([
   "read-notification-permissions",
@@ -501,6 +505,7 @@ function armAgentAwarenessLiveActivityForLocalWorkNow(input: {
     const nowIso = new Date(Date.now()).toISOString();
     const activity = startAgentLiveActivity(
       {
+        scheme: appScheme,
         title: "txcode",
         subtitle: "Agent work in progress",
         activeCount: 1,
@@ -1097,6 +1102,7 @@ export function refreshActiveLiveActivityRemoteRegistration(): Effect.Effect<
             try: () =>
               startAgentLiveActivity(
                 {
+                  scheme: appScheme,
                   title: aggregate.title,
                   subtitle: aggregate.subtitle,
                   activeCount: aggregate.activeCount,

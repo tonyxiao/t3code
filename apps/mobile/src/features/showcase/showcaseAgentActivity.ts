@@ -43,6 +43,7 @@ export function buildShowcaseAgentActivity(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   projects: ReadonlyArray<EnvironmentProject>,
   now: number,
+  scheme = "txcode",
 ): AgentActivityProps | null {
   const rows: AgentActivityRowProps[] = [];
   for (const definition of SHOWCASE_AGENT_ACTIVITY_ROWS) {
@@ -68,6 +69,7 @@ export function buildShowcaseAgentActivity(
     });
   }
   return {
+    scheme,
     title: "txcode",
     subtitle: "Agent work in progress",
     activeCount: rows.filter((row) => ACTIVE_PHASES.has(row.phase)).length,

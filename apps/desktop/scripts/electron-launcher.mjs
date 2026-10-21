@@ -15,9 +15,9 @@ const devBundleIdSuffix = NodePath.basename(repoRoot)
   .replaceAll(/[^a-z0-9]+/g, "");
 const APP_DISPLAY_NAME = isDevelopment ? "txcode (Dev)" : "txcode (Alpha)";
 const APP_BUNDLE_ID = isDevelopment
-  ? `com.tonyxiao.txcode.dev.${devBundleIdSuffix || "local"}`
-  : "com.tonyxiao.txcode";
-const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
+  ? `com.tonyxiao.txcode.v2.dev.${devBundleIdSuffix || "local"}`
+  : "com.tonyxiao.txcode.v2";
+const APP_PROTOCOL_SCHEMES = isDevelopment ? ["txcode-dev"] : ["txcode"];
 const LAUNCHER_VERSION = 20;
 const developmentMacIconPngPath = NodePath.join(
   repoRoot,

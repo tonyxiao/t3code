@@ -13,7 +13,7 @@ import { DEFAULT_SIGNAL_EXPORT, type SignalExport } from "@t3tools/shared/observ
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import packageJson from "../package.json" with { type: "json" };
 
-export const DEFAULT_PORT = 3773;
+export const DEFAULT_PORT = 3774;
 
 export const RuntimeMode = Schema.Literals(["web", "desktop"]);
 export type RuntimeMode = typeof RuntimeMode.Type;
@@ -143,7 +143,7 @@ export const deriveServerPaths = Effect.fn(function* (
     terminalLogsDir: join(logsDir, "terminals"),
     anonymousIdPath: join(stateDir, "anonymous-id"),
     environmentIdPath: join(stateDir, "environment-id"),
-    serverRuntimeStatePath: join(stateDir, "server-runtime.json"),
+    serverRuntimeStatePath: join(stateDir, "server-runtime-v2.json"),
     secretsDir: join(stateDir, "secrets"),
   };
 });
