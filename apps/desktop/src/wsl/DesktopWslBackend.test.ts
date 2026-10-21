@@ -172,7 +172,7 @@ describe("DesktopWslBackend", () => {
 
       yield* recordOwnershipFailure();
       const refusal = yield* backend.lastPreflightError;
-      assert.include(Option.getOrThrow(refusal), "Another txcode server");
+      assert.include(Option.getOrThrow(refusal), "Another TX Code server");
       yield* backend.reconcile;
       assert.equal(startCount, 1);
       assert.deepEqual(yield* backend.lastPreflightError, refusal);

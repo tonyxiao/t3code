@@ -174,28 +174,36 @@ export const ensureServerDirectories = Effect.fn(function* (derivedPaths: Server
   // be shared with the separate V2 environment.
   const sourceSecretsDir = path.join(derivedPaths.stateDir, "secrets");
   const importMarker = path.join(derivedPaths.stateDir, ".v1-provider-secret-import-complete");
-  if (!(yield* fs.exists(importMarker)) && (yield* fs.exists(sourceSecretsDir))) {
-    yield* fs.makeDirectory(derivedPaths.secretsDir, { recursive: true });
-    yield* fs.chmod(derivedPaths.secretsDir, 0o700);
-    const names = yield* fs.readDirectory(sourceSecretsDir);
-    for (const name of names) {
-      if (
-        !/^(provider-auth-|provider-env-|source-control-|github-token-)[A-Za-z0-9_-]+\.bin$/.test(
-          name,
-        ) &&
-        name !== "bitbucket-access-token.bin" &&
-        name !== "bitbucket-api-token.bin"
-      ) {
-        continue;
+  yield* Effect.gen(function* () {
+    if (!(yield* fs.exists(importMarker)) && (yield* fs.exists(sourceSecretsDir))) {
+      yield* fs.makeDirectory(derivedPaths.secretsDir, { recursive: true });
+      yield* fs.chmod(derivedPaths.secretsDir, 0o700);
+      const names = yield* fs.readDirectory(sourceSecretsDir);
+      for (const name of names) {
+        if (
+          !/^(provider-auth-|provider-env-|source-control-|github-token-)[A-Za-z0-9_-]+\.bin$/.test(
+            name,
+          ) &&
+          name !== "bitbucket-access-token.bin" &&
+          name !== "bitbucket-api-token.bin"
+        ) {
+          continue;
+        }
+        const destination = path.join(derivedPaths.secretsDir, name);
+        if (yield* fs.exists(destination)) continue;
+        yield* fs.copyFile(path.join(sourceSecretsDir, name), destination);
+        yield* fs.chmod(destination, 0o600);
       }
-      const destination = path.join(derivedPaths.secretsDir, name);
-      if (yield* fs.exists(destination)) continue;
-      yield* fs.copyFile(path.join(sourceSecretsDir, name), destination);
-      yield* fs.chmod(destination, 0o600);
+      yield* fs.writeFileString(importMarker, "imported\n");
+      yield* fs.chmod(importMarker, 0o600);
     }
-    yield* fs.writeFileString(importMarker, "imported\n");
-    yield* fs.chmod(importMarker, 0o600);
-  }
+  }).pipe(
+    Effect.catch((cause) =>
+      Effect.logWarning("Could not copy V1 provider credentials into V2; retry on next launch.", {
+        cause,
+      }),
+    ),
+  );
 
   const swept = sweepStalePendingAttachments({
     attachmentsDir: derivedPaths.attachmentsDir,

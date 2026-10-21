@@ -108,11 +108,11 @@ describe("electron development launcher", () => {
 
     assert.equal(
       values.NSScreenCaptureUsageDescription,
-      "txcode captures the active window when you use the snapshot shortcut.",
+      "TX Code captures the active window when you use the snapshot shortcut.",
     );
     assert.equal(
       values.NSDocumentsFolderUsageDescription,
-      "txcode reads project files you open in the desktop app.",
+      "TX Code reads project files you open in the desktop app.",
     );
   });
 
