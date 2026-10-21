@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# txcode Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> txcode Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,9 +10,9 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `txcode Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `txcode Preview`
+- `production`: store/release build as `txcode`
 
 Run commands from `apps/mobile`.
 
@@ -120,6 +120,14 @@ node ../../scripts/mobile-native-static-check.ts
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
 ## EAS Builds
+
+The fork's `private` profile builds a self-contained `txcode` app under
+`com.tonyxiao.txcode`, while `tx-code` and `tx-code:remote` target its preview
+identity and optional remote JavaScript launcher. The `tony:*` profiles retain
+the earlier `com.tonyxiao.t3code` identities and embedded-bundle recovery.
+Set signing credentials and any associated domains through the matching EAS
+environment; the app config also accepts the `T3CODE_MOBILE_APP_*` and
+`T3CODE_MOBILE_EAS_*` overrides used by the new profiles.
 
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
 

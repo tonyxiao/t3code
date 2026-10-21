@@ -57,7 +57,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const isTonyDesktopBuild = process.env.T3CODE_DESKTOP_TONY_BUILD === "1";
-const DESKTOP_APP_ID = isTonyDesktopBuild ? "com.tonyxiao.t3code.desktop" : "com.t3tools.t3code";
+const DESKTOP_APP_ID = isTonyDesktopBuild ? "com.tonyxiao.t3code.desktop" : "com.tonyxiao.txcode";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2682,8 +2682,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 export function resolveDesktopProductName(version: string): string {
   if (isTonyDesktopBuild) return "Tony T3 Code (Alpha)";
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "txcode (Nightly)"
+    : (desktopPackageJson.productName ?? "txcode");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2761,10 +2761,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       extendInfo: {
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
-        NSLocalNetworkUsageDescription:
-          "T3 Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
-        NSScreenCaptureUsageDescription:
-          "T3 Code captures the active window when you use the window capture shortcut.",
+        NSLocalNetworkUsageDescription: `${isTonyDesktopBuild ? "Tony T3 Code" : "txcode"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
+        NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony T3 Code" : "txcode"} captures the active window when you use the window capture shortcut.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2778,7 +2776,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: "T3 Code",
+          name: isTonyDesktopBuild ? "Tony T3 Code" : "txcode",
           schemes: isTonyDesktopBuild
             ? ["tony-t3code", "tony-t3code-dev"]
             : ["t3code", "t3code-dev"],
@@ -2837,7 +2835,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
         {
-          name: "T3 Code",
+          name: isTonyDesktopBuild ? "Tony T3 Code" : "txcode",
           schemes: isTonyDesktopBuild
             ? ["tony-t3code", "tony-t3code-dev"]
             : ["t3code", "t3code-dev"],
@@ -3761,8 +3759,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     ...(macWebAuthn ? { t3codeWebAuthn: macWebAuthn } : {}),
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description:
-      "T3 Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
+    description: `${isTonyDesktopBuild ? "Tony T3 Code" : "txcode"} is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.`,
     license: "MIT",
     homepage: "https://t3.codes",
     author: "T3 Tools",
@@ -4036,7 +4033,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for txcode."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

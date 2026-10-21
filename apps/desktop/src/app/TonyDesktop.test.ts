@@ -35,7 +35,7 @@ it.effect("isolates private desktop state and URL handling from the installed up
     assert.equal(
       environment.resolveDesktopAppBranding({ isDevelopment: false, appVersion: "1.0.0" })
         .displayName,
-      "Tony T3 Code (Beta)",
+      "Tony T3 Code (Alpha)",
     );
   }).pipe(Effect.provide(NodeServices.layer)),
 );

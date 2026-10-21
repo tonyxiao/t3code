@@ -41,7 +41,7 @@ export function CompactBrandTitle(
         props.fit && showStage ? (event) => setFullWidth(event.nativeEvent.layout.width) : undefined
       }
       aria-level={1}
-      accessibilityLabel={props.accessibilityLabel ?? "T3 Code, Threads"}
+      accessibilityLabel={props.accessibilityLabel ?? "txcode, Threads"}
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -52,13 +52,6 @@ export function CompactBrandTitle(
       ]}
     >
       <T3Wordmark colorClassName="accent-icon" height={Math.round(15 * scale)} />
-      <Text
-        allowFontScaling={props.allowFontScaling}
-        className="font-t3-medium text-foreground-muted"
-        style={{ fontSize: 21 * scale, letterSpacing: -0.5 * scale }}
-      >
-        Code
-      </Text>
       {showStage ? (
         <View
           className="rounded-full bg-subtle px-1.5 py-0.5"

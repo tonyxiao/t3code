@@ -10,7 +10,7 @@ Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isTonyBuild = repoEnv.T3CODE_MOBILE_TONY_BUILD === "1";
-const remoteJsEnabled = isTonyBuild && repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
+const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
@@ -73,27 +73,24 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
+    appName: "txcode Dev",
     scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode.dev",
+    androidPackage: "com.tonyxiao.txcode.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
+    appName: "txcode Preview",
     scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode.preview",
+    androidPackage: "com.tonyxiao.txcode.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
+    appName: "txcode",
     scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode",
+    androidPackage: "com.tonyxiao.txcode",
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -134,9 +131,14 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = isTonyBuild ? TONY_VARIANT_CONFIG[APP_VARIANT] : VARIANT_CONFIG[APP_VARIANT];
+const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
+const privateAppName = repoEnv.T3CODE_MOBILE_APP_NAME?.trim();
+const easProjectId =
+  repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim() ??
+  (isTonyBuild ? "f6cd51c6-6875-4ce4-9360-7aefaf9ee333" : "d763fcb8-d37c-41ea-a773-b54a0ab4a454");
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+  : (privateAppId ?? variant.iosBundleIdentifier);
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -158,7 +160,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T3 Code environments.",
+        description: "Subscription quotas from your connected txcode environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -209,7 +211,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active txcode agents.",
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
       },
@@ -248,10 +250,10 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 // family names without waiting for runtime font loading.
 
 const config: ExpoConfig = {
-  name: variant.appName,
-  slug: "t3-code",
+  name: privateAppName || variant.appName,
+  slug: repoEnv.T3CODE_MOBILE_SLUG?.trim() ?? "t3-code",
   platforms: ["ios", "android"],
-  scheme: variant.scheme,
+  scheme: repoEnv.T3CODE_MOBILE_SCHEME?.trim() ?? variant.scheme,
   version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.0.0",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
@@ -266,9 +268,7 @@ const config: ExpoConfig = {
     enabled: isTonyBuild
       ? repoEnv.T3CODE_MOBILE_UPDATES_ENABLED === "1"
       : repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: isTonyBuild
-      ? "https://u.expo.dev/f6cd51c6-6875-4ce4-9360-7aefaf9ee333"
-      : "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: `https://u.expo.dev/${easProjectId}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -280,13 +280,17 @@ const config: ExpoConfig = {
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId: isTonyBuild ? "H82Z395PDV" : "ARK85ZXQ4Z",
-    associatedDomains: [
-      `applinks:${variant.relyingParty}`,
-      `webcredentials:${variant.relyingParty}`,
-    ],
+    appleTeamId:
+      repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ?? (isTonyBuild ? "H82Z395PDV" : "ARK85ZXQ4Z"),
+    associatedDomains: repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS
+      ? repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS.split(",")
+          .map((domain) => domain.trim())
+          .filter(Boolean)
+      : isTonyBuild
+        ? ["applinks:clerk.t3.codes", "webcredentials:clerk.t3.codes"]
+        : [],
     entitlements: {
-      "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
+      "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       BGTaskSchedulerPermittedIdentifiers: [`${iosBundleIdentifier}.background-sync`],
@@ -299,8 +303,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+        "Allow txcode to connect to txcode servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow txcode to save images to your photo library.",
       // "Audio, AirPlay, and Picture in Picture": the browser screen's system
       // picture in picture needs it to start and to stay up outside the app.
       UIBackgroundModes: ["audio", "processing"],
@@ -324,7 +328,7 @@ const config: ExpoConfig = {
   },
   android: {
     icon: variant.assets.appIcon,
-    package: variant.androidPackage,
+    package: privateAppId ?? variant.androidPackage,
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
@@ -418,7 +422,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow txcode to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -427,7 +431,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow txcode to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -527,12 +531,10 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: isTonyBuild
-        ? "f6cd51c6-6875-4ce4-9360-7aefaf9ee333"
-        : "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: easProjectId,
     },
   },
-  owner: isTonyBuild ? "txlforge-tony" : "pingdotgg",
+  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ?? (isTonyBuild ? "txlforge-tony" : "pingdotgg"),
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
