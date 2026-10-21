@@ -173,27 +173,25 @@ export const ensureServerDirectories = Effect.fn(function* (derivedPaths: Server
   // the server signing key belong to the V1 environment identity and must not
   // be shared with the separate V2 environment.
   const sourceSecretsDir = path.join(derivedPaths.stateDir, "secrets");
-  const importMarker = path.join(derivedPaths.secretsDir, ".v1-provider-import-complete");
-  if (!(yield* fs.exists(importMarker))) {
+  const importMarker = path.join(derivedPaths.stateDir, ".v1-provider-secret-import-complete");
+  if (!(yield* fs.exists(importMarker)) && (yield* fs.exists(sourceSecretsDir))) {
     yield* fs.makeDirectory(derivedPaths.secretsDir, { recursive: true });
     yield* fs.chmod(derivedPaths.secretsDir, 0o700);
-    if (yield* fs.exists(sourceSecretsDir)) {
-      const names = yield* fs.readDirectory(sourceSecretsDir);
-      for (const name of names) {
-        if (
-          !/^(provider-auth-|provider-env-|source-control-|github-token-)[A-Za-z0-9_-]+\.bin$/.test(
-            name,
-          ) &&
-          name !== "bitbucket-access-token.bin" &&
-          name !== "bitbucket-api-token.bin"
-        ) {
-          continue;
-        }
-        const destination = path.join(derivedPaths.secretsDir, name);
-        if (yield* fs.exists(destination)) continue;
-        yield* fs.copyFile(path.join(sourceSecretsDir, name), destination);
-        yield* fs.chmod(destination, 0o600);
+    const names = yield* fs.readDirectory(sourceSecretsDir);
+    for (const name of names) {
+      if (
+        !/^(provider-auth-|provider-env-|source-control-|github-token-)[A-Za-z0-9_-]+\.bin$/.test(
+          name,
+        ) &&
+        name !== "bitbucket-access-token.bin" &&
+        name !== "bitbucket-api-token.bin"
+      ) {
+        continue;
       }
+      const destination = path.join(derivedPaths.secretsDir, name);
+      if (yield* fs.exists(destination)) continue;
+      yield* fs.copyFile(path.join(sourceSecretsDir, name), destination);
+      yield* fs.chmod(destination, 0o600);
     }
     yield* fs.writeFileString(importMarker, "imported\n");
     yield* fs.chmod(importMarker, 0o600);
