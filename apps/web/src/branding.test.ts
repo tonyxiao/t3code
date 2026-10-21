@@ -24,9 +24,9 @@ describe("branding", () => {
       value: {
         desktopBridge: {
           getAppBranding: () => ({
-            baseName: "txcode",
+            baseName: "TX Code",
             stageLabel: "Nightly",
-            displayName: "txcode (Nightly)",
+            displayName: "TX Code (Nightly)",
           }),
         },
       },
@@ -34,9 +34,9 @@ describe("branding", () => {
 
     const branding = await import("./branding");
 
-    expect(branding.APP_BASE_NAME).toBe("txcode");
+    expect(branding.APP_BASE_NAME).toBe("TX Code");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
-    expect(branding.APP_DISPLAY_NAME).toBe("txcode (Nightly)");
+    expect(branding.APP_DISPLAY_NAME).toBe("TX Code (Nightly)");
   });
 
   it("normalizes hosted app channel metadata", async () => {
@@ -47,7 +47,7 @@ describe("branding", () => {
     expect(branding.HOSTED_APP_CHANNEL).toBe("nightly");
     expect(branding.HOSTED_APP_CHANNEL_LABEL).toBe("Nightly");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
-    expect(branding.APP_DISPLAY_NAME).toBe("txcode (Nightly)");
+    expect(branding.APP_DISPLAY_NAME).toBe("TX Code (Nightly)");
   });
 
   it("does not label the latest hosted app channel", async () => {
@@ -58,7 +58,7 @@ describe("branding", () => {
     expect(branding.HOSTED_APP_CHANNEL).toBe("latest");
     expect(branding.HOSTED_APP_CHANNEL_LABEL).toBe("Latest");
     expect(branding.APP_STAGE_LABEL).toBe("Latest");
-    expect(branding.APP_DISPLAY_NAME).toBe("txcode");
+    expect(branding.APP_DISPLAY_NAME).toBe("TX Code");
   });
 
   it("ignores unknown hosted app channels", async () => {
@@ -84,33 +84,33 @@ describe("branding logic", () => {
   it("updates the display name for nightly primary server versions", () => {
     expect(
       resolveServerBackedAppDisplayName({
-        baseName: "txcode",
-        fallbackDisplayName: "txcode (Alpha)",
+        baseName: "TX Code",
+        fallbackDisplayName: "TX Code (Alpha)",
         fallbackStageLabel: "Alpha",
         primaryServerVersion: "0.0.28-nightly.20260616.12",
       }),
-    ).toBe("txcode (Nightly)");
+    ).toBe("TX Code (Nightly)");
   });
 
   it("keeps the fallback display name for stable primary server versions", () => {
     expect(
       resolveServerBackedAppDisplayName({
-        baseName: "txcode",
-        fallbackDisplayName: "txcode (Alpha)",
+        baseName: "TX Code",
+        fallbackDisplayName: "TX Code (Alpha)",
         fallbackStageLabel: "Alpha",
         primaryServerVersion: "0.0.27",
       }),
-    ).toBe("txcode (Alpha)");
+    ).toBe("TX Code (Alpha)");
   });
 
   it("keeps the fallback display name for malformed nightly primary server versions", () => {
     expect(
       resolveServerBackedAppDisplayName({
-        baseName: "txcode",
-        fallbackDisplayName: "txcode (Alpha)",
+        baseName: "TX Code",
+        fallbackDisplayName: "TX Code (Alpha)",
         fallbackStageLabel: "Alpha",
         primaryServerVersion: "0.0.28-nightly.20260616",
       }),
-    ).toBe("txcode (Alpha)");
+    ).toBe("TX Code (Alpha)");
   });
 });

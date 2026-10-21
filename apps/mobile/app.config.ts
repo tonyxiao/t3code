@@ -71,21 +71,21 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "txcode Dev",
+    appName: "TX Code Dev",
     scheme: "t3code-dev",
     iosBundleIdentifier: "com.tonyxiao.txcode.dev",
     androidPackage: "com.tonyxiao.txcode.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "txcode Preview",
+    appName: "TX Code Preview",
     scheme: "t3code-preview",
     iosBundleIdentifier: "com.tonyxiao.txcode.preview",
     androidPackage: "com.tonyxiao.txcode.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "txcode",
+    appName: "TX Code",
     scheme: "t3code",
     iosBundleIdentifier: "com.tonyxiao.txcode",
     androidPackage: "com.tonyxiao.txcode",
@@ -133,7 +133,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected txcode environments.",
+        description: "Subscription quotas from your connected TX Code environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -184,7 +184,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active txcode agents.",
+        description: "Shows the current state of active TX Code agents.",
         // Live Activity companion; there is no Android presentation for it.
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
@@ -266,8 +266,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow txcode to connect to txcode servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow txcode to save images to your photo library.",
+        "Allow TX Code to connect to TX Code servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow TX Code to save images to your photo library.",
       ITSAppUsesNonExemptEncryption: false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
@@ -379,7 +379,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow txcode to use your microphone for voice input.",
+        microphonePermission: "Allow TX Code to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -388,7 +388,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow txcode to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow TX Code to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,

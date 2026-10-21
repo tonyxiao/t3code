@@ -161,7 +161,7 @@ function ActiveSshPasswordPrompt({
           <DialogTitle>SSH Password Required</DialogTitle>
           <DialogDescription>
             T3 needs your SSH password to connect to <code>{target}</code>. The password is passed
-            to the local SSH process for this connection attempt and is not saved by txcode.
+            to the local SSH process for this connection attempt and is not saved by TX Code.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>

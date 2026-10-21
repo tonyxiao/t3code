@@ -70,7 +70,7 @@ export class DesktopAppUnreachableError extends Schema.TaggedError<DesktopAppUnr
   },
 ) {
   override get message(): string {
-    return "Could not reach the txcode desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running txcode server is not enough.";
+    return "Could not reach the TX Code desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running TX Code server is not enough.";
   }
 }
 
@@ -84,7 +84,7 @@ export class DesktopAppRequestFailedError extends Schema.TaggedError<DesktopAppR
   },
 ) {
   override get message(): string {
-    return `txcode could not open ${this.workspaceRoot} (${this.code}).`;
+    return `TX Code could not open ${this.workspaceRoot} (${this.code}).`;
   }
 }
 
@@ -288,7 +288,7 @@ export const pairImportCommand = Command.make("import", {
         catch: () =>
           new DesktopPairImportError({
             message:
-              "Could not reach a compatible txcode desktop app. Start or update the app on this machine; if a link was submitted, check Connections before using a fresh link.",
+              "Could not reach a compatible TX Code desktop app. Start or update the app on this machine; if a link was submitted, check Connections before using a fresh link.",
           }),
       });
       if (!response.ok) {
@@ -393,7 +393,7 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     });
   }
 
-  yield* Console.log(`Opened ${workspaceRoot} in txcode.`);
+  yield* Console.log(`Opened ${workspaceRoot} in TX Code.`);
 });
 
 export const appCommand = Command.make("app", {
@@ -403,6 +403,6 @@ export const appCommand = Command.make("app", {
     Argument.optional,
   ),
 }).pipe(
-  Command.withDescription("Open a project in the running txcode desktop app."),
+  Command.withDescription("Open a project in the running TX Code desktop app."),
   Command.withHandler(runAppCommand),
 );

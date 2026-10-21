@@ -85,7 +85,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
-      <T3Wordmark aria-label="txcode" className="h-4 w-auto shrink-0" />
+      <T3Wordmark aria-label="TX Code" className="h-4 w-auto shrink-0" />
     </Link>
   );
 }

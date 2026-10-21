@@ -124,7 +124,7 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 ### Private distribution
 
 The `private` build profile produces a self-contained APK or ad hoc iOS build named
-**txcode**, using `com.tonyxiao.txcode` and the `txlforge-t3` URL scheme. OTA updates
+**TX Code**, using `com.tonyxiao.txcode` and the `txlforge-t3` URL scheme. OTA updates
 are disabled. Register iOS devices before building; adding devices requires a new
 provisioning profile or a re-signed build.
 

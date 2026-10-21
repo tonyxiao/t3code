@@ -34,7 +34,7 @@ describe("private mobile builds", () => {
       T3CODE_MOBILE_SCHEME: "example-t3",
     });
 
-    expect(config.name).toBe("txcode");
+    expect(config.name).toBe("TX Code");
     expect(config.ios?.bundleIdentifier).toBe("com.example.private");
     expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
       "com.example.private.background-sync",

@@ -3294,7 +3294,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by txcode."
+          description="Notices for dependencies, assets, and optional tools used by TX Code."
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

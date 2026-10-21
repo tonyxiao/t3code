@@ -114,7 +114,7 @@ function createWindow(
     resizable: false,
     show: false,
     skipTaskbar: true,
-    title: "txcode Snapshot Animation",
+    title: "TX Code Snapshot Animation",
     transparent: true,
     webPreferences: {
       backgroundThrottling: false,

@@ -30,7 +30,7 @@ const GNOME_ACCESS_COPY = {
   "not-installed": {
     title: "Install the extension",
     description:
-      "The txcode GNOME extension lets you capture other windows and bring them into your draft. Sign out once after installing.",
+      "The TX Code GNOME extension lets you capture other windows and bring them into your draft. Sign out once after installing.",
   },
   "restart-required": {
     title: "Extension installed",
@@ -46,7 +46,7 @@ const GNOME_ACCESS_COPY = {
   },
   disabled: {
     title: "Enable the extension",
-    description: "Enable txcode SnapShots to start capturing windows.",
+    description: "Enable TX Code SnapShots to start capturing windows.",
   },
   enabled: {
     title: "Capture is ready",
@@ -58,7 +58,7 @@ const GNOME_ACCESS_COPY = {
   },
   error: {
     title: "Couldn't set up the extension",
-    description: "Check txcode SnapShots in GNOME Extensions, then try again.",
+    description: "Check TX Code SnapShots in GNOME Extensions, then try again.",
   },
 };
 
@@ -174,7 +174,7 @@ export function SnapShotSetupDialog({
                       ? "Update the capture helper"
                       : "Allow snapshots",
                   description:
-                    "txcode's capture helper lets you capture other apps and return to your draft. It's included with txcode.",
+                    "TX Code's capture helper lets you capture other apps and return to your draft. It's included with TX Code.",
                 }
           : backend === "niri"
             ? {
@@ -355,7 +355,7 @@ export function SnapShotSetupDialog({
                     </p>
                   ))}
                   {step === "access" && (backend === "gnome" || helperBackend) ? (
-                    <p>Included with txcode. No download needed.</p>
+                    <p>Included with TX Code. No download needed.</p>
                   ) : null}
                   {step === "access" && backend === "gnome" && extension?.status === "enabled" ? (
                     <Button
