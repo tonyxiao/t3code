@@ -198,6 +198,29 @@ function trimText(value: string | undefined | null): string | undefined {
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
+function codexErrorMessage(error: EffectCodexSchema.V2ErrorNotification["error"]): string {
+  const parts = [error.message];
+  const info = error.codexErrorInfo;
+  if (info && typeof info === "object") {
+    const status =
+      "httpConnectionFailed" in info
+        ? info.httpConnectionFailed.httpStatusCode
+        : "responseStreamConnectionFailed" in info
+          ? info.responseStreamConnectionFailed.httpStatusCode
+          : "responseStreamDisconnected" in info
+            ? info.responseStreamDisconnected.httpStatusCode
+            : "responseTooManyFailedAttempts" in info
+              ? info.responseTooManyFailedAttempts.httpStatusCode
+              : undefined;
+    if (status != null && !error.message.includes(String(status))) {
+      parts.push(`HTTP ${status}`);
+    }
+  }
+  const details = trimText(error.additionalDetails);
+  if (details && !error.message.includes(details)) parts.push(details);
+  return parts.join(" — ");
+}
+
 function asUnknownRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
 }
@@ -2138,7 +2161,9 @@ function mapToRuntimeEvents(
 
   if (event.method === "error") {
     const payload = readPayload(EffectCodexSchema.V2ErrorNotification, event.payload);
-    const message = payload?.error.message ?? event.message ?? "Provider runtime error";
+    const message = payload
+      ? codexErrorMessage(payload.error)
+      : (event.message ?? "Provider runtime error");
     const willRetry = payload?.willRetry === true;
     return [
       {

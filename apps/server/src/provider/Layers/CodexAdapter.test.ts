@@ -1792,43 +1792,90 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
-  it.effect("maps retryable Codex error notifications to runtime.warning", () =>
-    Effect.gen(function* () {
-      const { adapter, runtime } = yield* startLifecycleRuntime();
-      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+  for (const { name, error, expected } of [
+    {
+      name: "message only",
+      error: { message: "Reconnecting... 2/5" },
+      expected: "Reconnecting... 2/5",
+    },
+    ...[
+      "httpConnectionFailed",
+      "responseStreamConnectionFailed",
+      "responseStreamDisconnected",
+      "responseTooManyFailedAttempts",
+    ].map((kind) => ({
+      name: kind,
+      error: {
+        message: "Reconnecting... 2/5",
+        codexErrorInfo: { [kind]: { httpStatusCode: 429 } },
+        additionalDetails: "  Too many requests. Please try again later.  ",
+      },
+      expected: "Reconnecting... 2/5 — HTTP 429 — Too many requests. Please try again later.",
+    })),
+    {
+      name: "readable details without a status",
+      error: {
+        message: "Reconnecting... 2/5",
+        codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } },
+        additionalDetails: "Connection closed by the provider.",
+      },
+      expected: "Reconnecting... 2/5 — Connection closed by the provider.",
+    },
+    {
+      name: "details already in the message",
+      error: {
+        message: "Reconnecting... HTTP 503: Service unavailable",
+        codexErrorInfo: { httpConnectionFailed: { httpStatusCode: 503 } },
+        additionalDetails: "Service unavailable",
+      },
+      expected: "Reconnecting... HTTP 503: Service unavailable",
+    },
+    {
+      name: "named error and empty details",
+      error: {
+        message: "Reconnecting... 2/5",
+        codexErrorInfo: "rateLimitExceeded",
+        additionalDetails: "   ",
+      },
+      expected: "Reconnecting... 2/5",
+    },
+  ]) {
+    it.effect(`maps retryable Codex errors with ${name} to a readable runtime.warning`, () =>
+      Effect.gen(function* () {
+        const { adapter, runtime } = yield* startLifecycleRuntime();
+        const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
 
-      yield* runtime.emit({
-        id: asEventId("evt-retryable-error"),
-        kind: "notification",
-        provider: ProviderDriverKind.make("codex"),
-        threadId: asThreadId("thread-1"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-        method: "error",
-        turnId: asTurnId("turn-1"),
-        payload: {
-          threadId: "thread-1",
-          turnId: "turn-1",
-          error: {
-            message: "Reconnecting... 2/5",
+        yield* runtime.emit({
+          id: asEventId("evt-retryable-error"),
+          kind: "notification",
+          provider: ProviderDriverKind.make("codex"),
+          threadId: asThreadId("thread-1"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+          method: "error",
+          turnId: asTurnId("turn-1"),
+          payload: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            error,
+            willRetry: true,
           },
-          willRetry: true,
-        },
-      } satisfies ProviderEvent);
+        } satisfies ProviderEvent);
 
-      const firstEvent = yield* Fiber.join(firstEventFiber);
+        const firstEvent = yield* Fiber.join(firstEventFiber);
 
-      NodeAssert.equal(firstEvent._tag, "Some");
-      if (firstEvent._tag !== "Some") {
-        return;
-      }
-      NodeAssert.equal(firstEvent.value.type, "runtime.warning");
-      if (firstEvent.value.type !== "runtime.warning") {
-        return;
-      }
-      NodeAssert.equal(firstEvent.value.turnId, "turn-1");
-      NodeAssert.equal(firstEvent.value.payload.message, "Reconnecting... 2/5");
-    }),
-  );
+        NodeAssert.equal(firstEvent._tag, "Some");
+        if (firstEvent._tag !== "Some") {
+          return;
+        }
+        NodeAssert.equal(firstEvent.value.type, "runtime.warning");
+        if (firstEvent.value.type !== "runtime.warning") {
+          return;
+        }
+        NodeAssert.equal(firstEvent.value.turnId, "turn-1");
+        NodeAssert.equal(firstEvent.value.payload.message, expected);
+      }),
+    );
+  }
 
   it.effect("maps process stderr notifications to runtime.warning", () =>
     Effect.gen(function* () {
