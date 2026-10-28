@@ -277,6 +277,7 @@ interface ClaudeTurnState {
   authenticationFailureMessage: string | undefined;
   rejectedRateLimitTypes: Set<string>;
   latestAssistantRateLimited: boolean;
+  lastApiRetryError?: string;
   emittedThinkingText: boolean;
   readonly thinkingSnapshotIds: Set<string>;
 }
@@ -3968,10 +3969,17 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       case "thinking_tokens":
         return;
       case "api_retry":
-        // Transport-level retry heartbeat. Surfacing each attempt as a
-        // warning row spammed the work log (10 rows during a 502 storm);
-        // the terminal result/error path reports the actual failure. Keep
-        // the session visibly alive instead.
+        // Keep repeated attempts quiet, but show why the active turn is retrying.
+        if (context.turnState) {
+          const failure = [
+            ...(message.error_status != null ? [`HTTP ${message.error_status}`] : []),
+            message.error.replaceAll("_", " "),
+          ].join(" — ");
+          if (context.turnState.lastApiRetryError !== failure) {
+            context.turnState.lastApiRetryError = failure;
+            yield* emitRuntimeWarning(context, `Claude is retrying — ${failure}`, message);
+          }
+        }
         yield* offerRuntimeEvent({
           ...base,
           type: "session.state.changed",

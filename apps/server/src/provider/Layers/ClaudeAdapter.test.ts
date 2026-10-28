@@ -4683,6 +4683,98 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("shows Claude retry failures once per change and keeps the turn running", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const events: Array<ProviderRuntimeEvent> = [];
+      let receipt = yield* Deferred.make<void>();
+      yield* Stream.runForEach(adapter.streamEvents, (event) =>
+        Effect.gen(function* () {
+          events.push(event);
+          if (event.type === "session.state.changed" && event.payload.reason === "api_retry:3/3") {
+            yield* Deferred.succeed(receipt, undefined);
+          }
+        }),
+      ).pipe(Effect.forkChild);
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({ threadId: THREAD_ID, input: "hello", attachments: [] });
+      for (const [attempt, error_status, error] of [
+        [1, 429, "rate_limit"],
+        [2, 429, "rate_limit"],
+        [3, 503, "server_error"],
+      ] as const) {
+        harness.query.emit({
+          type: "system",
+          subtype: "api_retry",
+          attempt,
+          max_retries: 3,
+          retry_delay_ms: 1000,
+          error_status,
+          error,
+          session_id: "session",
+          uuid: `00000000-0000-0000-0000-00000000000${attempt}`,
+        } satisfies SDKMessage);
+      }
+      yield* Deferred.await(receipt);
+      const warnings = () => events.filter((event) => event.type === "runtime.warning");
+      assert.deepEqual(
+        warnings().map((event) => event.payload.message),
+        [
+          "Claude is retrying — HTTP 429 — rate limit",
+          "Claude is retrying — HTTP 503 — server error",
+        ],
+      );
+      assert.equal((yield* adapter.listSessions())[0]?.status, "running");
+      assert.equal(
+        events.some((event) => event.type === "turn.completed"),
+        false,
+      );
+
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        session_id: "session",
+        uuid: "retry-result",
+      } as unknown as SDKMessage);
+      // A queued heartbeat proves the result has settled before starting a new turn.
+      receipt = yield* Deferred.make<void>();
+      const retry = {
+        type: "system",
+        subtype: "api_retry",
+        attempt: 3,
+        max_retries: 3,
+        retry_delay_ms: 1000,
+        error_status: null,
+        error: "unknown",
+        session_id: "session",
+        uuid: "00000000-0000-0000-0000-000000000004",
+      } as const satisfies SDKMessage;
+      harness.query.emit(retry);
+      yield* Deferred.await(receipt);
+      assert.equal((yield* adapter.listSessions())[0]?.status, "ready");
+      yield* adapter.sendTurn({ threadId: THREAD_ID, input: "retry", attachments: [] });
+      receipt = yield* Deferred.make<void>();
+      harness.query.emit({
+        ...retry,
+        error_status: 503,
+        error: "server_error",
+      } as const satisfies SDKMessage);
+      yield* Deferred.await(receipt);
+      assert.equal(warnings().length, 3);
+      assert.equal(warnings()[2]?.payload.message, "Claude is retrying — HTTP 503 — server error");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   const observeUsageLimitEvents = (adapter: ClaudeAdapterShape, query: FakeClaudeQuery) =>
     Effect.gen(function* () {
       const runtimeEvents: Array<ProviderRuntimeEvent> = [];
@@ -4693,7 +4785,7 @@ describe("ClaudeAdapterLive", () => {
           if (
             receipt &&
             event.type === "session.state.changed" &&
-            event.payload.reason === "api_retry:1/1"
+            event.payload.reason === "session_state:running"
           ) {
             yield* Deferred.succeed(receipt, undefined);
           }
@@ -4701,15 +4793,11 @@ describe("ClaudeAdapterLive", () => {
       ).pipe(Effect.forkChild);
       const drainSdkMessages = Effect.gen(function* () {
         receipt = yield* Deferred.make<void>();
-        // The heartbeat follows queued SDK messages without adding a warning.
+        // A running heartbeat follows queued SDK messages without adding a warning.
         query.emit({
           type: "system",
-          subtype: "api_retry",
-          attempt: 1,
-          max_retries: 1,
-          retry_delay_ms: 0,
-          error_status: 429,
-          error: { type: "rate_limit_error" },
+          subtype: "session_state_changed",
+          state: "running",
           session_id: "sdk-session-limit",
           uuid: "usage-limit-drain",
         } as unknown as SDKMessage);

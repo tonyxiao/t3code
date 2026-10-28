@@ -69,7 +69,7 @@ export class ThreadCliServerUnavailableError extends Schema.TaggedError<ThreadCl
   { cause: Schema.optional(Schema.Defect()) },
 ) {
   override get message(): string {
-    return "No running T3 Code server is available.";
+    return "No running TX Code server is available.";
   }
 }
 
@@ -78,7 +78,7 @@ export class ThreadCliRequestError extends Schema.TaggedError<ThreadCliRequestEr
   { cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return "The T3 Code server rejected the thread command.";
+    return "The TX Code server rejected the thread command.";
   }
 }
 

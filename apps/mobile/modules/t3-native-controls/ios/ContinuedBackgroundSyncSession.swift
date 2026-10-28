@@ -15,7 +15,7 @@ protocol BackgroundSyncSessionController: AnyObject {
 final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
   // Registration lasts for the process, including across React bridge reloads.
   static let shared = ContinuedBackgroundSyncSession()
-  private let identifier = "\(Bundle.main.bundleIdentifier ?? "com.t3tools.code").background-sync"
+  private let identifier = "\(Bundle.main.bundleIdentifier ?? "com.tonyxiao.txcode").background-sync"
   private let duration = 600
   private var registered = false
   private var task: BGContinuedProcessingTask?
@@ -30,7 +30,7 @@ final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
     // willResignActive is still a foreground transition. Waiting until the
     // background notification is too late to request continued processing.
     guard UIApplication.shared.applicationState != .background else {
-      throw failure("Start a sync session while T3 Code is open.")
+      throw failure("Start a sync session while TX Code is open.")
     }
     if endsAt != nil { return }
     if !registered {

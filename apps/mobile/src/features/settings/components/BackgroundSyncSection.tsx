@@ -10,7 +10,7 @@ export function BackgroundSyncSection() {
   if (Platform.OS !== "ios") return null;
   const active = status.endsAt !== null;
   const message = !supported
-    ? "Automatic background sync requires iOS 26 or later and an updated T3 Code app."
+    ? "Automatic background sync requires iOS 26 or later and an updated TX Code app."
     : status.state === "unavailable"
       ? "iOS did not allow extended background sync. It will be requested again next time you leave the app."
       : status.state === "expired"

@@ -71,27 +71,24 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
+    appName: "TX Code Dev",
     scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode.dev",
+    androidPackage: "com.tonyxiao.txcode.dev",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
+    appName: "TX Code Preview",
     scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode.preview",
+    androidPackage: "com.tonyxiao.txcode.preview",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
+    appName: "TX Code",
     scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
-    relyingParty: "clerk.t3.codes",
+    iosBundleIdentifier: "com.tonyxiao.txcode",
+    androidPackage: "com.tonyxiao.txcode",
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -111,10 +108,7 @@ const variant = VARIANT_CONFIG[APP_VARIANT];
 const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
 const privateAppName = repoEnv.T3CODE_MOBILE_APP_NAME?.trim();
 const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
-const privateProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim();
-const easProjectId =
-  privateProjectId ??
-  (privateAppId || isIosPersonalTeamBuild ? undefined : "d763fcb8-d37c-41ea-a773-b54a0ab4a454");
+const easProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim();
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : (privateAppId ?? variant.iosBundleIdentifier);
@@ -139,7 +133,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T3 Code environments.",
+        description: "Subscription quotas from your connected TX Code environments.",
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -190,7 +184,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active TX Code agents.",
         // Live Activity companion; there is no Android presentation for it.
         android: null,
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
@@ -243,10 +237,8 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    // A private identity must never load updates from the upstream Expo project.
-    enabled:
-      repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0" &&
-      (!(privateAppId || isIosPersonalTeamBuild) || Boolean(privateProjectId)),
+    // Only load updates from an explicitly configured project for this bundle.
+    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0" && Boolean(easProjectId),
     url: easProjectId ? `https://u.expo.dev/${easProjectId}` : undefined,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
@@ -258,18 +250,12 @@ const config: ExpoConfig = {
     // showcase capture build requires full screen (see infoPlist below).
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
-    // Official builds pin the T3 Tools team. Private builds select their own
-    // team explicitly or let the signing tool prompt for it.
-    appleTeamId:
-      repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ??
-      (privateAppId || isIosPersonalTeamBuild ? undefined : "ARK85ZXQ4Z"),
+    appleTeamId: repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim(),
     associatedDomains: repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS
       ? repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS.split(",")
           .map((domain) => domain.trim())
           .filter(Boolean)
-      : privateAppId || isIosPersonalTeamBuild
-        ? []
-        : [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`],
+      : [],
     entitlements: {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
@@ -280,8 +266,8 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+        "Allow TX Code to connect to TX Code servers on your local network or tailnet.",
+      NSPhotoLibraryAddUsageDescription: "Allow TX Code to save images to your photo library.",
       ITSAppUsesNonExemptEncryption: false,
       // The App Store screenshot harness rotates the iPad interface from
       // inside the app (CI denies osascript the Accessibility access that
@@ -393,7 +379,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: "Allow TX Code to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -402,7 +388,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow TX Code to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -493,9 +479,7 @@ const config: ExpoConfig = {
     },
     eas: easProjectId ? { projectId: easProjectId } : {},
   },
-  owner:
-    repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ??
-    (privateAppId || isIosPersonalTeamBuild ? undefined : "pingdotgg"),
+  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim(),
 };
 
 export default config;

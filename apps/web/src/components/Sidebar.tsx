@@ -5381,61 +5381,63 @@ export default function Sidebar() {
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+              selectionToolbar={
+                !isSearchingThreads && selectionMode ? (
+                  <div data-thread-selection-safe className="flex w-full items-center gap-1 px-1">
+                    <span role="status" className="mr-auto text-xs text-sidebar-muted-foreground">
+                      {selectedCount} selected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        selectThreads(orderedThreadKeys);
+                      }}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Snooze selected threads"
+                      title="Snooze selected threads"
+                      disabled={bulkActionPending || !canBulkSnooze}
+                      onClick={(event) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        void handleMultiSelectContextMenu(
+                          { x: bounds.left, y: bounds.bottom },
+                          "snooze",
+                        );
+                      }}
+                    >
+                      <AlarmClockIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Archive selected threads"
+                      title="Archive selected threads"
+                      disabled={bulkActionPending || !canBulkArchive}
+                      onClick={() => {
+                        void handleMultiSelectContextMenu({ x: 0, y: 0 }, "archive");
+                      }}
+                    >
+                      <ArchiveIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Cancel thread selection"
+                      onClick={() => {
+                        clearSelection();
+                      }}
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                ) : null
+              }
             />
-            {!isSearchingThreads && selectionMode && (
-              <div data-thread-selection-safe className="flex items-center gap-1 px-1 pt-1">
-                <span role="status" className="mr-auto text-xs text-sidebar-muted-foreground">
-                  {selectedCount} selected
-                </span>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    selectThreads(orderedThreadKeys);
-                  }}
-                >
-                  All
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Snooze selected threads"
-                  title="Snooze selected threads"
-                  disabled={bulkActionPending || !canBulkSnooze}
-                  onClick={(event) => {
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    void handleMultiSelectContextMenu(
-                      { x: bounds.left, y: bounds.bottom },
-                      "snooze",
-                    );
-                  }}
-                >
-                  <AlarmClockIcon />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Archive selected threads"
-                  title="Archive selected threads"
-                  disabled={bulkActionPending || !canBulkArchive}
-                  onClick={() => {
-                    void handleMultiSelectContextMenu({ x: 0, y: 0 }, "archive");
-                  }}
-                >
-                  <ArchiveIcon />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Cancel thread selection"
-                  onClick={() => {
-                    clearSelection();
-                  }}
-                >
-                  <XIcon />
-                </Button>
-              </div>
-            )}
           </SidebarGroup>
         }
       >
