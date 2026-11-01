@@ -3577,6 +3577,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         assert.lengthOf(retryItems, 2);
         assert.equal(retryItems[0]?.status, "running");
         assert.equal(retryItems[0]?.failure.code, "responseStreamDisconnected");
+        assert.equal(
+          retryItems[0]?.failure.message,
+          "Reconnecting... 2/5 — HTTP 529 — The response stream disconnected.",
+        );
         assert.deepEqual(retryItems[0]?.retry, {
           attempt: 2,
           maxAttempts: 5,
@@ -6861,7 +6865,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         if (scenario.name === "known-reset" || scenario.name === "deferred-reset")
           assert.equal(terminal.failure.resetAt, resetAt);
         if (scenario.name === "matching-details")
-          assert.equal(terminal.failure.message, "Detailed provider allowance explanation.");
+          assert.equal(
+            terminal.failure.message,
+            "Provider stopped this request. — Detailed provider allowance explanation.",
+          );
         if (scenario.name === "late-reset") {
           yield* Deferred.await(resetReceipt);
           const item = harness.events.find(

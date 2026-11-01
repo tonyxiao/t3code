@@ -1105,6 +1105,27 @@ function codexErrorInfoCode(value: unknown): string | null {
   return Object.keys(value)[0] ?? null;
 }
 
+function codexErrorMessage(error: CodexSchema.V2ErrorNotification["error"]): string {
+  const parts = [error.message];
+  const info = error.codexErrorInfo;
+  if (info && typeof info === "object") {
+    const status =
+      "httpConnectionFailed" in info
+        ? info.httpConnectionFailed.httpStatusCode
+        : "responseStreamConnectionFailed" in info
+          ? info.responseStreamConnectionFailed.httpStatusCode
+          : "responseStreamDisconnected" in info
+            ? info.responseStreamDisconnected.httpStatusCode
+            : "responseTooManyFailedAttempts" in info
+              ? info.responseTooManyFailedAttempts.httpStatusCode
+              : undefined;
+    if (status != null && !error.message.includes(String(status))) parts.push(`HTTP ${status}`);
+  }
+  const details = error.additionalDetails?.trim();
+  if (details && !error.message.includes(details)) parts.push(details);
+  return parts.join(" — ");
+}
+
 interface ActiveCodexTurnContext {
   latestProviderFailure?: {
     readonly nativeMessage: string;
@@ -4500,7 +4521,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               context.latestProviderFailure = {
                 nativeMessage: payload.error.message,
                 failure: makeProviderFailure({
-                  message: payload.error.additionalDetails?.trim() || payload.error.message,
+                  message: codexErrorMessage(payload.error),
                   code: notificationCode,
                   class:
                     notificationCode === "usageLimitExceeded" ||
@@ -4520,12 +4541,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               retryDelayMs: null,
             };
             const code = codexErrorInfoCode(payload.error.codexErrorInfo);
-            const additionalDetails = payload.error.additionalDetails?.trim();
             const failure = makeProviderFailure({
-              message:
-                additionalDetails === undefined || additionalDetails.length === 0
-                  ? payload.error.message
-                  : additionalDetails,
+              message: codexErrorMessage(payload.error),
               code,
               class:
                 code === "usageLimitExceeded" || code === "rateLimitExceeded"
