@@ -176,6 +176,7 @@ it.effect("exports full history with size, scope, and missing-thread checks", ()
 
     const emptyResponse = yield* read(thread.id);
     expect(emptyResponse.status).toBe(200);
+    const snoozedUntil = "2099-10-30T00:00:00.000Z";
     const dispatch = (type = "thread.snooze") =>
       Effect.promise(() =>
         handler(
@@ -189,7 +190,7 @@ it.effect("exports full history with size, scope, and missing-thread checks", ()
               type,
               commandId: "cli-snooze-test",
               threadId: thread.id,
-              snoozedUntil: "2026-10-30T00:00:00.000Z",
+              snoozedUntil,
             }),
           }),
         ),
