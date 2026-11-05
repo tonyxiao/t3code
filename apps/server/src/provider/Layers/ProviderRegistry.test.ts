@@ -541,6 +541,25 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
         }),
       );
 
+      it.effect("accepts a Codex probe that takes longer than ten seconds", () =>
+        Effect.gen(function* () {
+          const started = yield* Deferred.make<void>();
+          const response = yield* Deferred.make<CodexAppServerProviderSnapshot>();
+          const statusFiber = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(response))),
+          ).pipe(Effect.forkChild);
+
+          yield* Deferred.await(started);
+          yield* TestClock.adjust("21 seconds");
+          yield* Deferred.succeed(response, makeCodexProbeSnapshot());
+
+          const status = yield* Fiber.join(statusFiber);
+          assert.strictEqual(status.status, "ready");
+          assert.strictEqual(status.installed, true);
+          assert.strictEqual(status.auth.status, "authenticated");
+        }),
+      );
+
       it.effect("closes the app-server probe scope when provider status times out", () =>
         Effect.gen(function* () {
           const killCalls = yield* Ref.make(0);
@@ -550,7 +569,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
           );
 
           yield* Effect.yieldNow;
-          yield* TestClock.adjust("11 seconds");
+          yield* TestClock.adjust("31 seconds");
           yield* Effect.yieldNow;
 
           const status = yield* Fiber.join(statusFiber);
