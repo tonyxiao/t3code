@@ -33,6 +33,44 @@ function entry(status: ServerProvider["status"], driver = "opencode") {
 }
 
 describe("shouldIncludeModelPickerOption", () => {
+  it("offers cached Codex models after a timeout, including from another provider", () => {
+    const cachedModel = {
+      slug: "gpt-6-astra",
+      name: "GPT 6 Astra",
+      isCustom: false,
+      capabilities: null,
+    };
+    const failedEntry = entry("error", "codex");
+    const providerEntry = {
+      ...failedEntry,
+      models: [cachedModel],
+      snapshot: {
+        ...failedEntry.snapshot,
+        models: [cachedModel],
+        auth: { status: "unknown" as const },
+        message: "Timed out while checking Codex app-server provider status.",
+      },
+    };
+
+    expect(
+      shouldIncludeModelPickerOption({
+        entry: providerEntry,
+        option: cachedModel,
+        activeInstanceId: ProviderInstanceId.make("claudeAgent"),
+        activeModel: "claude-sonnet-4-6",
+      }),
+    ).toBe(true);
+    expect(
+      adjacentModelPickerProvider({
+        entries: [providerEntry],
+        selectedInstanceId: "favorites",
+        direction: 1,
+        disabledInstanceIds: undefined,
+        selectableUnavailableInstanceIds: undefined,
+      }),
+    ).toBe(providerEntry.instanceId);
+  });
+
   it.each(["ready", "error"] as const)(
     "never offers the internal Antigravity default marker as a model when %s",
     (status) => {

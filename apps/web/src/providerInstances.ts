@@ -74,9 +74,17 @@ export interface ProviderInstanceEntry {
  *
  * Disabling an instance updates `enabled` independently, while its previous
  * `ready` probe status can remain in the streamed snapshot until reconciliation.
+ * A failed health check does not invalidate the server's cached model catalog.
+ * Keep it usable unless installation, authentication, or availability says otherwise.
  */
 export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled && entry.isAvailable && entry.status === "ready";
+  return (
+    entry.enabled &&
+    entry.isAvailable &&
+    entry.status !== "disabled" &&
+    entry.snapshot.auth.status !== "unauthenticated" &&
+    (entry.status === "ready" || (entry.installed && entry.models.length > 0))
+  );
 }
 
 /** Picker rails contain configured, enabled instances only. */
@@ -263,6 +271,7 @@ export function resolveSelectableProviderInstanceEntry(
     }
   }
   return (
+    entries.find((entry) => entry.status === "ready" && isProviderInstancePickerReady(entry)) ??
     entries.find(isProviderInstancePickerReady) ??
     entries.find((entry) => isSelectableProviderInstanceEntry(entry) && entry.status !== "error")
   );

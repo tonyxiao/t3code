@@ -13,46 +13,50 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
-  it("groups models by provider and flags legacy entries", () => {
-    const config = {
-      providers: [
+  it.each(["ready", "warning", "error"] as const)(
+    "groups cached models and flags legacy entries when provider status is %s",
+    (status) => {
+      const config = {
+        providers: [
+          {
+            instanceId: "codex",
+            driver: "codex",
+            displayName: "Codex",
+            enabled: true,
+            installed: true,
+            status,
+            auth: { status: status === "ready" ? "authenticated" : "unknown" },
+            models: [
+              {
+                slug: "gpt-5.6-sol",
+                name: "GPT-5.6 Sol",
+                isCustom: false,
+                capabilities: null,
+              },
+              {
+                slug: "gpt-5.4",
+                name: "GPT-5.4",
+                isCustom: false,
+                isLegacy: true,
+                capabilities: null,
+              },
+            ],
+          },
+        ],
+      } as unknown as ServerConfig;
+
+      expect(groupByProvider(buildModelOptions(config, null))).toMatchObject([
         {
-          instanceId: "codex",
-          driver: "codex",
-          displayName: "Codex",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
+          providerKey: "codex",
+          providerLabel: "Codex",
           models: [
-            {
-              slug: "gpt-5.6-sol",
-              name: "GPT-5.6 Sol",
-              isCustom: false,
-              capabilities: null,
-            },
-            {
-              slug: "gpt-5.4",
-              name: "GPT-5.4",
-              isCustom: false,
-              isLegacy: true,
-              capabilities: null,
-            },
+            { key: "codex:gpt-5.6-sol", label: "GPT-5.6 Sol", subtitle: "", isLegacy: false },
+            { key: "codex:gpt-5.4", label: "GPT-5.4", isLegacy: true },
           ],
         },
-      ],
-    } as unknown as ServerConfig;
-
-    expect(groupByProvider(buildModelOptions(config, null))).toMatchObject([
-      {
-        providerKey: "codex",
-        providerLabel: "Codex",
-        models: [
-          { key: "codex:gpt-5.6-sol", label: "GPT-5.6 Sol", subtitle: "", isLegacy: false },
-          { key: "codex:gpt-5.4", label: "GPT-5.4", isLegacy: true },
-        ],
-      },
-    ]);
-  });
+      ]);
+    },
+  );
 
   it("distinguishes same-name OpenCode models without changing their routing", () => {
     const sources = [

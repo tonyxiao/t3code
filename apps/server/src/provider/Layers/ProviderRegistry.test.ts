@@ -1067,6 +1067,9 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
                   ? retainedModels
                   : [customModel, ...cachedProvider.models];
                 assert.deepStrictEqual((yield* registry.getProviders)[0]?.models, expectedModels);
+                // The pending startup probe must not make the disk-cached
+                // catalog unusable before revalidation finishes.
+                assert.strictEqual((yield* registry.getProviders)[0]?.installed, true);
 
                 yield* registry.refreshInstance(instance.instanceId);
                 assert.deepStrictEqual(
@@ -1077,6 +1080,7 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
                 yield* Ref.set(nextProvider, failedProvider);
                 const afterFailure = yield* registry.refreshInstance(instance.instanceId);
                 assert.deepStrictEqual(afterFailure[0]?.models, retainedModels);
+                assert.strictEqual(afterFailure[0]?.status, "error");
                 assert.deepStrictEqual(
                   (yield* readProviderStatusCache(filePath))?.models,
                   retainedModels,
@@ -1264,6 +1268,8 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
           } satisfies ServerProvider;
           assert.deepStrictEqual(mergeProviderSnapshot(signedIn, booting), {
             ...booting,
+            installed: signedIn.installed,
+            version: signedIn.version,
             auth: signedIn.auth,
             models: signedIn.models,
           });

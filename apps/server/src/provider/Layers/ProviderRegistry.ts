@@ -213,12 +213,30 @@ export const mergeProviderSnapshot = (
     return nextProvider;
   }
   const savedAccount = carrySavedAntigravityAccount(previousProvider, nextProvider);
+  // Startup publishes an unchecked placeholder after loading the disk cache.
+  // It carries no new installation/authentication facts; retain those until
+  // the background probe answers so clients can use the cached catalog now.
+  const pendingProbe =
+    nextProvider.enabled &&
+    !nextProvider.installed &&
+    nextProvider.status === "warning" &&
+    nextProvider.auth.status === "unknown" &&
+    (nextProvider.auth.type === undefined || nextProvider.auth.type === previousProvider.auth.type) &&
+    previousProvider.enabled &&
+    isCachedProviderCorrelated({ cachedProvider: previousProvider, fallbackProvider: nextProvider });
   // "Google account access is not checked yet" describes the probe, not the
   // account; it must not outlive the state it explained.
   const { message: _uncheckedMessage, ...nextWithoutMessage } = nextProvider;
   return {
     ...(savedAccount?.status === "ready" ? nextWithoutMessage : nextProvider),
     ...savedAccount,
+    ...(pendingProbe
+      ? {
+          installed: previousProvider.installed,
+          version: previousProvider.version,
+          auth: previousProvider.auth,
+        }
+      : {}),
     models: mergeProviderModels(nextProvider, previousProvider.models, nextProvider.models),
     ...(nextProvider.workspaceSnapshots !== undefined
       ? { workspaceSnapshots: nextProvider.workspaceSnapshots }

@@ -68,6 +68,50 @@ describe("isProviderInstancePickerReady", () => {
 
     expect(entry && isProviderInstancePickerReady(entry)).toBe(true);
   });
+
+  it.each(["codex", "claudeAgent", "cursor", "grok", "opencode", "antigravity"])(
+    "keeps cached %s models selectable after a probe timeout",
+    (driver) => {
+      const snapshot = {
+        ...provider({
+          provider: ProviderDriverKind.make(driver),
+          instanceId: driver,
+          status: "error",
+          models: [model("cached-model")],
+        }),
+        auth: { status: "unknown" as const },
+        message: "Provider status check timed out.",
+      };
+      const [entry] = deriveProviderInstanceEntries([snapshot]);
+
+      expect(entry && isProviderInstancePickerReady(entry)).toBe(true);
+      expect(entry?.snapshot.message).toBe(snapshot.message);
+      expect(entry?.status).toBe("error");
+    },
+  );
+
+  it.each([
+    { enabled: false },
+    { installed: false },
+    { availability: "unavailable" as const },
+    { auth: { status: "unauthenticated" as const } },
+    { status: "disabled" as const },
+    { models: [] },
+  ])("does not offer cached models when the provider cannot be used: %j", (override) => {
+    const [entry] = deriveProviderInstanceEntries([
+      {
+        ...provider({
+          provider: ProviderDriverKind.make("codex"),
+          instanceId: "codex",
+          status: "error",
+          models: [model("cached-model")],
+        }),
+        ...override,
+      },
+    ]);
+
+    expect(entry && isProviderInstancePickerReady(entry)).toBe(false);
+  });
 });
 
 describe("isProviderInstancePickerVisible", () => {
