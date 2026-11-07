@@ -6,9 +6,11 @@ import { build } from "vite-plus";
 const mobileRoot = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 
 /** Bundle the same inline renderer as web so diagrams also work offline on mobile. */
-export async function generateRichChatScript() {
+export async function buildRichChatScript() {
   const result = await build({
     configFile: false,
+    // Metro runs in development, but this embedded document bundles production React.
+    oxc: { jsx: { development: false } },
     logLevel: "silent",
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
     build: {
@@ -26,10 +28,15 @@ export async function generateRichChatScript() {
     .flatMap((bundle) => ("output" in bundle ? bundle.output : []))
     .find((output) => output.type === "chunk");
   if (!chunk) throw new Error("Rich chat build did not emit a script.");
+  return chunk.code;
+}
+
+export async function generateRichChatScript() {
+  const script = await buildRichChatScript();
   const root = NodePath.join(mobileRoot, ".generated/rich-chat");
   await NodeFSP.mkdir(root, { recursive: true });
   for (const [name, contents] of [
-    ["index.js", `module.exports = ${JSON.stringify(chunk.code)};\n`],
+    ["index.js", `module.exports = ${JSON.stringify(script)};\n`],
     ["package.json", '{"main":"index.js"}\n'],
   ] as const) {
     const destination = NodePath.join(root, name);
