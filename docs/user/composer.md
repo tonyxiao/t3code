@@ -259,3 +259,12 @@ automatically. HTML previews cannot access your T3 Code session.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
+
+## Diagrams and interactive cards
+
+Ask the agent for a Mermaid diagram to see it directly in the conversation, including in
+older messages. Ask for an interactive card to explore tables, charts, or a small form.
+Both work on web, desktop, and mobile. Expand **View source** to inspect the original text.
+
+Card controls only change the card's local state; they do not send messages or run agent
+tools. Input values reset when the card is reopened.

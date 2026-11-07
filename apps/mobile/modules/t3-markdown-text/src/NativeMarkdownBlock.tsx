@@ -16,11 +16,15 @@ import type {
   MarkdownImageRenderer,
   NativeMarkdownTextStyle,
   SelectableMarkdownSkill,
+  SelectableMarkdownTextProps,
 } from "./SelectableMarkdownText.types";
 import { useHighlightedCode, type HighlightedCode } from "./useHighlightedCode";
 
 /** Set by SelectableMarkdownText so images anywhere in the block tree can use it. */
 export const MarkdownImageRendererContext = createContext<MarkdownImageRenderer | null>(null);
+
+export const MarkdownCodeRendererContext =
+  createContext<SelectableMarkdownTextProps["renderCodeBlock"]>(undefined);
 
 const MONO_FONT_FAMILY = Platform.select({
   ios: "ui-monospace",
@@ -501,6 +505,7 @@ export function NativeMarkdownBlock(props: {
   readonly depth?: number;
   readonly compact?: boolean;
 }) {
+  const renderCodeBlock = useContext(MarkdownCodeRendererContext);
   const depth = props.depth ?? 0;
   switch (props.node.type) {
     case "document":
@@ -521,12 +526,17 @@ export function NativeMarkdownBlock(props: {
       );
     case "code_block":
       return (
-        <NativeCodeBlock
-          node={props.node}
-          textStyle={props.textStyle}
-          highlightCode={props.highlightCode}
-          compact={props.compact}
-        />
+        renderCodeBlock?.({
+          content: nodeText(props.node),
+          language: props.node.language ?? undefined,
+        }) ?? (
+          <NativeCodeBlock
+            node={props.node}
+            textStyle={props.textStyle}
+            highlightCode={props.highlightCode}
+            compact={props.compact}
+          />
+        )
       );
     case "table":
       return (

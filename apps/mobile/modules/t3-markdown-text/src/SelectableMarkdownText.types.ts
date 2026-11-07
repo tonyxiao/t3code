@@ -77,6 +77,7 @@ export interface MarkdownFileContextMenu {
 
 export interface SelectableMarkdownTextProps {
   readonly markdown: string;
+  readonly isStreaming?: boolean | undefined;
   /** Opaque context payload supplied by the host for native selection copy. */
   readonly contextClipboardFragment?: string;
   readonly textStyle: NativeMarkdownTextStyle;
@@ -87,6 +88,10 @@ export interface SelectableMarkdownTextProps {
   readonly fileContextMenu?: (href: string) => MarkdownFileContextMenu | undefined;
   readonly onFileContextMenuAction?: (href: string, actionId: string) => void;
   readonly renderImage?: MarkdownImageRenderer;
+  readonly renderCodeBlock?: (code: {
+    readonly content: string;
+    readonly language?: string | undefined;
+  }) => import("react").ReactNode;
   readonly marginTop?: number;
   readonly marginBottom?: number;
 }

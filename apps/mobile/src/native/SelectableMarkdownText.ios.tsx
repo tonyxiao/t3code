@@ -1,3 +1,4 @@
+import { renderRichMarkdownCode } from "../features/threads/RichMarkdownCode";
 import {
   SelectableMarkdownText as T3SelectableMarkdownText,
   type SelectableMarkdownTextProps,
@@ -21,5 +22,11 @@ export function hasNativeSelectableMarkdownText(): boolean {
 }
 
 export function SelectableMarkdownText(props: MobileSelectableMarkdownTextProps) {
-  return <T3SelectableMarkdownText {...props} highlightCode={highlightCodeSnippet} />;
+  return (
+    <T3SelectableMarkdownText
+      {...props}
+      renderCodeBlock={renderRichMarkdownCode}
+      highlightCode={highlightCodeSnippet}
+    />
+  );
 }

@@ -1,0 +1,28 @@
+{
+  "name": "@t3tools/chat-renderer",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./format": "./src/format.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./document": "./src/document.ts",
+    "./language": "./src/language.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@json-render/core": "0.22.0",
+    "@json-render/react": "0.22.0",
+    "mermaid": "^11.12.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "@types/react-dom": "~19.2.3",
+    "vite-plus": "catalog:"
+  }
+}

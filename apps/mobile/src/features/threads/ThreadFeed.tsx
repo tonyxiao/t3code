@@ -1,3 +1,4 @@
+import { renderRichMarkdownCode } from "./RichMarkdownCode";
 import {
   WorktreeWorkingHeader,
   WorktreeSetupCard,
@@ -781,6 +782,7 @@ interface MarkdownLinkHandlers {
 
 const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
   readonly markdown: string;
+  readonly isStreaming?: boolean | undefined;
   readonly markdownStyles: MarkdownStyleSet;
   readonly linkHandlers: MarkdownLinkHandlers;
   readonly onUseArtifactTemplate?: ((template: CodexArtifactTemplate) => void) | undefined;
@@ -809,6 +811,7 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
       <SelectableMarkdownText
         key={`markdown:${segment.sourceOffset}`}
         markdown={markdown}
+        isStreaming={props.isStreaming}
         skills={props.skills}
         textStyle={props.markdownStyles.nativeTextStyle}
         {...props.linkHandlers}
@@ -1187,21 +1190,22 @@ function useMarkdownStyles(
             soft_break: () => <NativeText>{"\n"}</NativeText>,
           }
         : {}),
-      code_block: ({ content = "", language }) => (
-        <MarkdownCodeBlock
-          backgroundColor={blockBackgroundColor}
-          borderColor={markdownHrColor}
-          content={content}
-          copyTintColor={copyTintColor}
-          fontSize={markdownFontSizes.codeBlockFontSize}
-          headerTextColor={blockTextColor}
-          highlightCode={highlightCode}
-          language={language}
-          lineHeight={markdownFontSizes.codeBlockLineHeight}
-          textColor={blockTextColor}
-          theme={themeMode}
-        />
-      ),
+      code_block: ({ content = "", language }) =>
+        renderRichMarkdownCode({ content, language }) ?? (
+          <MarkdownCodeBlock
+            backgroundColor={blockBackgroundColor}
+            borderColor={markdownHrColor}
+            content={content}
+            copyTintColor={copyTintColor}
+            fontSize={markdownFontSizes.codeBlockFontSize}
+            headerTextColor={blockTextColor}
+            highlightCode={highlightCode}
+            language={language}
+            lineHeight={markdownFontSizes.codeBlockLineHeight}
+            textColor={blockTextColor}
+            theme={themeMode}
+          />
+        ),
     });
 
     const userTheme: PartialMarkdownTheme = {
@@ -1503,6 +1507,7 @@ function renderFeedEntry(
                 <AssistantMarkdownContent
                   key={reasoningMessage.id}
                   markdown={reasoningMessage.text}
+                  isStreaming={reasoningMessage.streaming}
                   markdownStyles={markdownStyles.assistant}
                   linkHandlers={props.markdownLinkHandlers}
                   renderImage={props.renderMarkdownImage}
@@ -1699,6 +1704,7 @@ function renderFeedEntry(
           <MarkdownImageAvailableWidthContext value={props.markdownContentWidth}>
             <AssistantMarkdownContent
               markdown={renderedText}
+              isStreaming={message.streaming}
               markdownStyles={styles}
               linkHandlers={props.markdownLinkHandlers}
               onUseArtifactTemplate={props.onUseArtifactTemplate}

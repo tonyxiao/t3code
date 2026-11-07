@@ -95,6 +95,7 @@ config.resolver = {
     ...config.resolver?.extraNodeModules,
     "@t3tools/mobile-third-party-licenses": generatedLicenseModuleRoot,
     "@t3tools/mobile-device-stream": generatedDeviceStreamRoot,
+    "@t3tools/mobile-rich-chat": path.join(__dirname, ".generated", "rich-chat"),
     shiki: mobileShikiRoot,
     "@shikijs/core": resolveShikiDependencyRoot("@shikijs/core"),
     "@shikijs/engine-javascript": resolveShikiDependencyRoot("@shikijs/engine-javascript"),
@@ -167,7 +168,26 @@ async function prepareDeviceStream() {
   }
 }
 
-module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareDeviceStream()]).then(() =>
+async function prepareRichChat() {
+  const { generateRichChatScript } = await import(
+    pathToFileURL(path.join(__dirname, "scripts/generate-rich-chat.mts")).href
+  );
+  await generateRichChatScript();
+  if (process.env.NODE_ENV !== "production") {
+    let rebuild = Promise.resolve();
+    fs.watch(path.join(workspaceRoot, "packages/chat-renderer/src"), { persistent: false }, () => {
+      rebuild = rebuild
+        .then(generateRichChatScript)
+        .catch((error) => console.error("Could not rebuild rich chat:", error));
+    });
+  }
+}
+
+module.exports = Promise.all([
+  generateMobileThirdPartyLicenses(),
+  prepareDeviceStream(),
+  prepareRichChat(),
+]).then(() =>
   withUniwindConfig(config, {
     cssEntryFile: "./global.css",
     extraThemes,

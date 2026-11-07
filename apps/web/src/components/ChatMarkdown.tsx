@@ -1,3 +1,4 @@
+import { richContentLanguage } from "@t3tools/chat-renderer/language";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -57,6 +58,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import React, {
   Children,
+  lazy,
   Suspense,
   type CSSProperties,
   type ComponentProps,
@@ -2818,6 +2820,10 @@ function markdownHeadingRenderer(level: 1 | 2 | 3 | 4 | 5 | 6) {
 }
 
 // Keep component types stable when streaming changes the message state.
+const LazyRichContent = lazy(() =>
+  import("@t3tools/chat-renderer/renderer").then((module) => ({ default: module.RichContent })),
+);
+
 const CHAT_MARKDOWN_COMPONENTS = {
   h1: markdownHeadingRenderer(1),
   h2: markdownHeadingRenderer(2),
@@ -3310,6 +3316,21 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+    const richLanguage = richContentLanguage(language);
+    if (richLanguage && (!isStreaming || isClosedCodeFence(node, text))) {
+      const fallback = <pre {...props}>{children}</pre>;
+      return (
+        <RenderErrorBoundary resetKeys={[codeBlock.code, language]} fallback={fallback}>
+          <Suspense fallback={fallback}>
+            <LazyRichContent
+              source={codeBlock.code}
+              language={richLanguage}
+              theme={resolvedTheme}
+            />
+          </Suspense>
+        </RenderErrorBoundary>
+      );
+    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}
