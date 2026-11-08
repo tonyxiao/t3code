@@ -75,6 +75,7 @@ vi.mock("@react-navigation/native", () => ({
   useFocusEffect: (callback: () => (() => void) | undefined) => useEffect(callback, [callback]),
 }));
 vi.mock("react-native", () => ({
+  Keyboard: { addListener: () => ({ remove() {} }) },
   Platform: { OS: "android", select: (values: { android?: unknown }) => values.android },
   StyleSheet: { create: (styles: unknown) => styles },
   useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1 }),
@@ -1427,3 +1428,21 @@ describe("ThreadFeed previews", () => {
     }
   });
 });
+
+vi.mock("../lib/foreground-handoff", () => ({ beginForegroundHandoff: () => () => {} }));
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+    list() {
+      return [];
+    }
+  },
+  File: class {
+    exists = false;
+    create() {}
+    write() {}
+    moveSync() {}
+    delete() {}
+  },
+  Paths: { document: "/documents" },
+}));

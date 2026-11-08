@@ -26,22 +26,22 @@ it.each(["prod", ""])("rejects APP_VARIANT=%j before selecting production IDs", 
 });
 
 it.each([
-  [undefined, "com.t3tools.t3code"],
-  ["development", "com.t3tools.t3code.dev"],
-  ["preview", "com.t3tools.t3code.preview"],
-  ["production", "com.t3tools.t3code"],
+  [undefined, "com.tonyxiao.txcode.v2"],
+  ["development", "com.tonyxiao.txcode.v2.dev"],
+  ["preview", "com.tonyxiao.txcode.v2.preview"],
+  ["production", "com.tonyxiao.txcode.v2"],
 ])("keeps the iOS and Android identifiers for APP_VARIANT=%j", async (value, identifier) => {
   const config = await loadConfig(value);
   expect(config.ios?.bundleIdentifier).toBe(identifier);
   expect(config.android?.package).toBe(identifier);
-  // Copied thread links open this app only while app.t3.codes lists it.
+  // Private fork IDs use app-scheme links; the public hosted associations belong to upstream.
   const host = new URL(DEFAULT_HOSTED_APP_URL).host;
   expect(config.ios?.associatedDomains).toContain(`applinks:${host}`);
-  expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).toContain(
+  expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).not.toContain(
     `${config.ios?.appleTeamId}.${identifier}`,
   );
   expect(config.android?.intentFilters?.[0]?.data).toEqual([
     { scheme: "https", host, pathPrefix: "/threads/" },
   ]);
-  expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+  expect(assetLinks.map((link) => link.target.package_name)).not.toContain(identifier);
 });
