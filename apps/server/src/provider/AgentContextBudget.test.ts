@@ -1,3 +1,4 @@
+import { EnvironmentId } from "@t3tools/contracts";
 import { ThreadCreation } from "../mcp/ThreadCreation.ts";
 import { ThreadRoutingBroker } from "../mcp/ThreadRoutingBroker.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -76,7 +77,9 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(ScheduledTaskService)({}),
   Layer.mock(SecretRequests)({}),
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-agent-context-budget-" }),
-  Layer.mock(ServerEnvironment)({}),
+  Layer.mock(ServerEnvironment)({
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("budget-test")),
+  }),
   Layer.mock(ServerSecretStore)({}),
   Layer.mock(ServerSettingsService)({}),
   Layer.mock(SourceControlRepositoryService)({}),
