@@ -93,7 +93,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer))
           port: address.port,
         });
         yield* persistServerRuntimeState({
-          path: `${baseDir}/userdata/server-runtime.json`,
+          path: `${baseDir}/userdata/server-runtime-v2.json`,
           state: { ...state, pid: recordedPid },
         });
 

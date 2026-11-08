@@ -226,7 +226,9 @@ export function installShowcaseCapture(
       async () => {
         const now = Date.now();
         const configuredScheme = Constants.expoConfig?.scheme;
-        const scheme = Array.isArray(configuredScheme) ? (configuredScheme[0] ?? "txcode") : (configuredScheme ?? "txcode");
+        const scheme = Array.isArray(configuredScheme)
+          ? (configuredScheme[0] ?? "txcode")
+          : (configuredScheme ?? "txcode");
         const activity = buildShowcaseAgentActivity(
           appAtomRegistry.get(environmentThreadShells.threadShellsAtom),
           appAtomRegistry.get(environmentProjects.projectsAtom),

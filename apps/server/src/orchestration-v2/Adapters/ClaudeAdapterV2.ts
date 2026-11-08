@@ -4178,7 +4178,7 @@ function providerFailureFromResult(
 
 function providerFailureFromApiRetry(message: SDKAPIRetryMessage): OrchestrationV2ProviderFailure {
   const errorName = message.error.replaceAll("_", " ");
-  const status = message.error_status === null ? "" : ` — HTTP ${Math.trunc(message.error_status)}`;
+  const status = message.error_status === null ? "" : `. HTTP ${Math.trunc(message.error_status)}`;
   return makeProviderFailure({
     message: `Claude API ${errorName}${status}.`,
     code:

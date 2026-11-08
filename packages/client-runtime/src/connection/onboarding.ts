@@ -203,7 +203,11 @@ const registerPairingConnection = Effect.fn(
     const conflict = pairingCatalogConflict(entries, environmentId, httpBaseUrl);
     return conflict === null ? Effect.void : Effect.fail(conflict);
   });
-  if (!(yield* registry.register(registration, { knownAddressOnly: input.expectedEnvironmentId === undefined }))) {
+  if (
+    !(yield* registry.register(registration, {
+      knownAddressOnly: input.expectedEnvironmentId === undefined,
+    }))
+  ) {
     return yield* new ConnectionBlockedError({
       reason: "configuration",
       detail: "The environment is managed by this app and cannot be replaced by a pairing link.",

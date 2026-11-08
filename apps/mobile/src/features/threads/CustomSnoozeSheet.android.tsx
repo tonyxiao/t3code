@@ -1,3 +1,4 @@
+import { useNowMinuteMs } from "../../lib/clock";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import {
   BasicAlertDialog,
@@ -75,6 +76,8 @@ export function CustomSnoozeSheet(props: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
   const [text, setText] = useState("");
+  const now = useNowMinuteMs();
+  const preview = resolveNaturalSnooze(text, new Date(now));
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [picker, setPicker] = useState<"date" | "time">("date");
   const [amount, setAmount] = useState(2);
@@ -192,9 +195,9 @@ export function CustomSnoozeSheet(props: Props) {
                       }}
                       style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
                     />
-                    {resolveNaturalSnooze(text, new Date()) ? (
+                    {preview ? (
                       <RNText style={{ color: colors["--color-foreground-secondary"] }}>
-                        {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                        {new Date(preview).toLocaleString()}
                       </RNText>
                     ) : null}
                   </View>

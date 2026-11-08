@@ -22,6 +22,7 @@ export function DesktopRendererSourceSetting() {
   const refresh = async () => {
     if (bridge?.getJavaScriptSourceState) setSnapshot(await bridge.getJavaScriptSourceState());
   };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the Electron launcher snapshot while this settings panel is mounted
   useEffect(() => {
     let active = true;
     void bridge

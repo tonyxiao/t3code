@@ -13,6 +13,7 @@ export function useCustomSnooze(
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const revision = useRef(0);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- invalidates in-flight resolver requests when the mounted dialog is disposed
   useEffect(
     () => () => {
       revision.current++;

@@ -198,8 +198,8 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const oldExe = path.join(root, "runtime/versions/1.0.0/t3");
-      const newExe = path.join(root, "runtime/versions/2.0.0/t3");
+      const oldExe = path.join(root, "runtime-v2/versions/1.0.0/t3");
+      const newExe = path.join(root, "runtime-v2/versions/2.0.0/t3");
       const launcher = path.join(root, "bin/t3");
       for (const file of [oldExe, newExe]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
@@ -235,24 +235,24 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
       yield* TestClock.setTime(Duration.toMillis(Duration.days(1)));
       for (const version of ["1.0.0", "2.0.0"]) {
-        const directory = path.join(root, "runtime/versions", version);
+        const directory = path.join(root, "runtime-v2/versions", version);
         yield* fs.makeDirectory(directory, { recursive: true });
         yield* fs.writeFileString(path.join(directory, "t3"), "");
         yield* fs.writeFileString(path.join(directory, ".install-complete"), `${version}\n`);
         yield* fs.utimes(path.join(directory, ".install-complete"), 0, 0);
       }
       if (recorded !== undefined) {
-        yield* fs.writeFileString(path.join(root, "runtime/launchers"), recorded);
+        yield* fs.writeFileString(path.join(root, "runtime-v2/launchers"), recorded);
       }
       // A launcher in the T3 home itself, which neither PATH nor the default bin dir reaches.
       const launcher = path.join(root, "t3");
-      yield* fs.symlink(path.join(root, "runtime/versions/1.0.0/t3"), launcher);
+      yield* fs.symlink(path.join(root, "runtime-v2/versions/1.0.0/t3"), launcher);
 
-      const launchersFile = path.join(root, "runtime/launchers");
+      const launchersFile = path.join(root, "runtime-v2/launchers");
       yield* repointLauncher({
         launchedAs: launcher,
         baseDir: root,
-        targetEntryPath: path.join(root, "runtime/versions/2.0.0/t3"),
+        targetEntryPath: path.join(root, "runtime-v2/versions/2.0.0/t3"),
       }).pipe(
         Effect.provideService(FileSystem.FileSystem, {
           ...fs,
@@ -280,7 +280,7 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       // macOS temp dirs sit behind the /var -> /private/var symlink, so compare canonical paths.
       assert.equal(
         yield* fs.realPath(launcher),
-        yield* fs.realPath(path.join(root, "runtime/versions/2.0.0/t3")),
+        yield* fs.realPath(path.join(root, "runtime-v2/versions/2.0.0/t3")),
       );
     }).pipe(Effect.scoped, Effect.provideService(HostProcess.Platform, "linux")),
   );
@@ -289,15 +289,21 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-    const oldExe = path.join(root, "runtime/versions/1.0.0/t3");
-    const newExe = path.join(root, "runtime/versions/2.0.0/t3");
+    const oldExe = path.join(root, "runtime-v2/versions/1.0.0/t3");
+    const newExe = path.join(root, "runtime-v2/versions/2.0.0/t3");
     const launcher = path.join(root, "t3");
     for (const file of [oldExe, newExe]) {
       yield* fs.makeDirectory(path.dirname(file), { recursive: true });
       yield* fs.writeFileString(file, "");
     }
     yield* fs.symlink(oldExe, launcher);
-    return { root, oldExe, newExe, launcher, launchersFile: path.join(root, "runtime/launchers") };
+    return {
+      root,
+      oldExe,
+      newExe,
+      launcher,
+      launchersFile: path.join(root, "runtime-v2/launchers"),
+    };
   });
 
   it.effect("records a relative launcher path as absolute", () =>
@@ -375,11 +381,11 @@ it.layer(NodeServices.layer)("t3 update launcher", (it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const newExe = path.join(root, "runtime/versions/2.0.0/t3");
+      const newExe = path.join(root, "runtime-v2/versions/2.0.0/t3");
       const copy = path.join(root, "copy/t3");
       const foreign = path.join(root, "foreign/t3");
       const elsewhere = path.join(root, "elsewhere/t3");
-      const otherHome = path.join(root, "other/runtime/versions/1.0.0/t3");
+      const otherHome = path.join(root, "other/runtime-v2/versions/1.0.0/t3");
       const otherLauncher = path.join(root, "other/bin/t3");
       for (const file of [newExe, copy, elsewhere, otherHome]) {
         yield* fs.makeDirectory(path.dirname(file), { recursive: true });
@@ -497,7 +503,7 @@ it.layer(NodeServices.layer)("t3 update with a background service", (it) => {
       const output = yield* runUpdate({
         baseDir,
         logsDir: baseDir,
-        serverRuntimeStatePath: path.join(baseDir, "server-runtime.json"),
+        serverRuntimeStatePath: path.join(baseDir, "server-runtime-v2.json"),
         channel: undefined,
         requestedVersion: version,
         allowDowngrade: false,

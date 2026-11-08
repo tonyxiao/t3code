@@ -61,7 +61,6 @@ import {
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
-const VERSION_PROBE_TIMEOUT_MS = 60_000;
 
 function claudeProviderModels(
   builtInModels: ReadonlyArray<ServerProviderModel>,

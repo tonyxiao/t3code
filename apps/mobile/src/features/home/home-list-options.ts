@@ -79,17 +79,30 @@ export function HomeListOptionsProvider({
   const [optionsAtom] = useState(() => Atom.make(defaultHomeListOptions(savedFilters)));
   const options = useAtomValue(optionsAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const setOptions = useCallback<Dispatch<SetStateAction<HomeListOptions>>>((update) => {
-    const current = registry.get(optionsAtom);
-    const next = typeof update === "function" ? update(current) : update;
-    registry.set(optionsAtom, next);
-    if (next.selectedEnvironmentIds !== current.selectedEnvironmentIds || next.selectedProjectKeys !== current.selectedProjectKeys || next.filterModes !== current.filterModes || next.pinnedFilter !== current.pinnedFilter) {
-      savePreferences({ threadListFilters: {
-        environmentIds: [...next.selectedEnvironmentIds], projectKeys: [...next.selectedProjectKeys],
-        environmentMode: next.filterModes.environment, projectMode: next.filterModes.project, pinnedFilter: next.pinnedFilter,
-      }});
-    }
-  }, [registry, optionsAtom, savePreferences]);
+  const setOptions = useCallback<Dispatch<SetStateAction<HomeListOptions>>>(
+    (update) => {
+      const current = registry.get(optionsAtom);
+      const next = typeof update === "function" ? update(current) : update;
+      registry.set(optionsAtom, next);
+      if (
+        next.selectedEnvironmentIds !== current.selectedEnvironmentIds ||
+        next.selectedProjectKeys !== current.selectedProjectKeys ||
+        next.filterModes !== current.filterModes ||
+        next.pinnedFilter !== current.pinnedFilter
+      ) {
+        savePreferences({
+          threadListFilters: {
+            environmentIds: [...next.selectedEnvironmentIds],
+            projectKeys: [...next.selectedProjectKeys],
+            environmentMode: next.filterModes.environment,
+            projectMode: next.filterModes.project,
+            pinnedFilter: next.pinnedFilter,
+          },
+        });
+      }
+    },
+    [registry, optionsAtom, savePreferences],
+  );
   const value = useMemo(
     () => ({ options, setOptions, projectGroupingMode }),
     [options, setOptions, projectGroupingMode],

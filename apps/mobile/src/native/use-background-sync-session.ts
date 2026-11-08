@@ -41,6 +41,7 @@ export function useBackgroundSyncSession() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to native background-session events and reads the initial native status
   useEffect(() => {
     if (!supported || !native) return;
     const initialRevision = revision.current;

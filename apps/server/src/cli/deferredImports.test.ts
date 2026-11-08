@@ -77,7 +77,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-deferred-project-" });
       const baseDir = NodePath.join(root, "state");
-      const runtimeStatePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+      const runtimeStatePath = NodePath.join(baseDir, "userdata", "server-runtime-v2.json");
       yield* persistServerRuntimeState({
         path: runtimeStatePath,
         state: yield* makePersistedServerRuntimeState({
@@ -107,7 +107,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
       const workspaceRoot = NodePath.join(root, "workspace");
       yield* fs.makeDirectory(workspaceRoot);
       yield* persistServerRuntimeState({
-        path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+        path: NodePath.join(baseDir, "userdata", "server-runtime-v2.json"),
         state: yield* makePersistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: 3_773,

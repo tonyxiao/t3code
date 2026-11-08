@@ -43,6 +43,7 @@ import {
   resolveMacPasskeySigningConfiguration,
   resolveMergedStageDependencies,
   resolveBuildOptions,
+  resolveGitHubPublishConfig,
   stageWslRuntimeArchive,
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
@@ -336,7 +337,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it.effect("resolves GitHub desktop publish config from Effect config", () =>
   it.effect("restores manifests and releases the checkout lock after interruption", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

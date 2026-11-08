@@ -19,6 +19,7 @@ export function SettingsJavaScriptSourceRouteScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<AppUpdateCheckState>("idle");
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the native JavaScript launcher snapshot while this screen is mounted
   useEffect(() => {
     let active = true;
     void client

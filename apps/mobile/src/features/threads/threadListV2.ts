@@ -32,7 +32,10 @@ import {
 import { isListedThreadLineage, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import type { MenuAction } from "@react-native-menu/menu";
-import { matchesSidebarFilter, type SidebarFilterModes } from "@t3tools/client-runtime/state/sidebar-filters";
+import {
+  matchesSidebarFilter,
+  type SidebarFilterModes,
+} from "@t3tools/client-runtime/state/sidebar-filters";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
 import type { ThreadMoveAvailability } from "./threadOrder";
@@ -709,8 +712,18 @@ export function buildThreadListV2Items(input: {
     (thread) =>
       thread.archivedAt === null &&
       isListedThreadLineage(thread.lineage) &&
-      matchesSidebarFilter(input.environmentIds ? input.environmentIds.has(thread.environmentId) : input.environmentId === null ? null : thread.environmentId === input.environmentId, input.filterModes?.environment) &&
-      matchesSidebarFilter(projectKeys?.has(`${thread.environmentId}:${thread.projectId}`) ?? null, input.filterModes?.project),
+      matchesSidebarFilter(
+        input.environmentIds
+          ? input.environmentIds.has(thread.environmentId)
+          : input.environmentId === null
+            ? null
+            : thread.environmentId === input.environmentId,
+        input.filterModes?.environment,
+      ) &&
+      matchesSidebarFilter(
+        projectKeys?.has(`${thread.environmentId}:${thread.projectId}`) ?? null,
+        input.filterModes?.project,
+      ),
   );
   // The same matches as the command palette, typo fallback included. Only
   // listed threads are ranked: a hidden exact match must not turn typos off.
