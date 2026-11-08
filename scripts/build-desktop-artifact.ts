@@ -2850,6 +2850,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} captures the active window when you use the window capture shortcut.`,
         NSCameraUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the camera.`,
         NSMicrophoneUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the microphone.`,
+        NSCalendarsUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need access to your calendars.`,
+        NSCalendarsFullAccessUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need to read and write your calendar events.`,
+        NSCalendarsWriteOnlyAccessUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need to add events to your calendars.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
