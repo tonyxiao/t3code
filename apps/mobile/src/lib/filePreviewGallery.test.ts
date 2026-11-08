@@ -88,3 +88,21 @@ describe("image preview groups", () => {
     expect(filePreviewGallery(b, [a])).toEqual([b]);
   });
 });
+
+vi.mock("../lib/foreground-handoff", () => ({ beginForegroundHandoff: () => () => {} }));
+vi.mock("expo-file-system", () => ({
+  Directory: class {
+    create() {}
+    list() {
+      return [];
+    }
+  },
+  File: class {
+    exists = false;
+    create() {}
+    write() {}
+    moveSync() {}
+    delete() {}
+  },
+  Paths: { document: "/documents" },
+}));
