@@ -2,7 +2,6 @@ import { expect, it } from "@effect/vitest";
 import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadCreation from "./ThreadCreation.ts";
@@ -27,7 +26,7 @@ it.effect("launches a project thread through v2 with a stable thread id and init
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectService.ProjectService)({
-            getShell: () => Effect.succeed(Option.some(project)),
+            getShell: () => Effect.succeedSome(project),
             listShells: () => Effect.succeed([project]),
           }),
           Layer.mock(ThreadLaunchService.ThreadLaunchService)({
@@ -80,8 +79,7 @@ it.effect("rejects a target project without a model before launching", () =>
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectService.ProjectService)({
-            getShell: () =>
-              Effect.succeed(Option.some({ ...project, defaultModelSelection: null })),
+            getShell: () => Effect.succeedSome({ ...project, defaultModelSelection: null }),
             listShells: () => Effect.succeed([]),
           }),
           Layer.mock(ThreadLaunchService.ThreadLaunchService)({

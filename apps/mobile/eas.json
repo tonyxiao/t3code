@@ -27,6 +27,13 @@
         "T3CODE_MOBILE_UPDATES_ENABLED": "0"
       }
     },
+    "development-simulator": {
+      "extends": "development",
+      "ios": {
+        "simulator": true,
+        "image": "macos-tahoe-26.6-xcode-27.1"
+      }
+    },
     "preview": {
       "pnpm": "11.10.0",
       "env": {
@@ -80,7 +87,8 @@
       "pnpm": "11.10.0",
       "env": {
         "APP_VARIANT": "production",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "SOURCEMAP_FILE": "/tmp/t3code-ios-main.jsbundle.map"
       },
       "channel": "production",
       "environment": "production",

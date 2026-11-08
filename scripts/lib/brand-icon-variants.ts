@@ -7,6 +7,8 @@ interface VariantOutputs {
   readonly appleTouch: string;
   readonly webApp192: string;
   readonly webApp512: string;
+  readonly webIcon192: string;
+  readonly webIcon512: string;
   readonly favicon16: string;
   readonly favicon32: string;
   readonly faviconIco: string;
@@ -30,6 +32,8 @@ export const ICON_VARIANTS = [
       appleTouch: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
       webApp192: BRAND_ASSET_PATHS.developmentWebAppIcon192Png,
       webApp512: BRAND_ASSET_PATHS.developmentWebAppIcon512Png,
+      webIcon192: BRAND_ASSET_PATHS.developmentWebIcon192Png,
+      webIcon512: BRAND_ASSET_PATHS.developmentWebIcon512Png,
       favicon16: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
       favicon32: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
       faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
@@ -46,6 +50,8 @@ export const ICON_VARIANTS = [
       appleTouch: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
       webApp192: BRAND_ASSET_PATHS.nightlyWebAppIcon192Png,
       webApp512: BRAND_ASSET_PATHS.nightlyWebAppIcon512Png,
+      webIcon192: BRAND_ASSET_PATHS.nightlyWebIcon192Png,
+      webIcon512: BRAND_ASSET_PATHS.nightlyWebIcon512Png,
       favicon16: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
       favicon32: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
       faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
@@ -62,6 +68,8 @@ export const ICON_VARIANTS = [
       appleTouch: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
       webApp192: BRAND_ASSET_PATHS.productionWebAppIcon192Png,
       webApp512: BRAND_ASSET_PATHS.productionWebAppIcon512Png,
+      webIcon192: BRAND_ASSET_PATHS.productionWebIcon192Png,
+      webIcon512: BRAND_ASSET_PATHS.productionWebIcon512Png,
       favicon16: BRAND_ASSET_PATHS.productionWebFavicon16Png,
       favicon32: BRAND_ASSET_PATHS.productionWebFavicon32Png,
       faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,

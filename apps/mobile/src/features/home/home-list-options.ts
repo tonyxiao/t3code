@@ -7,15 +7,14 @@ import {
 } from "@t3tools/client-runtime/state/sidebar-filters";
 import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
 import { DEFAULT_SIDEBAR_PROJECT_SORT_ORDER } from "@t3tools/contracts";
-import { useAtomSet } from "@effect/atom-react";
+import { RegistryContext, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/reactivity";
 import {
   createContext,
   createElement,
   useCallback,
   useContext,
   useMemo,
-  useEffect,
-  useRef,
   useState,
   type PropsWithChildren,
   type Dispatch,
@@ -76,41 +75,24 @@ export function HomeListOptionsProvider({
   readonly projectGroupingMode: SidebarProjectGroupingMode;
   readonly savedFilters?: ThreadListFilters | undefined;
 }>) {
-  const [options, setOptions] = useState<HomeListOptions>(() =>
-    defaultHomeListOptions(savedFilters),
-  );
+  const registry = useContext(RegistryContext);
+  const [optionsAtom] = useState(() => Atom.make(defaultHomeListOptions(savedFilters)));
+  const options = useAtomValue(optionsAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const saved = useRef(savedFilters);
-  useEffect(() => {
-    const next: ThreadListFilters = {
-      environmentIds: [...options.selectedEnvironmentIds],
-      projectKeys: [...options.selectedProjectKeys],
-      environmentMode: options.filterModes.environment,
-      projectMode: options.filterModes.project,
-      pinnedFilter: options.pinnedFilter,
-    };
-    if (
-      saved.current === undefined &&
-      next.environmentIds?.length === 0 &&
-      next.projectKeys?.length === 0 &&
-      next.environmentMode === "exclude" &&
-      next.projectMode === "exclude" &&
-      next.pinnedFilter === "all"
-    )
-      return;
-    if (JSON.stringify(saved.current) === JSON.stringify(next)) return;
-    saved.current = next;
-    savePreferences({ threadListFilters: next });
-  }, [
-    options.selectedEnvironmentIds,
-    options.selectedProjectKeys,
-    options.filterModes,
-    options.pinnedFilter,
-    savePreferences,
-  ]);
+  const setOptions = useCallback<Dispatch<SetStateAction<HomeListOptions>>>((update) => {
+    const current = registry.get(optionsAtom);
+    const next = typeof update === "function" ? update(current) : update;
+    registry.set(optionsAtom, next);
+    if (next.selectedEnvironmentIds !== current.selectedEnvironmentIds || next.selectedProjectKeys !== current.selectedProjectKeys || next.filterModes !== current.filterModes || next.pinnedFilter !== current.pinnedFilter) {
+      savePreferences({ threadListFilters: {
+        environmentIds: [...next.selectedEnvironmentIds], projectKeys: [...next.selectedProjectKeys],
+        environmentMode: next.filterModes.environment, projectMode: next.filterModes.project, pinnedFilter: next.pinnedFilter,
+      }});
+    }
+  }, [registry, optionsAtom, savePreferences]);
   const value = useMemo(
     () => ({ options, setOptions, projectGroupingMode }),
-    [options, projectGroupingMode],
+    [options, setOptions, projectGroupingMode],
   );
   return createElement(HomeListOptionsContext, { value }, children);
 }

@@ -1,22 +1,8 @@
 import { Pressable, ScrollView } from "react-native";
 import { SymbolView } from "../../components/ui/AppSymbol";
-import { ListFilterMenu } from "../workspace/ListFilterMenu";
+import { ListFilterMenu } from "../layout/workspace/ListFilterMenu";
 import { buildHomeListFilterNativeMenu } from "./home-list-filter-menu";
-import type { HomeHeaderProps } from "./HomeHeader.types";
-
-type FilterProps = Pick<
-  HomeHeaderProps,
-  | "environments"
-  | "projects"
-  | "selectedEnvironmentIds"
-  | "selectedProjectKeys"
-  | "pinnedFilter"
-  | "filterModes"
-  | "onEnvironmentChange"
-  | "onProjectChange"
-  | "onPinnedFilterChange"
-  | "onFilterModeChange"
->;
+type FilterProps = Parameters<typeof buildHomeListFilterNativeMenu>[0] & { readonly gutter: number };
 
 export function ThreadListFilters(props: FilterProps) {
   const menu = buildHomeListFilterNativeMenu(props);
@@ -44,7 +30,7 @@ export function ThreadListFilters(props: FilterProps) {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: 10, gap: 8 }}
+      contentContainerStyle={{ paddingHorizontal: props.gutter, paddingTop: 2, paddingBottom: 10, gap: 8 }}
     >
       <ListFilterMenu
         label={environmentLabel ?? "Environments"}

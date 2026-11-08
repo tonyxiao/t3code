@@ -90,8 +90,7 @@ export const runDoctor = Effect.fn("runDoctor")(function* (
   if (selected.includes("database")) {
     const service = yield* BootService.BootService;
     yield* Console.log("\nReclaiming database space. This can take several minutes...");
-    // Report inside the pause: a repair that succeeded is worth knowing about
-    // even when starting the service again fails afterwards.
+    // Report the repair before restarting, which can fail independently.
     yield* service.withStopped(
       maintenance
         .compact(databasePath)

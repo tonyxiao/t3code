@@ -10,13 +10,18 @@ import * as Schema from "effect/Schema";
 import { handleDesktopAppActivationRequest } from "../../desktopAppActivation";
 import { importDesktopPairing } from "../../connection/onboarding";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
-import { findProjectByPath, inferProjectTitleFromPath } from "../../lib/projectPaths";
+import {
+  findProjectByPath,
+  inferProjectTitleFromPath,
+} from "@t3tools/client-runtime/state/projects";
 import { newProjectId } from "../../lib/utils";
 import { readProjects, waitForProject } from "../../state/entities";
 import { usePrimaryEnvironment } from "../../state/environments";
 import { projectEnvironment } from "../../state/projects";
 import { useEnvironmentShellHasSnapshot } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useOrchestrationCommand } from "../../state/use-orchestration-command";
+import { reportProjectFailure } from "../../hooks/useProjectGroupUpdate";
 
 const isConnectionBlockedError = Schema.is(ConnectionBlockedError);
 const isConnectionTransientError = Schema.is(ConnectionTransientError);
@@ -25,6 +30,9 @@ export function DesktopAppActivationCoordinator() {
   const primaryEnvironment = usePrimaryEnvironment();
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
   const importPairing = useAtomCommand(importDesktopPairing, { reportFailure: false });
+  const updateProject = useOrchestrationCommand(projectEnvironment.update, {
+    label: "project unarchive",
+  });
   const openThread = useNewThreadHandler();
   const queueRef = useRef(Promise.resolve());
   const activation = window.desktopBridge?.appActivation;
@@ -108,11 +116,26 @@ export function DesktopAppActivationCoordinator() {
         waitForProject: async (projectRef) => {
           await waitForProject(projectRef);
         },
-        openThread: (projectRef) => openThread(projectRef),
+      openThread: (projectRef) => {
+        const project = readProjects().find(
+          (candidate) =>
+            candidate.environmentId === projectRef.environmentId &&
+            candidate.id === projectRef.projectId,
+        );
+        // Opening an archived project's folder again brings the project back.
+        if (project?.archivedAt != null) {
+          void updateProject({
+            environmentId: projectRef.environmentId,
+            input: { projectId: projectRef.projectId, archived: false },
+          }).then((result) => reportProjectFailure("Failed to unarchive project", result));
+        }
+        return openThread(projectRef);
+      },
       });
     },
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to desktop activation requests over the bridge and marks the renderer ready
   useEffect(() => {
     if (!ready || activation === undefined) return;
 

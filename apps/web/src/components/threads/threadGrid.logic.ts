@@ -38,6 +38,8 @@ export function threadGridKey(thread: EnvironmentThreadShell): string {
 export function threadGridStatus(thread: EnvironmentThreadShell): string {
   const status = resolveSidebarThreadStatus(thread);
   return {
+    preparing: "Preparing",
+    request: "Needs attention",
     approval: "Needs approval",
     input: "Needs input",
     working: "Working",

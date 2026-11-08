@@ -752,7 +752,11 @@ export function ThreadGrid() {
                 <AlarmClockIcon /> Snooze
               </MenuTrigger>
               <MenuPopup>
-                {resolveSnoozePresets(new Date(), timestampFormat).map((preset) => (
+                {resolveSnoozePresets(
+                  new Date(now),
+                  timestampFormat,
+                  selectedRows[0]!.thread.environmentId,
+                ).map((preset) => (
                   <MenuItem
                     key={preset.id}
                     onClick={() => void runAction("snooze", preset.snoozedUntil)}
@@ -763,7 +767,7 @@ export function ThreadGrid() {
                 <MenuItem
                   onClick={() => {
                     void (async () => {
-                      const environmentId = selectedRows[0]?.thread.environmentId;
+                      const environmentId = selectedRows[0]!.thread.environmentId;
                       if (!environmentId) return;
                       const preset = await requestCustomSnooze(environmentId);
                       if (preset) await runAction("snooze", preset.snoozedUntil);

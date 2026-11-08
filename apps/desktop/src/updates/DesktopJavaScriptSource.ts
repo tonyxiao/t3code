@@ -55,7 +55,7 @@ export const layer = Layer.effect(
       );
       if (contents === null) return null;
       const value = yield* decodeLegacyDesktopSettings(contents).pipe(
-        Effect.catch(() => Effect.succeed(null)),
+        Effect.orElseSucceed(() => null),
       );
       const url = value?.localRendererUrl;
       if (typeof url !== "string" || !URL.canParse(url)) return null;
@@ -81,7 +81,9 @@ export const layer = Layer.effect(
     return {
       store,
       sourceApi,
-      select: (source) => attempt(() => sourceApi.select(source)),
+      select: Effect.fn("DesktopJavaScriptSource.select")((source) =>
+        attempt(() => sourceApi.select(source)),
+      ),
       prepareLaunch: attempt(async () => {
         launch = await store.prepareLaunch();
         return launch;

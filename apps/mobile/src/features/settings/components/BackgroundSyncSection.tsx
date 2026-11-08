@@ -2,7 +2,7 @@ import { Platform, View } from "react-native";
 
 import { AppText as Text } from "../../../components/ui/AppText";
 import { useBackgroundSyncSession } from "../../../native/use-background-sync-session";
-import { SettingsActionRow } from "./SettingsActionRow";
+import { SettingsRow } from "./SettingsRow";
 import { SettingsSection } from "./SettingsSection";
 
 export function BackgroundSyncSection() {
@@ -21,11 +21,10 @@ export function BackgroundSyncSection() {
   return (
     <SettingsSection title="Background sync">
       {active ? (
-        <SettingsActionRow
+        <SettingsRow
           icon="arrow.clockwise"
-          label="Stop sync session"
+          label={pending ? "Stopping sync session…" : "Stop sync session"}
           disabled={!supported || pending}
-          loading={pending}
           onPress={() => {
             void stop();
           }}

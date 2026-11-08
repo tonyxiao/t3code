@@ -35,17 +35,16 @@ export const importDesktopPairing = createRuntimeCommand(connectionAtomRuntime, 
     mode: "singleFlight",
     key: (input: { pairingUrl: string }) => `desktop:${pairingKey(input.pairingUrl)}`,
   },
-  execute: (input: { readonly pairingUrl: string }) =>
-    Effect.gen(function* () {
-      const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-      const before = yield* SubscriptionRef.get(registry.entries);
-      const onboarding = yield* ConnectionOnboarding.ConnectionOnboarding;
-      const environmentId = yield* onboarding.registerPairing(input);
-      return {
-        environmentId,
-        action: before.has(environmentId) ? "updated" : "added",
-      } as const;
-    }),
+  execute: Effect.fn("execute")(function* (input: { readonly pairingUrl: string }) {
+    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+    const before = yield* SubscriptionRef.get(registry.entries);
+    const onboarding = yield* ConnectionOnboarding.ConnectionOnboarding;
+    const environmentId = yield* onboarding.registerPairing(input);
+    return {
+      environmentId,
+      action: before.has(environmentId) ? "updated" : "added",
+    } as const;
+  }),
 });
 
 export const connectSshEnvironment = createRuntimeCommand(connectionAtomRuntime, {

@@ -8,6 +8,7 @@ import type {
 import type * as Effect from "effect/Effect";
 
 import type { TextGenerationPolicy } from "./textGenerationPolicy.ts";
+import type { ThreadTitleForkSource } from "./textGenerationPrompts.ts";
 
 export interface CommitMessageGenerationInput {
   cwd: string;
@@ -33,6 +34,7 @@ export interface PrContentGenerationInput {
   diffSummary: string;
   diffPatch: string;
   changeRequestTemplate?: string | undefined;
+  threadContext?: string | undefined;
   policy?: TextGenerationPolicy | undefined;
   modelSelection: ModelSelection;
 }
@@ -59,7 +61,9 @@ export interface ThreadTitleGenerationInput {
   cwd: string;
   message: string;
   previousTitle?: string | undefined;
+  forkSource?: ThreadTitleForkSource | undefined;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
+  instructions?: string | undefined;
   modelSelection: ModelSelection;
 }
 
@@ -93,6 +97,16 @@ export type ReviewGuideGenerationResult = Omit<
   "headSha" | "generatedAt" | "modelSelection"
 >;
 
+export interface TranscriptionPostProcessingInput {
+  cwd: string;
+  prompt: string;
+  modelSelection: ModelSelection;
+}
+
+export interface TranscriptionPostProcessingResult {
+  transcription: string;
+}
+
 export interface ProviderTextGeneration {
   readonly generateSnoozeTime?: (input: {
     readonly text: string;
@@ -101,6 +115,10 @@ export interface ProviderTextGeneration {
     readonly cwd: string;
     readonly modelSelection: ModelSelection;
   }) => Effect.Effect<{ readonly snoozedUntil: string | null }, TextGenerationError>;
+  readonly generateTranscriptionPostProcessing: (
+    input: TranscriptionPostProcessingInput,
+  ) => Effect.Effect<TranscriptionPostProcessingResult, TextGenerationError>;
+
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
   ) => Effect.Effect<CommitMessageGenerationResult, TextGenerationError>;

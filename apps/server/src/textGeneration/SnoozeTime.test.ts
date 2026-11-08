@@ -50,6 +50,7 @@ function instance(
       generateBranchName: () => Effect.die("unused"),
       generateThreadTitle: () => Effect.die("unused"),
       generateReviewGuide: () => Effect.die("unused"),
+      generateTranscriptionPostProcessing: () => Effect.die("unused"),
       generateSnoozeTime,
     },
   };

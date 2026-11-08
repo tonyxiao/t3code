@@ -5,7 +5,7 @@ import {
   type ThreadRoutingRequest,
   type ThreadRoutingHost,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
@@ -54,7 +54,6 @@ export const executeThreadRoutingRequest = Effect.fn("connection.executeThreadRo
 
 export const watchThreadRouting = Effect.fn("connection.watchThreadRouting")(function* () {
   const registry = yield* EnvironmentRegistry;
-  const crypto = yield* Crypto.Crypto;
   const sourceStream = (
     environmentId: EnvironmentId,
     connections: (typeof ThreadRoutingHost.Type)["connections"],
@@ -74,7 +73,7 @@ export const watchThreadRouting = Effect.fn("connection.watchThreadRouting")(fun
                     Effect.gen(function* () {
                       if (config.environment.capabilities.agentThreadRouting !== true)
                         return Stream.empty;
-                      const connectionId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+                      const connectionId = yield* Effect.sync(() => SecureRandom.uuidV4Unsafe());
                       return active.client[WS_METHODS.threadRoutingConnect]({
                         connectionId,
                         connections,

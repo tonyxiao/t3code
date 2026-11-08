@@ -5,7 +5,6 @@ import {
   squashAtomCommandFailure,
   type AtomCommand,
 } from "@t3tools/client-runtime/state/runtime";
-import { serializeLegacyContextMessage } from "@t3tools/shared/composerContextLegacySend";
 import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
 import {
   AuthOrchestrationOperateScope,
@@ -115,20 +114,16 @@ export async function sendOfflineOutboxTurn(id: string): Promise<void> {
       reviewComments: turn.reviewComments,
       previewAnnotations: turn.previewAnnotations,
       threadContexts: turn.threadContexts,
+      environmentContexts: turn.environmentContexts ?? [],
       attachments: attachments.map((attachment, index) => ({
         attachment,
         attachmentId: wireAttachments[index]?.id ?? attachment.id,
       })),
     });
-    const inlineContext = readConfig()?.environment.capabilities.inlineMessageContext === true;
-    const outgoingText =
+    const text =
       turn.legacyPromptEffort === undefined
         ? turn.text
         : applyClaudePromptEffortPrefix(turn.text, turn.legacyPromptEffort);
-    const text =
-      context && !inlineContext
-        ? serializeLegacyContextMessage({ text: outgoingText, records: context.records })
-        : outgoingText;
     if (!turn.bootstrap?.createThread && !readThreadShell(threadRef)) {
       await waitForThreadShell(threadRef);
     }
@@ -191,7 +186,7 @@ export async function sendOfflineOutboxTurn(id: string): Promise<void> {
           role: "user",
           text,
           attachments: wireAttachments,
-          ...(context && inlineContext ? { context } : {}),
+          ...(context ? { context } : {}),
         },
         modelSelection: turn.modelSelection,
         titleSeed: turn.titleSeed,

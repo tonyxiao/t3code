@@ -2,7 +2,7 @@ import { Debouncer } from "@tanstack/react-pacer";
 import type { PullRequestMergeMethod } from "@t3tools/contracts";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { create } from "zustand";
-import { normalizeProjectPathForComparison } from "./lib/projectPaths";
+import { normalizeProjectPathForComparison } from "@t3tools/client-runtime/state/projects";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 2;
@@ -253,7 +253,10 @@ export function persistState(state: UiState): void {
         projectOrder: state.projectOrder,
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
-        sidebarProjectScopeKey: state.sidebarProjectScopeKey,
+        sidebarProjectScopeKey:
+          state.sidebarProjectScopeMode === "include" && state.sidebarProjectScopeKeys.length === 1
+            ? (state.sidebarProjectScopeKeys[0] ?? null)
+            : null,
         sidebarEnvironmentScopeIds: state.sidebarEnvironmentScopeIds,
         sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
         sidebarEnvironmentScopeMode: state.sidebarEnvironmentScopeMode,
@@ -372,6 +375,15 @@ export function setSidebarProjectScopeKey(state: UiState, projectKey: string | n
     sidebarProjectScopeKeys: nextKey === null ? [] : [nextKey],
     sidebarProjectScopeMode: nextKey === null ? "exclude" : "include",
   };
+}
+
+function setSidebarProjectScopeKeys(state: UiState, projectKeys: readonly string[]): UiState {
+  return setSidebarScopeSelection(
+    state,
+    "project",
+    projectKeys,
+    projectKeys.length ? "include" : "exclude",
+  );
 }
 
 export function setSidebarScopeSelection(
@@ -504,6 +516,7 @@ interface UiStateStore extends UiState {
     mode: "include" | "exclude",
   ) => void;
   setSidebarThreadSortOrder: (order: SidebarThreadSortOrder) => void;
+  setSidebarProjectScopeKeys: (projectKeys: readonly string[]) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
   setProjectExpanded: (projectIds: string | readonly string[], expanded: boolean) => void;
   reorderProjects: (
@@ -528,6 +541,8 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
   setSidebarScopeSelection: (kind, keys, mode) =>
     set((state) => setSidebarScopeSelection(state, kind, keys, mode)),
   setSidebarThreadSortOrder: (order) => set((state) => setSidebarThreadSortOrder(state, order)),
+  setSidebarProjectScopeKeys: (projectKeys) =>
+    set((state) => setSidebarProjectScopeKeys(state, projectKeys)),
   setPullRequestMergeMethod: (method) => set((state) => setPullRequestMergeMethod(state, method)),
   setProjectExpanded: (projectIds, expanded) =>
     set((state) => setProjectExpanded(state, projectIds, expanded)),

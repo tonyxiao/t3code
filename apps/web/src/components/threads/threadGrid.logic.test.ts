@@ -35,6 +35,8 @@ function thread(overrides: Partial<EnvironmentThreadShell> = {}): EnvironmentThr
       parentThreadId: null,
     },
     forkedFrom: null,
+    linkOrigin: null,
+    delegatedFrom: null,
     activeProviderThreadId: null,
     pendingBackgroundTasks: [],
     providerInstanceHistory: [],

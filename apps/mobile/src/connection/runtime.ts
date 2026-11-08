@@ -28,7 +28,9 @@ const layerMobileThreadSnapshotLoader = Layer.effect(
     const loader = yield* ThreadSnapshotLoader;
     const hydration = yield* Semaphore.make(4);
     return ThreadSnapshotLoader.of({
-      load: (...args) => loader.load(...args).pipe(hydration.withPermits(1)),
+      load: Effect.fn("ThreadSnapshotLoader.load")((...args) =>
+        loader.load(...args).pipe(hydration.withPermits(1)),
+      ),
     });
   }),
 ).pipe(Layer.provide(BoundedThreadSnapshotLoader.layer));
@@ -50,7 +52,11 @@ type ConnectionLayerSource =
 
 const layerProvidedClientConnection = layerSnapshotLoader.pipe(
   Layer.provideMerge(
-    Connection.layerWithOptions({ usageLimitSources: true, usageLimitsCommand: true }),
+    Connection.layerWithOptions({
+      usageLimitSources: true,
+      usageLimitsCommand: true,
+      providerCatalogsOnDemand: true,
+    }),
   ),
   Layer.provideMerge(
     Layer.mergeAll(

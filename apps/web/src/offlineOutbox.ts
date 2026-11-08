@@ -7,6 +7,7 @@ import {
   type ThreadId,
   type PreviewAnnotationPayload,
   type ThreadContextRecord,
+  type EnvironmentContextRecord,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { create } from "zustand";
@@ -36,6 +37,7 @@ export interface OfflineOutboxTurn {
   previewAnnotations: PreviewAnnotationPayload[];
   reviewComments: ReviewCommentContext[];
   threadContexts: ThreadContextRecord[];
+  environmentContexts?: EnvironmentContextRecord[];
   bootstrap?: {
     createThread?: {
       projectId: ProjectId;
