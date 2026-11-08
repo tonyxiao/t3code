@@ -5862,7 +5862,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         if (scenario.name === "matching-details")
           assert.equal(
             terminal.failure.message,
-            "Provider stopped this request. — Detailed provider allowance explanation.",
+            "Provider stopped this request. Detailed provider allowance explanation.",
           );
         if ("resetAfter" in scenario) {
           yield* Deferred.await(snapshotReceipt);
@@ -6006,7 +6006,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           assert.equal(
             terminal.failure.message,
             expectedClass === notificationClass
-              ? `${message}. HTTP ${notificationStatus}. ${additionalDetails}`
+              ? `${message} HTTP ${notificationStatus} ${additionalDetails}`
               : message,
           );
           if (willRetry) assert.equal(terminal.retry?.attempt, 1);

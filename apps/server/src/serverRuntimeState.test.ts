@@ -43,16 +43,16 @@ const startBesideBootService = Effect.fn("test.startBesideBootService")(function
   for (const home of [t3Home, serviceHome]) {
     yield* fs.makeDirectory(path.join(home, "userdata"), { recursive: true });
   }
-  yield* fs.makeDirectory(path.join(serviceHome, "runtime"));
+  yield* fs.makeDirectory(path.join(serviceHome, "runtime-v2"));
   const activeVersion = input.activeVersion ?? "0.0.42";
   if (!input.missingServiceState) {
     yield* fs.writeFileString(
-      path.join(serviceHome, "runtime", "service-state.json"),
+      path.join(serviceHome, "runtime-v2", "service-state.json"),
       JSON.stringify({ protocol: input.npmRuntime ? 2 : 3, activeVersion }),
     );
   }
   if (input.npmRuntime) {
-    const versionDir = path.join(serviceHome, "runtime", "versions", activeVersion);
+    const versionDir = path.join(serviceHome, "runtime-v2", "versions", activeVersion);
     const entryPath = path.join(versionDir, "node_modules", "t3", "dist", "bin.mjs");
     yield* fs.makeDirectory(path.dirname(entryPath), { recursive: true });
     yield* fs.writeFileString(entryPath, "");
@@ -60,13 +60,13 @@ const startBesideBootService = Effect.fn("test.startBesideBootService")(function
 
   if (input.restartPending) {
     yield* fs.writeFileString(
-      path.join(serviceHome, "runtime", ".restart-pending"),
+      path.join(serviceHome, "runtime-v2", ".restart-pending"),
       `${activeVersion}\n`,
     );
   }
   const plan = {
     program: input.npmRuntime
-      ? ["/usr/bin/node", path.join(serviceHome, "runtime", "service-launcher.mjs")]
+      ? ["/usr/bin/node", path.join(serviceHome, "runtime-v2", "service-launcher.mjs")]
       : [],
     baseDir: serviceHome,
     logPath: "",
@@ -75,11 +75,11 @@ const startBesideBootService = Effect.fn("test.startBesideBootService")(function
   const [unitPath, unit] =
     input.platform === "darwin"
       ? [
-          path.join(root, "Library", "LaunchAgents", "com.t3tools.t3code.service.plist"),
+          path.join(root, "Library", "LaunchAgents", "com.tonyxiao.txcode.v2.service.plist"),
           renderBootServicePlist(plan, { homeDir: root, environmentPath: "" }),
         ]
       : [
-          path.join(root, ".config", "systemd", "user", "t3code.service"),
+          path.join(root, ".config", "systemd", "user", "t3code-v2.service"),
           renderBootServiceUnit(plan),
         ];
   yield* fs.makeDirectory(path.dirname(unitPath), { recursive: true });
@@ -113,7 +113,7 @@ const startBesideBootService = Effect.fn("test.startBesideBootService")(function
       }),
   });
   const result = yield* Effect.scoped(
-    ServerOwnership.acquireServerOwnership(path.join(t3Home, "userdata", "server-runtime.json")),
+    ServerOwnership.acquireServerOwnership(path.join(t3Home, "userdata", "server-runtime-v2.json")),
   ).pipe(
     Effect.provideService(ProcessRunner.ProcessRunner, runner),
     Effect.provideService(HostProcess.Platform, input.platform),
@@ -157,7 +157,7 @@ describe("server ownership", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-owner-race-" });
-      const statePath = path.join(root, "server-runtime.json");
+      const statePath = path.join(root, "server-runtime-v2.json");
       const attempts = yield* Effect.all(
         [
           ServerOwnership.acquireServerOwnership(statePath).pipe(Effect.result),
@@ -176,7 +176,7 @@ describe("server ownership", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-owner-" });
-      const statePath = path.join(root, "server-runtime.json");
+      const statePath = path.join(root, "server-runtime-v2.json");
       const state = yield* makeState;
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -215,8 +215,8 @@ describe("server ownership", () => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-owner-lost-" });
-        const statePath = path.join(root, "server-runtime.json");
-        const lockPath = path.join(root, "server-owner.sqlite");
+        const statePath = path.join(root, "server-runtime-v2.json");
+        const lockPath = path.join(root, "server-owner-v2.sqlite");
         const replacement = path.join(root, "replacement.sqlite");
         if (operation === "during acquisition" || operation === "first acquisition") {
           if (operation === "during acquisition") yield* fs.writeFileString(lockPath, "");
@@ -260,7 +260,7 @@ describe("server ownership", () => {
             ? []
             : [
                 [
-                  `Server ownership lock at ${lockPath} was deleted or replaced. Another server may now share this T3 home. Stop any other server using this home, then restart this server. Do not delete server-owner.sqlite while a server is running.`,
+                  `Server ownership lock at ${lockPath} was deleted or replaced. Another server may now share this T3 home. Stop any other server using this home, then restart this server. Do not delete server-owner-v2.sqlite while a server is running.`,
                 ],
               ];
         assert.deepEqual(messages, expected);
@@ -284,7 +284,7 @@ describe("server ownership", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-owner-legacy-" });
-      const statePath = path.join(root, "server-runtime.json");
+      const statePath = path.join(root, "server-runtime-v2.json");
       const state = yield* makeState;
       yield* ServerRuntimeState.persistServerRuntimeState({
         path: statePath,
@@ -308,7 +308,7 @@ describe("server ownership", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-owner-cleanup-" });
-      const statePath = path.join(root, "server-runtime.json");
+      const statePath = path.join(root, "server-runtime-v2.json");
       const state = yield* makeState;
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -339,7 +339,7 @@ describe("server ownership", () => {
               "launchctl print": { code: 113 },
               "launchctl print-disabled": {
                 code: 0,
-                stdout: '"com.t3tools.t3code.service" => false',
+                stdout: '"com.tonyxiao.txcode.v2.service" => false',
               },
             },
           },
@@ -452,7 +452,7 @@ describe("server ownership", () => {
               "launchctl print": { code: 113 },
               "launchctl print-disabled": {
                 code: 0,
-                stdout: '"com.t3tools.t3code.service" => disabled',
+                stdout: '"com.tonyxiao.txcode.v2.service" => disabled',
               },
             },
           },
