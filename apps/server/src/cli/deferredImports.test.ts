@@ -95,7 +95,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
 
       assert.isTrue(Exit.hasDies(exit));
       assert.isTrue(yield* fs.exists(runtimeStatePath));
-      assert.isFalse(yield* fs.exists(NodePath.join(baseDir, "userdata", "server-owner-v2.sqlite")));
+      assert.isFalse(
+        yield* fs.exists(NodePath.join(baseDir, "userdata", "server-owner-v2.sqlite")),
+      );
     }),
   );
 
