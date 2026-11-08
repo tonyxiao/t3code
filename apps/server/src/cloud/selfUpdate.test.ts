@@ -365,10 +365,10 @@ it.layer(NodeServices.layer)("pruning runtimes on start", (it) => {
     const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-prune-on-start-" });
     const realHome = path.join(tempDir, "home");
     const baseDir = input.symlinkedHome ? path.join(tempDir, "linked-home") : realHome;
-    const versionsDir = path.join(baseDir, "runtime", "versions");
+    const versionsDir = path.join(baseDir, "runtime-v2", "versions");
     yield* TestClock.setTime(24 * 60 * 60 * 1000);
     for (const version of [staleVersion, packageJson.version]) {
-      const directory = path.join(realHome, "runtime", "versions", version);
+      const directory = path.join(realHome, "runtime-v2", "versions", version);
       yield* fs.makeDirectory(directory, { recursive: true });
       yield* fs.writeFileString(path.join(directory, "t3"), "");
       const sentinel = path.join(directory, ".install-complete");

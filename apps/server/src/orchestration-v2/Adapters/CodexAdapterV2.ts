@@ -1138,7 +1138,7 @@ function codexErrorMessage(error: CodexSchema.V2ErrorNotification["error"]): str
   }
   const details = error.additionalDetails?.trim();
   if (details && !error.message.includes(details)) parts.push(details);
-  return parts.join(". ");
+  return parts.join(" ");
 }
 
 type CodexErrorInfo = CodexSchema.ServerNotification__CodexErrorInfo;

@@ -27,7 +27,6 @@ import * as Stream from "effect/Stream";
 import { Argument, Command, Flag, GlobalFlag } from "effect/cli";
 
 import { snoozeCommand, wakeCommand, interruptCommand } from "./threadActions.ts";
-export { wakeAt } from "./threadActions.ts";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
