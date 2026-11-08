@@ -14,6 +14,14 @@ import { WebView } from "react-native-webview";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { RichInputFocusContext, type RichInputTarget } from "./richInputFocus";
 
+function parseBridgeMessage(data: string): unknown {
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
 function RichMarkdownCode({
   content,
   language,
@@ -67,36 +75,32 @@ function RichMarkdownCode({
         }}
         onShouldStartLoadWithRequest={(request) => request.url === "about:blank"}
         onMessage={(event) => {
-          try {
-            const message: unknown = JSON.parse(event.nativeEvent.data);
-            if (
-              typeof message === "object" &&
-              message !== null &&
-              "height" in message &&
-              typeof message.height === "number" &&
-              Number.isFinite(message.height)
-            )
-              setHeight(Math.max(100, Math.min(10000, message.height)));
-            if (typeof message === "object" && message !== null && "inputFocus" in message) {
-              const bounds = message.inputFocus;
-              if (bounds === null) {
-                inputBounds.current = null;
-                onInputFocus?.(inputTarget, false);
-              } else if (
-                typeof bounds === "object" &&
-                "top" in bounds &&
-                typeof bounds.top === "number" &&
-                Number.isFinite(bounds.top) &&
-                "bottom" in bounds &&
-                typeof bounds.bottom === "number" &&
-                Number.isFinite(bounds.bottom)
-              ) {
-                inputBounds.current = { top: bounds.top, bottom: bounds.bottom };
-                onInputFocus?.(inputTarget, true);
-              }
+          const message = parseBridgeMessage(event.nativeEvent.data);
+          if (
+            typeof message === "object" &&
+            message !== null &&
+            "height" in message &&
+            typeof message.height === "number" &&
+            Number.isFinite(message.height)
+          )
+            setHeight(Math.max(100, Math.min(10000, message.height)));
+          if (typeof message === "object" && message !== null && "inputFocus" in message) {
+            const bounds = message.inputFocus;
+            if (bounds === null) {
+              inputBounds.current = null;
+              onInputFocus?.(inputTarget, false);
+            } else if (
+              typeof bounds === "object" &&
+              "top" in bounds &&
+              typeof bounds.top === "number" &&
+              Number.isFinite(bounds.top) &&
+              "bottom" in bounds &&
+              typeof bounds.bottom === "number" &&
+              Number.isFinite(bounds.bottom)
+            ) {
+              inputBounds.current = { top: bounds.top, bottom: bounds.bottom };
+              onInputFocus?.(inputTarget, true);
             }
-          } catch {
-            /* Ignore messages outside the local document bridge. */
           }
         }}
       />
