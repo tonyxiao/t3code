@@ -1,9 +1,10 @@
 import { richContentLanguage } from "@t3tools/chat-renderer/language";
 import { richContentDocument } from "@t3tools/chat-renderer/document";
-import { useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { RichInputFocusContext, type RichInputTarget } from "./richInputFocus";
 
 function RichMarkdownCode({
   content,
@@ -14,6 +15,24 @@ function RichMarkdownCode({
 }) {
   const { themeAppearance: theme } = useAppearancePreferences();
   const [height, setHeight] = useState(180);
+  const container = useRef<ComponentRef<typeof View>>(null);
+  const inputBounds = useRef<{ top: number; bottom: number } | null>(null);
+  const onInputFocus = useContext(RichInputFocusContext);
+  const onInputFocusRef = useRef(onInputFocus);
+  useEffect(() => {
+    onInputFocusRef.current = onInputFocus;
+  }, [onInputFocus]);
+  const inputTarget = useMemo<RichInputTarget>(
+    () => ({
+      measure: (callback) => {
+        container.current?.measureInWindow((_x, y) => {
+          const bounds = inputBounds.current;
+          if (bounds) callback(y + bounds.top, y + bounds.bottom);
+        });
+      },
+    }),
+    [],
+  );
   const source = useMemo(
     () => ({
       // Keep the bundled browser libraries out of ordinary markdown rendering.
@@ -26,13 +45,18 @@ function RichMarkdownCode({
     }),
     [content, language, theme],
   );
+  useEffect(() => () => onInputFocusRef.current?.(inputTarget, false), [inputTarget]);
   return (
-    <View style={{ minWidth: 0, width: "100%", height }}>
+    <View ref={container} collapsable={false} style={{ minWidth: 0, width: "100%", height }}>
       <WebView
         source={source}
         originWhitelist={["about:blank"]}
         scrollEnabled={height >= 10000}
         style={{ backgroundColor: "transparent" }}
+        onLoadStart={() => {
+          inputBounds.current = null;
+          onInputFocus?.(inputTarget, false);
+        }}
         onShouldStartLoadWithRequest={(request) => request.url === "about:blank"}
         onMessage={(event) => {
           try {
@@ -45,8 +69,26 @@ function RichMarkdownCode({
               Number.isFinite(message.height)
             )
               setHeight(Math.max(100, Math.min(10000, message.height)));
+            if (typeof message === "object" && message !== null && "inputFocus" in message) {
+              const bounds = message.inputFocus;
+              if (bounds === null) {
+                inputBounds.current = null;
+                onInputFocus?.(inputTarget, false);
+              } else if (
+                typeof bounds === "object" &&
+                "top" in bounds &&
+                typeof bounds.top === "number" &&
+                Number.isFinite(bounds.top) &&
+                "bottom" in bounds &&
+                typeof bounds.bottom === "number" &&
+                Number.isFinite(bounds.bottom)
+              ) {
+                inputBounds.current = { top: bounds.top, bottom: bounds.bottom };
+                onInputFocus?.(inputTarget, true);
+              }
+            }
           } catch {
-            /* Ignore messages outside the height bridge. */
+            /* Ignore messages outside the local document bridge. */
           }
         }}
       />

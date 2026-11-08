@@ -926,6 +926,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               latestTurn={props.selectedThread.latestTurn}
               activeWorkStartedAt={props.activeWorkStartedAt}
               listRef={listRef}
+              composerFocused={composerFocused}
               freeze={freeze}
               anchorMessageId={anchorMessageId}
               submittedMessageId={submittedMessageId}

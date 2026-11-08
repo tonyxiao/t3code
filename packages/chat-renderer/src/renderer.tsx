@@ -109,6 +109,8 @@ function BoundInput({
           background: "transparent",
           color: "inherit",
           font: "inherit",
+          // iOS zooms focused inputs whose text is smaller than 16 CSS pixels.
+          fontSize: "max(16px, 1em)",
         }}
         id={id}
         value={typeof value === "string" ? value : ""}
