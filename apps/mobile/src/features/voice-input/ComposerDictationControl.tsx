@@ -143,8 +143,21 @@ export function ComposerDictationToolbar(props: {
         <Animated.View
           key={props.showsDictation ? "dictation" : "draft"}
           className="absolute inset-0"
-          entering={props.showsDictation ? DICTATION_TOOLBAR_ENTERING : DRAFT_TOOLBAR_ENTERING}
-          exiting={props.showsDictation ? DICTATION_TOOLBAR_EXITING : DRAFT_TOOLBAR_EXITING}
+          // Android can retain the hidden initial face when reduced motion skips the flip.
+          entering={
+            Platform.OS === "android"
+              ? undefined
+              : props.showsDictation
+                ? DICTATION_TOOLBAR_ENTERING
+                : DRAFT_TOOLBAR_ENTERING
+          }
+          exiting={
+            Platform.OS === "android"
+              ? undefined
+              : props.showsDictation
+                ? DICTATION_TOOLBAR_EXITING
+                : DRAFT_TOOLBAR_EXITING
+          }
           style={{ backfaceVisibility: "hidden" }}
         >
           {props.children}
