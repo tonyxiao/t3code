@@ -17,8 +17,22 @@ const cached = {
 } satisfies ServerProvider;
 
 it("retains usable cached installation and auth until the startup probe answers", () => {
-  const pending = { ...cached, installed: false, version: null, status: "warning", auth: { status: "unknown" }, models: [] } satisfies ServerProvider;
+  const pending = {
+    ...cached,
+    installed: false,
+    version: null,
+    status: "warning",
+    auth: { status: "unknown" },
+    models: [],
+  } satisfies ServerProvider;
   const snapshot = mergeProviderSnapshot(cached, pending);
-  expect(snapshot).toMatchObject({ installed: true, version: cached.version, auth: cached.auth, models: cached.models });
-  expect(mergeProviderSnapshot(snapshot, { ...pending, status: "error", message: "CLI missing" })).toMatchObject({ installed: false, version: null, status: "error" });
+  expect(snapshot).toMatchObject({
+    installed: true,
+    version: cached.version,
+    auth: cached.auth,
+    models: cached.models,
+  });
+  expect(
+    mergeProviderSnapshot(snapshot, { ...pending, status: "error", message: "CLI missing" }),
+  ).toMatchObject({ installed: false, version: null, status: "error" });
 });
