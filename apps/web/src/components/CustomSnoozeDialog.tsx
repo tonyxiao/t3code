@@ -104,7 +104,7 @@ function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId })
       : mode === "text"
         ? { mode, text }
         : { mode, amount, unit };
-  const preview = mode === "text" ? resolveNaturalSnooze(text, new Date()) : null;
+  const preview = mode === "text" ? resolveNaturalSnooze(text, new Date(`${nowMinute}Z`)) : null;
   return (
     <Dialog
       open

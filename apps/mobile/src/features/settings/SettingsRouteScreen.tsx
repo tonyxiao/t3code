@@ -277,7 +277,11 @@ function useSettingsIndexSections(): SettingsListSection[] {
       rows: [
         serverPage("SettingsEnvironmentMaintenance", "arrow.clockwise", "Maintenance"),
         page("SettingsLabs", "sparkles", "Labs"),
-        page("SettingsJavaScriptSource", "chevron.left.forwardslash.chevron.right", "JavaScript source"),
+        page(
+          "SettingsJavaScriptSource",
+          "chevron.left.forwardslash.chevron.right",
+          "JavaScript source",
+        ),
         page("SettingsAbout", "info.circle", "About"),
         page("SettingsArchive", "archivebox", "Archive"),
       ],

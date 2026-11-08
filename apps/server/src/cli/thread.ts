@@ -771,7 +771,9 @@ const threadShowCommand = Command.make("show", {
 export const threadCommand = Command.make("thread").pipe(
   Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
-    snoozeCommand, wakeCommand, interruptCommand,
+    snoozeCommand,
+    wakeCommand,
+    interruptCommand,
     threadListCommand,
     threadStartCommand,
     threadSendCommand,

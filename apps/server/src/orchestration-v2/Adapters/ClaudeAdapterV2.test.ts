@@ -9705,7 +9705,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         const runningRetry = retryItems()[0];
         assert.equal(runningRetry?.status, "running");
         assert.equal(runningRetry?.failure.code, "api_error_529");
-        assert.equal(runningRetry?.failure.message, "Claude API overloaded — HTTP 529.");
+        assert.equal(runningRetry?.failure.message, "Claude API overloaded. HTTP 529.");
         assert.deepEqual(runningRetry?.retry, {
           attempt: 2,
           maxAttempts: 10,

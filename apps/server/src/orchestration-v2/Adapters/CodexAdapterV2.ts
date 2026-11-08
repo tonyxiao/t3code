@@ -1138,7 +1138,7 @@ function codexErrorMessage(error: CodexSchema.V2ErrorNotification["error"]): str
   }
   const details = error.additionalDetails?.trim();
   if (details && !error.message.includes(details)) parts.push(details);
-  return parts.join(" — ");
+  return parts.join(". ");
 }
 
 type CodexErrorInfo = CodexSchema.ServerNotification__CodexErrorInfo;
@@ -4751,11 +4751,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               retryDelayMs: null,
             };
             const code = codexErrorInfoCode(payload.error.codexErrorInfo);
-            const additionalDetails = payload.error.additionalDetails?.trim();
             const failure = withCodexManagedFailure(
               makeProviderFailure({
-                message:
-                  codexErrorMessage(payload.error),
+                message: codexErrorMessage(payload.error),
                 code,
                 class: codexUsageLimitError(code, payload.error.codexErrorInfo)
                   ? "usage_limit"

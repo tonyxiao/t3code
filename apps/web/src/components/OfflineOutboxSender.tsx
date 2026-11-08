@@ -10,12 +10,14 @@ import { toastManager } from "./ui/toast";
 export function OfflineOutboxSender() {
   const turns = useOfflineOutbox(useShallow((state) => state.turns));
   const persistenceError = useOfflineOutbox((state) => state.persistenceError);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hydrates the persisted outbox from browser storage when its sender mounts
   useEffect(() => {
     void useOfflineOutbox
       .getState()
       .hydrate()
       .catch(() => undefined);
   }, []);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the external toast registry in step with outbox persistence failures
   useEffect(() => {
     if (!persistenceError) return;
     toastManager.add({
@@ -45,6 +47,7 @@ function TurnSender({ turn, first }: { turn: OfflineOutboxTurn; first: boolean }
   const sending = useOfflineOutbox((state) => state.sendingIds.has(turn.id));
   const connected = environment?.connection.phase === "connected";
   const handledConnection = useRef(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- retries the external outbox once per environment connection
   useEffect(() => {
     if (!connected) {
       handledConnection.current = false;
@@ -58,11 +61,13 @@ function TurnSender({ turn, first }: { turn: OfflineOutboxTurn; first: boolean }
       .retry(turn.id)
       .catch(() => undefined);
   }, [connected, turn.blockedReason, turn.id]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- dispatches ready persisted messages through the environment transport
   useEffect(() => {
     if (!first || !hydrated || !connected || !hasShellSnapshot || sending || turn.blockedReason)
       return;
     void sendOfflineOutboxTurn(turn.id);
   }, [first, hydrated, connected, hasShellSnapshot, sending, turn.blockedReason, turn.id]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the external toast registry in step with blocked persisted messages
   useEffect(() => {
     if (!turn.blockedReason || turn.blockedReason === "Waiting for connection") return;
     toastManager.add({

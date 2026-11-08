@@ -36,9 +36,6 @@ import {
   resolveBackgroundActivitySettings,
 } from "./backgroundActivitySettings.ts";
 
-const ServerSettingsJson = fromLenientJson(ServerSettings);
-const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
-
 export function isSourceControlProviderEnabled(
   settings: Pick<ServerSettings, "disabledSourceControlProviders">,
   kind: SourceControlProviderKind,

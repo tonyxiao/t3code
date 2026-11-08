@@ -2846,14 +2846,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       extendInfo: {
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
-        NSLocalNetworkUsageDescription:
-          `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
-        NSScreenCaptureUsageDescription:
-          `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} captures the active window when you use the window capture shortcut.`,
-        NSCameraUsageDescription:
-          `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the camera.`,
-        NSMicrophoneUsageDescription:
-          `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the microphone.`,
+        NSLocalNetworkUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
+        NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} captures the active window when you use the window capture shortcut.`,
+        NSCameraUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the camera.`,
+        NSMicrophoneUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the microphone.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [

@@ -1,3 +1,4 @@
+import { useNowMinuteMs } from "../../lib/clock";
 import { Button } from "../../components/ui/Button";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -28,6 +29,8 @@ export function CustomSnoozeSheet(props: {
 }) {
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
   const [text, setText] = useState("");
+  const now = useNowMinuteMs();
+  const preview = resolveNaturalSnooze(text, new Date(now));
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [picker, setPicker] = useState<"date" | "time" | null>(null);
   const [amount, setAmount] = useState("2");
@@ -80,9 +83,9 @@ export function CustomSnoozeSheet(props: {
                   clearError();
                 }}
               />
-              {resolveNaturalSnooze(text, new Date()) ? (
+              {preview ? (
                 <AppText className="text-foreground-secondary">
-                  Returns {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                  Returns {new Date(preview).toLocaleString()}
                 </AppText>
               ) : null}
             </View>

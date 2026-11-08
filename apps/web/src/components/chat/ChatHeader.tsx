@@ -173,6 +173,7 @@ export const ChatHeader = memo(function ChatHeader({
       title: activeThreadTitle,
     });
   };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to external rename requests while this thread header is mounted
   useEffect(
     () =>
       onRequestThreadRename((threadRef) => {

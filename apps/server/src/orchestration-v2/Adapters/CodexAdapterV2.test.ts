@@ -6006,7 +6006,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           assert.equal(
             terminal.failure.message,
             expectedClass === notificationClass
-              ? `${message} — HTTP ${notificationStatus} — ${additionalDetails}`
+              ? `${message}. HTTP ${notificationStatus}. ${additionalDetails}`
               : message,
           );
           if (willRetry) assert.equal(terminal.retry?.attempt, 1);

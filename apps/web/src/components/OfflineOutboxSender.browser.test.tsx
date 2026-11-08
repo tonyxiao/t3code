@@ -1,6 +1,5 @@
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { act, render } from "../../test/render";
+import { expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
 const connection = vi.hoisted(() => ({ phase: "reconnecting" }));
@@ -13,8 +12,6 @@ vi.mock("../offlineOutboxSend", () => ({ sendOfflineOutboxTurn: vi.fn() }));
 import { OfflineOutboxSender } from "./OfflineOutboxSender";
 import { useOfflineOutbox, type OfflineOutboxTurn } from "../offlineOutbox";
 import { sendOfflineOutboxTurn } from "../offlineOutboxSend";
-
-let root: Root;
 
 const turn: OfflineOutboxTurn = {
   id: "saved-turn",
@@ -39,8 +36,8 @@ const turn: OfflineOutboxTurn = {
   blockedReason: "Waiting for connection",
 };
 
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+it("sends a saved turn after reconnect and waits for another reconnect after a transient failure", async () => {
+  vi.clearAllMocks();
   connection.phase = "reconnecting";
   useOfflineOutbox.setState({
     turns: [turn],
@@ -56,17 +53,7 @@ beforeEach(() => {
       }));
     },
   });
-  root = createRoot(document.createElement("div"));
-});
-
-afterEach(async () => {
-  await act(() => root.unmount());
-  vi.clearAllMocks();
-  vi.unstubAllGlobals();
-});
-
-it("sends a saved turn after reconnect and waits for another reconnect after a transient failure", async () => {
-  await act(() => root.render(<OfflineOutboxSender />));
+  await using _screen = await render(<OfflineOutboxSender />);
   expect(sendOfflineOutboxTurn).not.toHaveBeenCalled();
 
   connection.phase = "connected";

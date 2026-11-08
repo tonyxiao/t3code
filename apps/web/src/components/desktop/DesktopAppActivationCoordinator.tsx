@@ -116,21 +116,21 @@ export function DesktopAppActivationCoordinator() {
         waitForProject: async (projectRef) => {
           await waitForProject(projectRef);
         },
-      openThread: (projectRef) => {
-        const project = readProjects().find(
-          (candidate) =>
-            candidate.environmentId === projectRef.environmentId &&
-            candidate.id === projectRef.projectId,
-        );
-        // Opening an archived project's folder again brings the project back.
-        if (project?.archivedAt != null) {
-          void updateProject({
-            environmentId: projectRef.environmentId,
-            input: { projectId: projectRef.projectId, archived: false },
-          }).then((result) => reportProjectFailure("Failed to unarchive project", result));
-        }
-        return openThread(projectRef);
-      },
+        openThread: (projectRef) => {
+          const project = readProjects().find(
+            (candidate) =>
+              candidate.environmentId === projectRef.environmentId &&
+              candidate.id === projectRef.projectId,
+          );
+          // Opening an archived project's folder again brings the project back.
+          if (project?.archivedAt != null) {
+            void updateProject({
+              environmentId: projectRef.environmentId,
+              input: { projectId: projectRef.projectId, archived: false },
+            }).then((result) => reportProjectFailure("Failed to unarchive project", result));
+          }
+          return openThread(projectRef);
+        },
       });
     },
   );

@@ -137,8 +137,10 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
       const failed = command === control.failCommand;
       if (!failed && command === "loginctl enable-linger --no-ask-password 501")
         control.linger = "yes";
-      if (!failed && command === "systemctl --user enable t3code-v2.service") control.enabled = true;
-      if (!failed && command === "systemctl --user restart t3code-v2.service") control.active = true;
+      if (!failed && command === "systemctl --user enable t3code-v2.service")
+        control.enabled = true;
+      if (!failed && command === "systemctl --user restart t3code-v2.service")
+        control.active = true;
       // A timed-out stop may still stop the service.
       if (command === "systemctl --user stop t3code-v2.service") control.active = false;
       if (
@@ -869,9 +871,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       expect((yield* service.status).installed).toBe(false);
       expect(commands.some((command) => command.startsWith("systemctl "))).toBe(false);
       // launchd can take 90s to bootout; the runner's 60s default could let bootstrap race it.
-      expect(timeouts.get("launchctl bootout --wait gui/501/com.tonyxiao.txcode.v2.service")).toEqual(
-        Duration.seconds(120),
-      );
+      expect(
+        timeouts.get("launchctl bootout --wait gui/501/com.tonyxiao.txcode.v2.service"),
+      ).toEqual(Duration.seconds(120));
     }),
   );
 

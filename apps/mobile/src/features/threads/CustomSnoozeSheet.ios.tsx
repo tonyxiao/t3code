@@ -1,3 +1,4 @@
+import { useNowMinuteMs } from "../../lib/clock";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useSnoozeResolver } from "./useSnoozeResolver";
@@ -56,6 +57,8 @@ export function CustomSnoozeSheet(props: {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
   const [text, setText] = useState("");
+  const now = useNowMinuteMs();
+  const preview = resolveNaturalSnooze(text, new Date(now));
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -146,9 +149,9 @@ export function CustomSnoozeSheet(props: {
                         }}
                         style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
                       />
-                      {resolveNaturalSnooze(text, new Date()) ? (
+                      {preview ? (
                         <RNText style={{ color: colors["--color-foreground-secondary"] }}>
-                          {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                          {new Date(preview).toLocaleString()}
                         </RNText>
                       ) : null}
                     </View>
@@ -254,7 +257,12 @@ function SnoozePopoverNavigation(props: {
               title="Custom snooze"
               onCancel={props.onClose}
               accessibilityLabel="Cancel custom snooze"
-              confirm={{ label: props.pending ? "Interpreting date" : "Snooze", onPress: props.onSubmit, disabled: props.pending, loading: props.pending }}
+              confirm={{
+                label: props.pending ? "Interpreting date" : "Snooze",
+                onPress: props.onSubmit,
+                disabled: props.pending,
+                loading: props.pending,
+              }}
             />
             <ScrollView
               contentInsetAdjustmentBehavior="automatic"
