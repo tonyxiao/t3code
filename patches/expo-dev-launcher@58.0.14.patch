@@ -1,0 +1,150 @@
+diff --git a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+index b4840dbdad090589b1bdd311c9590f2423824e34..3d8829a10bf1c23a81079a85c22363c54a8a03c6 100644
+--- a/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
++++ b/android/src/debug/java/expo/modules/devlauncher/modules/ExpoDevLauncherModule.kt
+@@ -12,6 +12,32 @@ class ExpoDevLauncherModule : Module() {
+   override fun definition() = ModuleDefinition {
+     Name("ExpoDevLauncher")
+ 
++    Function("getSourceInfo") {
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      val context = appContext.reactContext
++      val runtimeResource = context?.resources?.getIdentifier("expo_runtime_version", "string", context.packageName) ?: 0
++      val embeddedRuntime = if (runtimeResource == 0) "" else context?.getString(runtimeResource) ?: ""
++      val runtimeVersion = controller.updatesInterface?.runtimeVersion?.takeIf { it.isNotBlank() }
++        ?: embeddedRuntime.takeUnless { it.startsWith("file:") } ?: ""
++      mapOf(
++        "runtimeVersion" to runtimeVersion,
++        "serverUrl" to if (controller.useDeveloperSupport) controller.manifestURL?.toString() else null
++      )
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { promise: Promise ->
++      val controller = DevLauncherController.nullableInstance ?: throw DevLauncherNotAvailableException()
++      val activity = appContext.currentActivity as? ReactActivity
++      controller.coroutineScope.launch {
++        try {
++          controller.loadEmbeddedBundle(activity)
++          promise.resolve(true)
++        } catch (e: Exception) {
++          promise.reject("ExpoDevLauncher", "Failed to load Built-in", DevLauncherLoadAppException(e))
++        }
++      }
++    }
++
+     AsyncFunction("loadApp") { url: Uri, promise: Promise ->
+       if (url.scheme.isNullOrEmpty()) {
+         throw DevLauncherInvalidURLException()
+diff --git a/ios/EXDevLauncherController.m b/ios/EXDevLauncherController.m
+index dfeec1c38ab81a15dc52ef05b7e1601b74b95741..9a506af740e48e150d496f9abe06e7dec8caa88f 100644
+--- a/ios/EXDevLauncherController.m
++++ b/ios/EXDevLauncherController.m
+@@ -1,3 +1,4 @@
++#import <React/RCTAssert.h>
+ #import <React/RCTBundleURLProvider.h>
+ #import <React/RCTRootView.h>
+ #import <React/RCTDevLoadingViewSetEnabled.h>
+@@ -201,1 +202,15 @@ - (void)start:(id<EXDevLauncherControllerDelegate>)delegate launchOptions:(NSDic
+   EXDevLauncherUncaughtExceptionHandler.isInstalled = true;
++#if !RCT_DEV
++  // A fatal JavaScript startup error can leave the release launcher on its splash
++  // screen. Keep native recovery reachable even when React never mounts.
++  __weak typeof(self) weakSelf = self;
++  RCTSetFatalHandler(^(NSError *error) {
++    dispatch_async(dispatch_get_main_queue(), ^{
++      typeof(self) self = weakSelf;
++      if (!self) return;
++      EXDevLauncherAppError *appError = [[EXDevLauncherAppError alloc] initWithMessage:error.localizedDescription stack:nil];
++      [self.errorManager showError:appError];
++    });
++  });
++#endif
++
+@@ -228,7 +228,8 @@ - (void)start:(id<EXDevLauncherControllerDelegate>)delegate launchOptions:(NSDic
+-  // The autoload logic in DevLauncherViewController.viewDidLoad will load it instead.
+-  // Without this guard, loadApp's error handler would call navigateToLauncher and
+-  // invalidate the bridge that loadLocalBundle created, causing a JSI crash.
++  // With an embedded bundle, begin there even in private Release builds.
++  // This gives an offline startup; errors return to the native launcher.
++  // An explicit incoming URL still takes precedence.
+-  if ([[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"] != nil) {
++  if ([[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"] != nil &&
++      [EXDevLauncherController initialUrlFromProcessInfo] == nil) {
+-    [self navigateToLauncher];
++    [self loadLocalBundleOnSuccess:nil onError:navigateToLauncher];
+     return;
+   }
+diff --git a/ios/Modules/DevLauncherModule.swift b/ios/Modules/DevLauncherModule.swift
+index 6c6312a7f18e72174bd4a172d19eba8815fd91aa..fc08c27a8a272c8a164a6f60d6e8f7022aa09d82 100644
+--- a/ios/Modules/DevLauncherModule.swift
++++ b/ios/Modules/DevLauncherModule.swift
+@@ -6,6 +6,29 @@ public class DevLauncherModule: Module {
+   public func definition() -> ModuleDefinition {
+     Name("ExpoDevLauncher")
+ 
++    Function("getSourceInfo") {
++      let controller = EXDevLauncherController.sharedInstance()
++      let source = controller.sourceUrl()
++      let remote = source?.scheme == "http" || source?.scheme == "https"
++      let updatesRuntime = controller.getUpdatesConfig(nil)["runtimeVersion"] as? String ?? ""
++      let embeddedRuntime = Bundle.main.path(forResource: "Expo", ofType: "plist")
++        .flatMap { NSDictionary(contentsOfFile: $0)?["EXUpdatesRuntimeVersion"] as? String } ?? ""
++      let runtimeVersion = !updatesRuntime.isEmpty ? updatesRuntime :
++        (embeddedRuntime.hasPrefix("file:") ? "" : embeddedRuntime)
++      return [
++        "runtimeVersion": runtimeVersion,
++        "serverUrl": remote ? (source?.absoluteString ?? "") as Any : NSNull()
++      ] as [String: Any]
++    }
++
++    AsyncFunction("loadEmbeddedBundle") { (promise: Promise) in
++      EXDevLauncherController.sharedInstance().loadLocalBundle(onSuccess: {
++        promise.resolve(true)
++      }, onError: { error in
++        promise.reject(DevLauncherLoadAppException(error.localizedDescription).causedBy(error))
++      })
++    }.runOnQueue(.main)
++
+     AsyncFunction("loadApp") { (url: URL, promise: Promise) in
+       if url.scheme == nil {
+         throw DevLauncherInvalidURLException()
+diff --git a/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift b/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
+index e189d86a8aecc814910f38012c63cf0a2cbd0964..6d1f24268e064fdccd0e5203e643f439b118dc02 100644
+--- a/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
++++ b/ios/ReactDelegateHandler/ExpoDevLauncherReactDelegateHandler.swift
+@@ -17,6 +17,27 @@ private class DevLauncherWrapperView: UIView {
+   }
+ 
+ #if !os(macOS)
++  override func didMoveToWindow() {
++    super.didMoveToWindow()
++    guard window != nil, let viewController = devLauncherViewController,
++      viewController.parent == nil else {
++      return
++    }
++
++    var responder = next
++    while let current = responder {
++      if let parent = current as? UIViewController {
++        viewController.view.removeFromSuperview()
++        parent.addChild(viewController)
++        addSubview(viewController.view)
++        setupDevLauncherView(viewController)
++        viewController.didMove(toParent: parent)
++        break
++      }
++      responder = current.next
++    }
++  }
++
+   override func layoutSubviews() {
+     super.layoutSubviews()
+     devLauncherViewController?.view.frame = bounds
+@@ -46,7 +67,3 @@ public class ExpoDevLauncherReactDelegateHandler: ExpoReactDelegateHandler, EXDevLauncherControllerDelegate {
+   ) -> UIView? {
+-    if !EXAppDefines.APP_DEBUG {
+-      return nil
+-    }
+-
+     self.reactDelegate = reactDelegate
+     self.launchOptions = launchOptions

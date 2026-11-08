@@ -74,10 +74,9 @@ export function useBackgroundSyncSession() {
       if (revision.current === currentRevision) setStatus(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not stop background sync.");
-    } finally {
-      busy.current = false;
-      setPending(false);
     }
+    busy.current = false;
+    setPending(false);
   };
 
   return { supported, status, pending, error, stop };

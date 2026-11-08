@@ -1,35 +1,38 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
+import * as Hash from "effect/Hash";
 import * as Layer from "effect/Layer";
+import * as Stream from "effect/Stream";
 import {
   SourceControlProviderError,
   type SourceControlProviderDiscoveryItem,
 } from "@t3tools/contracts";
-import type { SourceControlProviderKind } from "@t3tools/contracts";
-import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 import { isSourceControlProviderEnabled } from "@t3tools/shared/serverSettings";
 
-import * as AzureDevOpsSourceControlProvider from "./AzureDevOpsSourceControlProvider.ts";
-import * as BitbucketSourceControlProvider from "./BitbucketSourceControlProvider.ts";
-import * as GitHubSourceControlProvider from "./GitHubSourceControlProvider.ts";
-import * as GitLabSourceControlProvider from "./GitLabSourceControlProvider.ts";
-import * as ForgejoSourceControlProvider from "./ForgejoSourceControlProvider.ts";
-import * as SourceControlProvider from "./SourceControlProvider.ts";
+import * as BuiltInDrivers from "./builtInDrivers.ts";
+import { sourceControlDefinitions } from "./sourceControlDefinitions.ts";
+import * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import {
   probeSourceControlProvider,
   refineUnknownRemoteProvider,
   type SourceControlProviderDiscoverySpec,
-} from "./SourceControlProviderDiscovery.ts";
-import { ServerConfig } from "../config.ts";
+  type UnknownRemoteVerdict,
+} from "@t3tools/source-control-core/server/discovery";
+import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
+
+import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
-import * as VcsProcess from "../vcs/VcsProcess.ts";
 
 const PROVIDER_DETECTION_CACHE_CAPACITY = 2_048;
 const PROVIDER_DETECTION_CACHE_TTL = Duration.seconds(5);
+const UNKNOWN_REMOTE_CACHE_CAPACITY = 512;
+const UNKNOWN_REMOTE_CACHE_TTL = Duration.minutes(5);
 
 export interface SourceControlProviderRegistration {
   readonly kind: SourceControlProviderKind;
@@ -79,12 +82,16 @@ function disabledProvider(
     });
   return SourceControlProvider.SourceControlProvider.of({
     kind,
-    listChangeRequests: () => Effect.succeed([]),
+    listChangeRequests: Effect.fn("SourceControlProvider.listChangeRequests")(() =>
+      Effect.succeed([]),
+    ),
     getChangeRequest: (input) => unavailable("getChangeRequest", input.cwd),
     createChangeRequest: (input) => unavailable("createChangeRequest", input.cwd),
     getRepositoryCloneUrls: (input) => unavailable("getRepositoryCloneUrls", input.cwd),
     createRepository: (input) => unavailable("createRepository", input.cwd),
-    getDefaultBranch: () => Effect.succeed(null),
+    getDefaultBranch: Effect.fn("SourceControlProvider.getDefaultBranch")(() =>
+      Effect.succeed(null),
+    ),
     checkoutChangeRequest: (input) => unavailable("checkoutChangeRequest", input.cwd),
   });
 }
@@ -92,15 +99,19 @@ function disabledProvider(
 function unsupportedProvider(
   kind: SourceControlProviderKind,
 ): SourceControlProvider.SourceControlProvider["Service"] {
+  // Binding context does not create a second provider-operation span.
   return SourceControlProvider.SourceControlProvider.of({
     kind,
+    // Unknown hosts have no readable change requests; return none to avoid poll warnings on every refresh.
     listChangeRequests: (input) =>
-      new SourceControlProviderError({
-        provider: kind,
-        operation: "listChangeRequests",
-        cwd: input.cwd,
-        detail: `No ${kind} source control provider is registered.`,
-      }),
+      kind === "unknown"
+        ? Effect.succeed([])
+        : new SourceControlProviderError({
+            provider: kind,
+            operation: "listChangeRequests",
+            cwd: input.cwd,
+            detail: `No ${kind} source control provider is registered.`,
+          }),
     getChangeRequest: (input) =>
       new SourceControlProviderError({
         provider: kind,
@@ -159,7 +170,7 @@ function selectProviderContext(
 ): SourceControlProvider.SourceControlProviderContext | null {
   const candidates: Array<SourceControlProvider.SourceControlProviderContext> = [];
   for (const remote of remotes) {
-    const provider = detectSourceControlProviderFromRemoteUrl(remote.url);
+    const provider = sourceControlDefinitions.recognizeRemote(remote.url);
     if (provider) {
       candidates.push({
         provider,
@@ -177,6 +188,32 @@ function selectProviderContext(
   );
 }
 
+// Failed probes are not cached, so cwd is irrelevant; equality ignores lookup, unlike Data.Class.
+class UnknownRemoteLookup {
+  readonly key: string;
+  readonly lookup: Effect.Effect<UnknownRemoteVerdict>;
+
+  constructor(
+    context: SourceControlProvider.SourceControlProviderContext,
+    lookup: Effect.Effect<UnknownRemoteVerdict>,
+  ) {
+    this.lookup = lookup;
+    this.key = [
+      context.provider.name,
+      context.provider.baseUrl,
+      context.remoteUrl.trim().replace(/(?<!\/\/[^/]*)[^/:]+\/[^/:]+\/?$/u, ""),
+      context.requestedHost ?? "",
+    ].join("\n");
+  }
+
+  [Equal.symbol](that: unknown): boolean {
+    return that instanceof UnknownRemoteLookup && that.key === this.key;
+  }
+  [Hash.symbol](): number {
+    return Hash.string(this.key);
+  }
+}
+
 function bindProviderContext(
   provider: SourceControlProvider.SourceControlProvider["Service"],
   context: SourceControlProvider.SourceControlProviderContext | null,
@@ -186,47 +223,55 @@ function bindProviderContext(
   }
 
   return SourceControlProvider.SourceControlProvider.of({
-    kind: provider.kind,
-    ...(provider.resolveLink ? { resolveLink: provider.resolveLink } : {}),
-    listChangeRequests: (input) =>
-      provider.listChangeRequests({
+    ...provider,
+    listChangeRequests: Effect.fnUntraced(function* (input) {
+      return yield* provider.listChangeRequests({
         ...input,
         context: input.context ?? context,
-      }),
-    getChangeRequest: (input) =>
-      provider.getChangeRequest({
+      });
+    }),
+    getChangeRequest: Effect.fnUntraced(function* (input) {
+      return yield* provider.getChangeRequest({
         ...input,
         context: input.context ?? context,
-      }),
-    createChangeRequest: (input) =>
-      provider.createChangeRequest({
+      });
+    }),
+    createChangeRequest: Effect.fnUntraced(function* (input) {
+      return yield* provider.createChangeRequest({
         ...input,
         context: input.context ?? context,
-      }),
-    getRepositoryCloneUrls: (input) =>
-      provider.getRepositoryCloneUrls({
+      });
+    }),
+    getRepositoryCloneUrls: Effect.fnUntraced(function* (input) {
+      return yield* provider.getRepositoryCloneUrls({
         ...input,
         context: input.context ?? context,
-      }),
-    createRepository: (input) => provider.createRepository(input),
-    getDefaultBranch: (input) =>
-      provider.getDefaultBranch({
+      });
+    }),
+    createRepository: Effect.fnUntraced(function* (input) {
+      return yield* provider.createRepository(input);
+    }),
+    getDefaultBranch: Effect.fnUntraced(function* (input) {
+      return yield* provider.getDefaultBranch({
         ...input,
         context: input.context ?? context,
-      }),
-    checkoutChangeRequest: (input) =>
-      provider.checkoutChangeRequest({
+      });
+    }),
+    checkoutChangeRequest: Effect.fnUntraced(function* (input) {
+      return yield* provider.checkoutChangeRequest({
         ...input,
         context: input.context ?? context,
-      }),
+      });
+    }),
   });
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWithProviders")(
   function* (registrations: ReadonlyArray<SourceControlProviderRegistration>) {
-    const config = yield* ServerConfig;
-    const process = yield* VcsProcess.VcsProcess;
+    const config = yield* ServerConfig.ServerConfig;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
+    const { process } = yield* SourceControlHost.SourceControlHost;
     const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
     const providers = new Map<
       SourceControlProviderKind,
@@ -234,8 +279,44 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     >(registrations.map((registration) => [registration.kind, registration.provider]));
     const discoverySpecs = registrations.map((registration) => registration.discovery);
 
+    const isEnabled: SourceControlProviderRegistry["Service"]["isEnabled"] = (kind) =>
+      serverSettings.getSettings.pipe(
+        Effect.map((settings) => isSourceControlProviderEnabled(settings, kind)),
+        Effect.orElseSucceed(() => true),
+      );
+    const configuredProvider = (provider: SourceControlProvider.SourceControlProvider["Service"]) =>
+      isEnabled(provider.kind).pipe(
+        Effect.map((enabled) => (enabled ? provider : disabledProvider(provider.kind))),
+      );
     const get: SourceControlProviderRegistry["Service"]["get"] = (kind) =>
-      Effect.succeed(providers.get(kind) ?? unsupportedProvider(kind));
+      configuredProvider(providers.get(kind) ?? unsupportedProvider(kind));
+
+    const unknownRemoteCache = yield* Cache.makeWith(
+      (request: UnknownRemoteLookup) => request.lookup,
+      {
+        capacity: UNKNOWN_REMOTE_CACHE_CAPACITY,
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit) && exit.value.settled ? UNKNOWN_REMOTE_CACHE_TTL : Duration.zero,
+      },
+    );
+    const settingsChanges = yield* serverSettings.subscribeChanges;
+    yield* Stream.runForEach(settingsChanges, () => Cache.invalidateAll(unknownRemoteCache)).pipe(
+      Effect.forkScoped,
+    );
+
+    const refineContext = (
+      cwd: string,
+      context: SourceControlProvider.SourceControlProviderContext | null,
+    ): Effect.Effect<SourceControlProvider.SourceControlProviderContext | null> =>
+      context === null || context.provider.kind !== "unknown"
+        ? Effect.succeed(context)
+        : Cache.get(
+            unknownRemoteCache,
+            new UnknownRemoteLookup(
+              context,
+              refineUnknownRemoteProvider({ specs: discoverySpecs, process, cwd, context }),
+            ),
+          ).pipe(Effect.map(({ provider }) => (provider ? { ...context, provider } : context)));
 
     const detectProviderContext = Effect.fn("SourceControlProviderRegistry.detectProviderContext")(
       function* (cwd: string) {
@@ -243,7 +324,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
           Effect.mapError(
             (error) =>
               new SourceControlProviderError({
-                provider: "unknown",
+                provider: SourceControlProviderKind.make("unknown"),
                 operation: "detectProvider",
                 cwd,
                 detail: "Failed to detect source control provider.",
@@ -255,7 +336,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
           Effect.mapError(
             (error) =>
               new SourceControlProviderError({
-                provider: "unknown",
+                provider: SourceControlProviderKind.make("unknown"),
                 operation: "detectProvider",
                 cwd,
                 detail: "Failed to detect source control provider.",
@@ -263,14 +344,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
               }),
           ),
         );
-        const context = selectProviderContext(remotes.remotes);
-
-        return yield* refineUnknownRemoteProvider({
-          specs: discoverySpecs,
-          process,
-          cwd,
-          context,
-        });
+        return yield* refineContext(cwd, selectProviderContext(remotes.remotes));
       },
     );
 
@@ -286,20 +360,20 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = (input) =>
       (input.context === undefined
         ? Cache.get(providerContextCache, input.cwd)
-        : refineUnknownRemoteProvider({
-            specs: discoverySpecs,
-            process,
-            cwd: input.cwd,
-            context: input.context,
-          })
+        : refineContext(input.cwd, input.context)
       ).pipe(
-        Effect.map((context) => {
-          const kind = context?.provider.kind ?? "unknown";
+        Effect.flatMap((context) => {
+          const kind = context?.provider.kind ?? SourceControlProviderKind.make("unknown");
           const provider = providers.get(kind) ?? unsupportedProvider(kind);
-          return {
-            provider: bindProviderContext(provider, context),
-            context,
-          } satisfies SourceControlProviderHandle;
+          return configuredProvider(provider).pipe(
+            Effect.map(
+              (configured) =>
+                ({
+                  provider: bindProviderContext(configured, context),
+                  context,
+                }) satisfies SourceControlProviderHandle,
+            ),
+          );
         }),
       );
 
@@ -308,13 +382,15 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
         if (input.url.protocol !== "https:" || input.url.username || input.url.password) {
           return undefined;
         }
-        const kind = detectSourceControlProviderFromRemoteUrl(input.url.href)?.kind;
+        const kind = sourceControlDefinitions.recognizeRemote(input.url.href)?.kind;
         return kind ? providers.get(kind)?.resolveLink?.(input) : undefined;
       },
       get,
-      isEnabled: () => Effect.succeed(true),
+      isEnabled,
       resolveHandle,
-      resolve: (input) => resolveHandle(input).pipe(Effect.map((handle) => handle.provider)),
+      resolve: Effect.fn("SourceControlProviderRegistry.resolve")(function (input) {
+        return resolveHandle(input).pipe(Effect.map((handle) => handle.provider));
+      }),
       discover: Effect.forEach(
         discoverySpecs,
         (spec) =>
@@ -322,87 +398,26 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
             spec,
             process,
             cwd: config.cwd,
-          }).pipe(Effect.map((item) => ({ ...item, enabled: true }))),
+          }).pipe(
+            Effect.flatMap((item) =>
+              isEnabled(item.kind).pipe(Effect.map((enabled) => ({ ...item, enabled }))),
+            ),
+          ),
         { concurrency: "unbounded" },
       ),
     });
   },
 );
 
-export const make = Effect.gen(function* () {
-  const github = yield* GitHubSourceControlProvider.make;
-  const gitlab = yield* GitLabSourceControlProvider.make;
-  const forgejo = yield* ForgejoSourceControlProvider.make;
-  const forgejoDiscovery = yield* ForgejoSourceControlProvider.makeDiscovery;
-  const bitbucket = yield* BitbucketSourceControlProvider.make;
-  const bitbucketDiscovery = yield* BitbucketSourceControlProvider.makeDiscovery;
-  const azureDevOps = yield* AzureDevOpsSourceControlProvider.make;
-  return yield* makeWithProviders([
-    {
-      kind: "github",
-      provider: github,
-      discovery: GitHubSourceControlProvider.discovery,
-    },
-    {
-      kind: "gitlab",
-      provider: gitlab,
-      discovery: GitLabSourceControlProvider.discovery,
-    },
-    {
-      kind: "azure-devops",
-      provider: azureDevOps,
-      discovery: AzureDevOpsSourceControlProvider.discovery,
-    },
-    {
-      kind: "bitbucket",
-      provider: bitbucket,
-      discovery: bitbucketDiscovery,
-    },
-    { kind: "forgejo", provider: forgejo, discovery: forgejoDiscovery },
-  ]);
+const make = Effect.gen(function* () {
+  const drivers = yield* BuiltInDrivers.SourceControlDrivers;
+  return yield* makeWithProviders(
+    drivers.map(({ driver, instance }): SourceControlProviderRegistration => ({
+      kind: driver.kind,
+      provider: instance.sourceControl,
+      discovery: instance.discovery,
+    })),
+  );
 });
 
-/** @public Service construction is part of the canonical Effect module API. */
-export const makeConfigured = Effect.gen(function* () {
-  const registry = yield* make;
-  const settings = yield* ServerSettings.ServerSettingsService;
-  const isEnabled = (kind: SourceControlProviderKind) =>
-    settings.getSettings.pipe(
-      Effect.map((current) => isSourceControlProviderEnabled(current, kind)),
-      // Settings are already loaded before this registry is served. If a later
-      // refresh fails, retain the historical enabled behavior instead of
-      // turning an unrelated settings I/O error into a source-control error.
-      Effect.orElseSucceed(() => true),
-    );
-  const configuredProvider = (provider: SourceControlProvider.SourceControlProvider["Service"]) =>
-    isEnabled(provider.kind).pipe(
-      Effect.map((enabled) => (enabled ? provider : disabledProvider(provider.kind))),
-    );
-  const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = (input) =>
-    registry
-      .resolveHandle(input)
-      .pipe(
-        Effect.flatMap((handle) =>
-          configuredProvider(handle.provider).pipe(
-            Effect.map((provider) => ({ ...handle, provider })),
-          ),
-        ),
-      );
-
-  return SourceControlProviderRegistry.of({
-    resolveLink: registry.resolveLink,
-    isEnabled,
-    get: (kind) => registry.get(kind).pipe(Effect.flatMap(configuredProvider)),
-    resolveHandle,
-    resolve: (input) => resolveHandle(input).pipe(Effect.map((handle) => handle.provider)),
-    discover: registry.discover.pipe(
-      Effect.flatMap((items) =>
-        Effect.forEach(items, (item) =>
-          isEnabled(item.kind).pipe(Effect.map((enabled) => ({ ...item, enabled }))),
-        ),
-      ),
-    ),
-  });
-});
-
-export const layer = Layer.effect(SourceControlProviderRegistry, makeConfigured);
+export const layer = Layer.effect(SourceControlProviderRegistry, make);

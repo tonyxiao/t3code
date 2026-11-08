@@ -1,5 +1,6 @@
-import { useSnoozeResolver } from "./useSnoozeResolver";
+import { SheetHeader } from "../../components/ui/SheetHeader";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { useSnoozeResolver } from "./useSnoozeResolver";
 import {
   DatePicker,
   Host,
@@ -9,9 +10,7 @@ import {
   RNHostView,
   Spacer,
   Text,
-  TextField,
   VStack,
-  useNativeState,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
@@ -28,19 +27,16 @@ import {
 import {
   localSnoozeDate,
   localSnoozeTime,
+  resolveNaturalSnooze,
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { useState, type ReactNode } from "react";
-import { NavigationContainer, NavigationIndependentTree } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ScrollView, useWindowDimensions, View } from "react-native";
-import { useMobileNavigationTheme } from "../../lib/useMobileNavigationTheme";
-import { NativeHeaderToolbar } from "../../native/StackHeader";
-import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
+import { StandaloneStack } from "../layout/nested-stacks";
+import { ScrollView, Text as RNText, TextInput, useWindowDimensions, View } from "react-native";
+
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
 const durationAmounts = Array.from({ length: 99 }, (_, index) => index + 1);
-const SnoozeStack = createNativeStackNavigator<{ CustomSnooze: undefined }>();
 const modes = [
   { value: "text", label: "Type a time" },
   { value: "date", label: "Date and time" },
@@ -59,7 +55,7 @@ export function CustomSnoozeSheet(props: {
 }) {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
-  const text = useNativeState("");
+  const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date(Date.now() + 3_600_000));
   const [amount, setAmount] = useState(2);
   const [unit, setUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -74,10 +70,10 @@ export function CustomSnoozeSheet(props: {
 
   const submit = async () => {
     const input: CustomSnoozeInput =
-      mode === "text"
-        ? { mode, text: text.get() }
-        : mode === "date"
-          ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+      mode === "date"
+        ? { mode, date: localSnoozeDate(date), time: localSnoozeTime(date) }
+        : mode === "text"
+          ? { mode, text }
           : { mode, amount: String(amount), unit };
     const snoozedUntil = await resolve(input);
     if (!snoozedUntil) return;
@@ -137,17 +133,26 @@ export function CustomSnoozeSheet(props: {
                   ))}
                 </Picker>
                 {mode === "text" ? (
-                  <VStack
-                    spacing={8}
-                    modifiers={[frame({ maxWidth: Infinity, minHeight: 180, maxHeight: 180 })]}
-                  >
-                    <Text>Snooze until</Text>
-                    <TextField
-                      text={text}
-                      placeholder="1w, 30days, tomorrow at 9am"
-                      onTextChange={clearError}
-                    />
-                  </VStack>
+                  <RNHostView matchContents={{ vertical: true }}>
+                    <View style={{ gap: 12, minHeight: 180 }}>
+                      <TextInput
+                        accessibilityLabel="Snooze until"
+                        placeholder="1w, 30days, tomorrow at 9am"
+                        placeholderTextColor={colors["--color-foreground-secondary"]}
+                        value={text}
+                        onChangeText={(value) => {
+                          setText(value);
+                          clearError();
+                        }}
+                        style={{ color: colors["--color-foreground"], fontSize: 17, minHeight: 48 }}
+                      />
+                      {resolveNaturalSnooze(text, new Date()) ? (
+                        <RNText style={{ color: colors["--color-foreground-secondary"] }}>
+                          {new Date(resolveNaturalSnooze(text, new Date())!).toLocaleString()}
+                        </RNText>
+                      ) : null}
+                    </View>
+                  </RNHostView>
                 ) : mode === "date" ? (
                   <DatePicker
                     title="Snooze until"
@@ -232,7 +237,6 @@ export function CustomSnoozeSheet(props: {
   );
 }
 
-/** The popover owns a native navigation bar, just like the app's sheet screens. */
 function SnoozePopoverNavigation(props: {
   readonly width: number;
   readonly height: number;
@@ -241,59 +245,24 @@ function SnoozePopoverNavigation(props: {
   readonly pending: boolean;
   readonly children: ReactNode;
 }) {
-  const navigationTheme = useMobileNavigationTheme();
-  const { themeVariables: colors } = useAppearancePreferences();
-
   return (
     <VStack modifiers={[frame({ width: props.width, height: props.height })]}>
       <RNHostView>
         <View style={{ width: props.width, height: props.height }}>
-          <NavigationIndependentTree>
-            <NavigationContainer theme={navigationTheme}>
-              <SnoozeStack.Navigator
-                screenOptions={{
-                  contentStyle: { backgroundColor: "transparent" },
-                  headerShadowVisible: false,
-                  headerStyle: {
-                    backgroundColor: NATIVE_LIQUID_GLASS_SUPPORTED
-                      ? "transparent"
-                      : colors["--color-card"],
-                  },
-                  headerTintColor: colors["--color-foreground"],
-                  headerTitleStyle: { fontSize: 17, fontWeight: "700" },
-                  headerTransparent: NATIVE_LIQUID_GLASS_SUPPORTED,
-                  title: "Custom snooze",
-                }}
-              >
-                <SnoozeStack.Screen name="CustomSnooze">
-                  {() => (
-                    <>
-                      <NativeHeaderToolbar placement="left">
-                        <NativeHeaderToolbar.Button
-                          accessibilityLabel="Cancel custom snooze"
-                          icon="xmark"
-                          onPress={props.onClose}
-                        />
-                      </NativeHeaderToolbar>
-                      <NativeHeaderToolbar placement="right">
-                        <NativeHeaderToolbar.Button
-                          label={props.pending ? "Interpreting…" : "Snooze"}
-                          disabled={props.pending}
-                          onPress={props.onSubmit}
-                        />
-                      </NativeHeaderToolbar>
-                      <ScrollView
-                        contentInsetAdjustmentBehavior="automatic"
-                        showsVerticalScrollIndicator={false}
-                      >
-                        {props.children}
-                      </ScrollView>
-                    </>
-                  )}
-                </SnoozeStack.Screen>
-              </SnoozeStack.Navigator>
-            </NavigationContainer>
-          </NavigationIndependentTree>
+          <StandaloneStack>
+            <SheetHeader
+              title="Custom snooze"
+              onCancel={props.onClose}
+              accessibilityLabel="Cancel custom snooze"
+              confirm={{ label: props.pending ? "Interpreting date" : "Snooze", onPress: props.onSubmit, disabled: props.pending, loading: props.pending }}
+            />
+            <ScrollView
+              contentInsetAdjustmentBehavior="automatic"
+              showsVerticalScrollIndicator={false}
+            >
+              {props.children}
+            </ScrollView>
+          </StandaloneStack>
         </View>
       </RNHostView>
     </VStack>

@@ -4,7 +4,6 @@ import android.app.Service
 import android.content.Intent
 import com.facebook.react.HeadlessJsTaskService
 import java.time.Duration
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -13,18 +12,18 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowService
 
-// Keep the Android service lifecycle real; a JavaScript runtime is not needed
-// to exercise Android's foreground-service acknowledgement and cancellation.
+// The Android service lifecycle is exercised without starting a React Native runtime.
 @Implements(HeadlessJsTaskService::class)
 class HeadlessRuntimeShadow : ShadowService() {
   @Implementation
+  @Suppress("UnusedParameter")
   fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = Service.START_NOT_STICKY
 
   @Implementation
@@ -46,13 +45,14 @@ class BackgroundSyncServiceTest {
     val controller = Robolectric.buildService(BackgroundSyncService::class.java).create()
     controller.startCommand(0, 1)
     val service = shadowOf(controller.get())
+
     assertNotNull(service.lastForegroundNotification)
     assertTrue(service.isStoppedBySelf)
     controller.destroy()
   }
 
   @Test
-  fun cancellationOfARepeatedStartWaitsForItsAcknowledgement() {
+  fun cancellationOfRepeatedStartWaitsForAcknowledgement() {
     val context = RuntimeEnvironment.getApplication()
     BackgroundSyncService.start(context)
     val controller = Robolectric.buildService(BackgroundSyncService::class.java).create()
@@ -71,20 +71,39 @@ class BackgroundSyncServiceTest {
   }
 
   @Test
-  fun repeatedStartsDoNotExtendTheTenMinuteWindow() {
+  fun foregroundStartIsAcknowledgedAndStopsAfterTenMinutes() {
     val context = RuntimeEnvironment.getApplication()
     BackgroundSyncService.start(context)
     val controller = Robolectric.buildService(BackgroundSyncService::class.java).create()
     controller.startCommand(0, 1)
+    val service = shadowOf(controller.get())
+
+    assertNotNull(service.lastForegroundNotification)
+    assertFalse(service.isStoppedBySelf)
+
+    shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMinutes(10))
+    assertTrue(service.isStoppedBySelf)
+    BackgroundSyncService.stop(context)
+    controller.destroy()
+  }
+
+  @Test
+  fun repeatedStartDoesNotExtendTheTenMinuteWindow() {
+    val context = RuntimeEnvironment.getApplication()
+    BackgroundSyncService.start(context)
+    val controller = Robolectric.buildService(BackgroundSyncService::class.java).create()
+    controller.startCommand(0, 1)
+    val service = shadowOf(controller.get())
     val looper = shadowOf(android.os.Looper.getMainLooper())
     looper.idleFor(Duration.ofMinutes(9))
 
     BackgroundSyncService.start(context)
-    assertEquals(Service.START_NOT_STICKY, controller.get().onStartCommand(null, 0, 2))
-    assertFalse(shadowOf(controller.get()).isStoppedBySelf)
+    controller.startCommand(0, 2)
+    assertFalse(service.isStoppedBySelf)
     looper.idleFor(Duration.ofMinutes(1))
 
-    assertTrue(shadowOf(controller.get()).isStoppedBySelf)
+    assertTrue(service.isStoppedBySelf)
+    BackgroundSyncService.stop(context)
     controller.destroy()
   }
 }

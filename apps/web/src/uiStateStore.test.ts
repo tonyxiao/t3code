@@ -1,5 +1,4 @@
-import { DEFAULT_SIDEBAR_FILTER_MODES } from "@t3tools/client-runtime/state/sidebar-filters";
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -12,14 +11,10 @@ import {
   persistState,
   reorderProjects,
   resolveProjectExpanded,
-  setDefaultAdvertisedEndpointKey,
   setProjectExpanded,
-  setSidebarEnvironmentScopeIds,
-  setSidebarProjectScopeKeys,
-  setSidebarFilterMode,
-  toggleSidebarScopeSelection,
-  setSidebarThreadSortOrder,
-  setSidebarThreadStatusFilter,
+  setDefaultAdvertisedEndpointKey,
+  setSidebarProjectScopeKey,
+  setSidebarScopeSelection,
   setThreadChangedFilesExpanded,
   type UiState,
 } from "./uiStateStore";
@@ -28,11 +23,12 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
   return {
     projectExpandedById: {},
     projectOrder: [],
-    sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+    sidebarProjectScopeKey: null,
     sidebarEnvironmentScopeIds: [],
     sidebarProjectScopeKeys: [],
+    sidebarEnvironmentScopeMode: "exclude",
+    sidebarProjectScopeMode: "exclude",
     sidebarThreadSortOrder: "created_at",
-    sidebarThreadStatusFilter: "all",
     threadLastVisitedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
@@ -42,77 +38,6 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
 }
 
 describe("uiStateStore pure functions", () => {
-  it("migrates old except-pinned state once without reversing new pinned-only choices on reload", () => {
-    const old = {
-      sidebarThreadStatusFilter: "pinned",
-      sidebarFilterModes: { ...DEFAULT_SIDEBAR_FILTER_MODES, pinned: "exclude" as const },
-    };
-    expect(parsePersistedState(old).sidebarThreadStatusFilter).toBe("unpinned");
-    expect(
-      parsePersistedState({ ...old, sidebarFilterSelectionVersion: 1 }).sidebarThreadStatusFilter,
-    ).toBe("pinned");
-  });
-
-  it("preserves None on reload while migrating legacy empty selections to All", () => {
-    expect(
-      parsePersistedState({ sidebarEnvironmentScopeIds: [], sidebarProjectScopeKeys: [] })
-        .sidebarFilterModes,
-    ).toMatchObject({ environment: "exclude", project: "exclude" });
-    expect(
-      parsePersistedState({
-        sidebarFilterSelectionVersion: 1,
-        sidebarEnvironmentScopeIds: [],
-        sidebarProjectScopeKeys: [],
-        sidebarFilterModes: { environment: "include", project: "include", pinned: "include" },
-      }).sidebarFilterModes,
-    ).toMatchObject({ environment: "include", project: "include" });
-    expect(
-      parsePersistedState({
-        sidebarEnvironmentScopeIds: ["env-a"],
-        sidebarProjectScopeKeys: ["site"],
-      }).sidebarFilterModes,
-    ).toMatchObject({ environment: "include", project: "include" });
-  });
-
-  it("restores filter modes without changing existing include selections", () => {
-    expect(parsePersistedState({}).sidebarFilterModes).toEqual(DEFAULT_SIDEBAR_FILTER_MODES);
-    const state = setSidebarFilterMode(
-      makeUiState({ sidebarProjectScopeKeys: ["project-a"] }),
-      "project",
-      "exclude",
-    );
-    expect(state.sidebarProjectScopeKeys).toEqual(["project-a"]);
-    expect(setSidebarFilterMode(state, "project", "exclude")).toBe(state);
-    expect(
-      parsePersistedState({ sidebarFilterModes: state.sidebarFilterModes }).sidebarFilterModes
-        .project,
-    ).toBe("exclude");
-  });
-
-  it("migrates existing single sidebar scopes to multi-selection", () => {
-    expect(
-      parsePersistedState({
-        sidebarEnvironmentScopeId: "environment-a",
-        sidebarProjectScopeKey: "project-a",
-      }),
-    ).toMatchObject({
-      sidebarEnvironmentScopeIds: ["environment-a"],
-      sidebarProjectScopeKeys: ["project-a"],
-    });
-    expect(
-      parsePersistedState({
-        sidebarEnvironmentScopeIds: ["environment-a", "environment-b", "environment-a"],
-        sidebarEnvironmentScopeId: "old-environment",
-      }).sidebarEnvironmentScopeIds,
-    ).toEqual(["environment-a", "environment-b"]);
-  });
-
-  it("restores the pinned conversation filter", () => {
-    expect(
-      parsePersistedState({ sidebarThreadStatusFilter: "pinned" }).sidebarThreadStatusFilter,
-    ).toBe("pinned");
-  });
-
   it("stores server timestamps without moving visit state backwards", () => {
     const threadId = ThreadId.make("thread-1");
     const initialState = makeUiState();
@@ -163,17 +88,6 @@ describe("uiStateStore pure functions", () => {
       "environment-b:/repo": false,
     });
     expect(setProjectExpanded(next, keys, false)).toBe(next);
-  });
-
-  it("reorders from the current atom-derived project order", () => {
-    const project1 = ProjectId.make("project-1");
-    const project2 = ProjectId.make("project-2");
-    const project3 = ProjectId.make("project-3");
-    const currentOrder = [project1, project2, project3];
-
-    const next = reorderProjects(makeUiState(), currentOrder, [project1], [project3]);
-
-    expect(next.projectOrder).toEqual([project2, project3, project1]);
   });
 
   it("moves grouped project members together", () => {
@@ -229,74 +143,36 @@ describe("uiStateStore pure functions", () => {
     });
   });
 
-  it("stores selected projects and resets to all projects", () => {
-    const scoped = setSidebarProjectScopeKeys(makeUiState(), ["project-a", "project-b"]);
+  it("stores the sidebar project scope and resets it to all projects", () => {
+    const scoped = setSidebarProjectScopeKey(makeUiState(), "github.com/pingdotgg/t3code");
 
-    expect(scoped.sidebarProjectScopeKeys).toEqual(["project-a", "project-b"]);
-    expect(setSidebarProjectScopeKeys(scoped, ["project-a", "project-b"])).toBe(scoped);
-    expect(setSidebarProjectScopeKeys(scoped, []).sidebarProjectScopeKeys).toEqual([]);
+    expect(scoped.sidebarProjectScopeKey).toBe("github.com/pingdotgg/t3code");
+    expect(setSidebarProjectScopeKey(scoped, "github.com/pingdotgg/t3code")).toBe(scoped);
+    expect(setSidebarProjectScopeKey(scoped, null).sidebarProjectScopeKey).toBeNull();
+    expect(setSidebarProjectScopeKey(scoped, "").sidebarProjectScopeKey).toBeNull();
   });
 
-  it("stores selected environments and resets to all environments", () => {
-    const scoped = setSidebarEnvironmentScopeIds(makeUiState(), ["environment-a", "environment-b"]);
-
-    expect(scoped.sidebarEnvironmentScopeIds).toEqual(["environment-a", "environment-b"]);
-    expect(setSidebarEnvironmentScopeIds(scoped, ["environment-a", "environment-b"])).toBe(scoped);
-    expect(setSidebarEnvironmentScopeIds(scoped, []).sidebarEnvironmentScopeIds).toEqual([]);
-    expect(toggleSidebarScopeSelection([], "environment-a")).toEqual(["environment-a"]);
-    expect(toggleSidebarScopeSelection(["environment-a"], "environment-b")).toEqual([
-      "environment-a",
-      "environment-b",
-    ]);
-    expect(toggleSidebarScopeSelection(["environment-a"], "environment-a")).toEqual([]);
-  });
-
-  it("stores the current sidebar thread sort order", () => {
-    const lastActive = setSidebarThreadSortOrder(makeUiState(), "updated_at");
-
-    expect(lastActive.sidebarThreadSortOrder).toBe("updated_at");
-    expect(setSidebarThreadSortOrder(lastActive, "updated_at")).toBe(lastActive);
-    expect(setSidebarThreadSortOrder(lastActive, "created_at").sidebarThreadSortOrder).toBe(
-      "created_at",
+  it("persists independent multi-environment and project selections", () => {
+    const selected = setSidebarScopeSelection(
+      setSidebarScopeSelection(
+        makeUiState(),
+        "environment",
+        ["remote", "local", "remote"],
+        "include",
+      ),
+      "project",
+      ["alpha", "beta"],
+      "include",
     );
-  });
-
-  it("stores the legacy sidebar thread status filter", () => {
-    const snoozed = setSidebarThreadStatusFilter(makeUiState(), "snoozed");
-
-    expect(snoozed.sidebarThreadStatusFilter).toBe("snoozed");
-    expect(setSidebarThreadStatusFilter(snoozed, "snoozed")).toBe(snoozed);
-    expect(setSidebarThreadStatusFilter(snoozed, "active").sidebarThreadStatusFilter).toBe(
-      "active",
+    expect(selected.sidebarEnvironmentScopeIds).toEqual(["remote", "local"]);
+    expect(selected.sidebarProjectScopeKeys).toEqual(["alpha", "beta"]);
+    expect(setSidebarScopeSelection(selected, "project", ["alpha", "beta"], "include")).toBe(
+      selected,
     );
   });
 });
 
 describe("parsePersistedState", () => {
-  it("defaults invalid current-sidebar sort orders to creation time", () => {
-    expect(parsePersistedState({ sidebarThreadSortOrder: "unknown" }).sidebarThreadSortOrder).toBe(
-      "created_at",
-    );
-  });
-
-  it("defaults invalid legacy-sidebar status filters to all", () => {
-    expect(
-      parsePersistedState({ sidebarThreadStatusFilter: "unknown" }).sidebarThreadStatusFilter,
-    ).toBe("all");
-  });
-
-  it("hydrates the last selected pull request merge method", () => {
-    const parsed = parsePersistedState({
-      pullRequestMergeMethod: "squash",
-    });
-    const invalid = parsePersistedState({
-      pullRequestMergeMethod: "fast-forward",
-    });
-
-    expect(parsed.pullRequestMergeMethod).toBe("squash");
-    expect(invalid.pullRequestMergeMethod).toBe("merge");
-  });
-
   it("hydrates raw UI-owned state without server entities", () => {
     const parsed = parsePersistedState({
       projectExpandedById: {
@@ -327,11 +203,12 @@ describe("parsePersistedState", () => {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
-      sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
+      sidebarProjectScopeKey: null,
       sidebarEnvironmentScopeIds: [],
       sidebarProjectScopeKeys: [],
+      sidebarEnvironmentScopeMode: "exclude",
+      sidebarProjectScopeMode: "exclude",
       sidebarThreadSortOrder: "created_at",
-      sidebarThreadStatusFilter: "all",
       pullRequestMergeMethod: "merge",
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -369,23 +246,6 @@ describe("parsePersistedState", () => {
     expect(resolveProjectExpanded(parsed.projectExpandedById, [projectBKey])).toBe(false);
     expect(resolveProjectExpanded(parsed.projectExpandedById, ["unknown"])).toBe(true);
   });
-
-  it("preserves legacy expanded-only semantics for one-way migration", () => {
-    const parsed = parsePersistedState({
-      expandedProjectCwds: ["/repo/a"],
-    });
-
-    expect(
-      resolveProjectExpanded(parsed.projectExpandedById, [
-        legacyProjectCwdPreferenceKey("/repo/a"),
-      ]),
-    ).toBe(true);
-    expect(
-      resolveProjectExpanded(parsed.projectExpandedById, [
-        legacyProjectCwdPreferenceKey("/repo/b"),
-      ]),
-    ).toBe(false);
-  });
 });
 
 function createLocalStorageStub(): Storage {
@@ -421,21 +281,6 @@ describe("uiStateStore persistence", () => {
     vi.unstubAllGlobals();
   });
 
-  it("persists exclusions with the selected scopes", () => {
-    const state = makeUiState({
-      sidebarEnvironmentScopeIds: ["env-a"],
-      sidebarProjectScopeKeys: ["project-b"],
-      sidebarFilterModes: { environment: "exclude", project: "include", pinned: "exclude" },
-    });
-    persistState(state);
-    const restored = parsePersistedState(
-      JSON.parse(localStorageStub.getItem(PERSISTED_STATE_KEY)!),
-    );
-    expect(restored.sidebarFilterModes).toEqual(state.sidebarFilterModes);
-    expect(restored.sidebarEnvironmentScopeIds).toEqual(["env-a"]);
-    expect(restored.sidebarProjectScopeKeys).toEqual(["project-b"]);
-  });
-
   it("persists raw UI preferences including thread visit markers", () => {
     const state = makeUiState({
       projectExpandedById: {
@@ -468,12 +313,12 @@ describe("uiStateStore persistence", () => {
         "environment:thread-1": "2026-02-25T12:35:00.000Z",
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
-      sidebarFilterModes: DEFAULT_SIDEBAR_FILTER_MODES,
-      sidebarFilterSelectionVersion: 1,
+      sidebarProjectScopeKey: null,
       sidebarEnvironmentScopeIds: [],
       sidebarProjectScopeKeys: [],
+      sidebarEnvironmentScopeMode: "exclude",
+      sidebarProjectScopeMode: "exclude",
       sidebarThreadSortOrder: "created_at",
-      sidebarThreadStatusFilter: "all",
       threadChangedFilesExpansionVersion: 2,
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -489,61 +334,35 @@ describe("uiStateStore persistence", () => {
   });
 
   it("restores the sidebar project scope across reloads", () => {
-    persistState(makeUiState({ sidebarProjectScopeKeys: ["project-a", "project-b"] }));
+    const keys = ["github.com/pingdotgg/t3code", "github.com/pingdotgg/uploadthing"];
+    persistState(makeUiState({ sidebarProjectScopeKeys: keys }));
 
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
 
-    expect(parsePersistedState(persisted).sidebarProjectScopeKeys).toEqual([
-      "project-a",
-      "project-b",
-    ]);
+    expect(parsePersistedState(persisted).sidebarProjectScopeKeys).toEqual(keys);
   });
 
-  it("restores the sidebar environment scope across reloads", () => {
-    persistState(makeUiState({ sidebarEnvironmentScopeIds: ["environment-a", "environment-b"] }));
+  it("keeps a single-project scope readable by older clients", () => {
+    persistState(
+      makeUiState({
+        sidebarProjectScopeKeys: ["github.com/pingdotgg/t3code"],
+        sidebarProjectScopeMode: "include",
+      }),
+    );
 
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
 
-    expect(parsePersistedState(persisted).sidebarEnvironmentScopeIds).toEqual([
-      "environment-a",
-      "environment-b",
-    ]);
+    expect(persisted.sidebarProjectScopeKey).toBe("github.com/pingdotgg/t3code");
   });
 
-  it("restores the current sidebar thread sort order across reloads", () => {
-    persistState(makeUiState({ sidebarThreadSortOrder: "updated_at" }));
-
-    const persisted = JSON.parse(
-      localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
-    ) as PersistedUiState;
-
-    expect(parsePersistedState(persisted).sidebarThreadSortOrder).toBe("updated_at");
-  });
-
-  it("restores the legacy sidebar status filter across reloads", () => {
-    persistState(makeUiState({ sidebarThreadStatusFilter: "settled" }));
-
-    const persisted = JSON.parse(
-      localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
-    ) as PersistedUiState;
-
-    expect(parsePersistedState(persisted).sidebarThreadStatusFilter).toBe("settled");
-  });
-
-  it("drops the temporary expanded-only migration fallback when rewriting state", () => {
-    const migrated = parsePersistedState({
-      expandedProjectCwds: ["/repo/a"],
-    });
-
-    persistState(migrated);
-
-    const persisted = JSON.parse(
-      localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
-    ) as PersistedUiState;
-    expect(resolveProjectExpanded(persisted.projectExpandedById ?? {}, ["unknown"])).toBe(true);
+  it("restores a single-project scope saved before multi-project filtering", () => {
+    expect(
+      parsePersistedState({ sidebarProjectScopeKey: "github.com/pingdotgg/t3code" })
+        .sidebarProjectScopeKeys,
+    ).toEqual(["github.com/pingdotgg/t3code"]);
   });
 });

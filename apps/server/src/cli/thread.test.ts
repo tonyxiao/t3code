@@ -1,274 +1,294 @@
-import {
-  MessageId,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-  TurnId,
-  type OrchestrationMessage,
-  type OrchestrationShellSnapshot,
-} from "@t3tools/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
+import { AuthSessionId, ProjectId, RunId, ThreadId } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as NetService from "@t3tools/shared/Net";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as DateTime from "effect/DateTime";
-import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import * as TestConsole from "effect/testing/TestConsole";
+import { Command } from "effect/cli";
+import { vi } from "vite-plus/test";
 
+import * as McpBridge from "../mcp/AcpMcpStdioBridge.ts";
 import {
-  ThreadCliUsageError,
-  deriveThreadCliTitle,
-  findSettledTurn,
-  listThreadCliThreads,
-  resolveThreadCliMessageText,
-  resolveThreadCliModelSelection,
-  resolveThreadCliProject,
-  resolveThreadCliTarget,
-  resolveThreadCliWakeTime,
-  selectTurnReply,
-  threadCliStatus,
+  makePersistedServerRuntimeState,
+  persistServerRuntimeState,
+} from "../serverRuntimeState.ts";
+import {
+  readLatestMessages,
+  threadCommand,
+  type ThreadTools,
+  titleFromMessage,
+  waitForRun,
 } from "./thread.ts";
 
-const THREAD_ID = ThreadId.make("thread-1");
-const snapshot = {
-  snapshotSequence: 1,
-  projects: [],
-  threads: [
-    {
-      id: THREAD_ID,
-      projectId: ProjectId.make("project-1"),
-      title: "Thread",
-      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6" },
-      runtimeMode: "full-access" as const,
-      interactionMode: "default" as const,
-      branch: null,
-      worktreePath: null,
-      pullRequests: [],
-      latestTurn: null,
-      createdAt: "2026-09-16T00:00:00.000Z",
-      updatedAt: "2026-09-16T00:00:00.000Z",
-      archivedAt: null,
-      settledOverride: null,
-      settledAt: null,
-      snoozedUntil: null,
-      snoozedAt: null,
-      session: null,
-      latestUserMessageAt: null,
-      hasPendingApprovals: false,
-      hasPendingUserInput: false,
-      hasActionableProposedPlan: false,
-    },
-  ],
-  updatedAt: "2026-09-16T00:00:00.000Z",
+vi.mock("../auth/EnvironmentAuth.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../auth/EnvironmentAuth.ts")>();
+  return {
+    ...actual,
+    layerRuntime: Layer.mock(actual.EnvironmentAuth)({
+      issueMcpClientSession: () =>
+        Effect.map(DateTime.now, (expiresAt) => ({
+          sessionId: AuthSessionId.make("test-session"),
+          token: "synthetic-token",
+          expiresAt,
+        })),
+      revokeSession: () => Effect.succeed(true),
+    }),
+  };
+});
+
+const threadId = ThreadId.make("thread-1");
+const runId = RunId.make("run-1");
+
+it.effect(
+  "start resolves home-relative project paths while preserving ids and relative paths",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs
+        .makeTempDirectoryScoped({ prefix: "t3-thread-project-path-" })
+        .pipe(Effect.flatMap((directory) => fs.realPath(directory)));
+      const home = path.join(root, "home");
+      const cwd = path.join(root, "current");
+      const workspaceRoot = path.join(home, "My Project");
+      const nestedRoot = path.join(workspaceRoot, "nested");
+      const baseDir = path.join(root, "state");
+      yield* fs.makeDirectory(nestedRoot, { recursive: true });
+      yield* fs.makeDirectory(cwd);
+      const projects = [
+        { id: ProjectId.make("current-project"), title: "Current", workspaceRoot: cwd },
+        { id: ProjectId.make("home-project"), title: "Home", workspaceRoot: home },
+        { id: ProjectId.make("intended-project"), title: "Intended", workspaceRoot },
+        { id: ProjectId.make("nested-project"), title: "Nested", workspaceRoot: nestedRoot },
+        { id: ProjectId.make("~/literal-id"), title: "Exact id", workspaceRoot: cwd },
+      ];
+      yield* persistServerRuntimeState({
+        path: path.join(baseDir, "userdata", "server-runtime-v2.json"),
+        state: yield* makePersistedServerRuntimeState({
+          config: { host: "127.0.0.1", devUrl: undefined },
+          port: 3_773,
+        }),
+      });
+      using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
+        Effect.succeed({
+          call: (tool, args) => {
+            switch (tool) {
+              case "t3_project_list":
+                return Effect.succeed({ structuredContent: { projects, nextCursor: null } });
+              case "t3_thread_launch":
+                return Effect.succeed({
+                  structuredContent: { threadId, projectId: args.projectId, runId: null },
+                });
+              default:
+                return Effect.die(`unexpected ${tool} call`);
+            }
+          },
+        }),
+      );
+
+      for (const [identifier, expectedProjectId] of [
+        ["intended-project", "intended-project"],
+        ["~/literal-id", "~/literal-id"],
+        [workspaceRoot, "intended-project"],
+        [path.relative(cwd, workspaceRoot), "intended-project"],
+        [".", "current-project"],
+        ["~/My Project", "intended-project"],
+        ["~", "home-project"],
+        ["~/My Project/nested", "nested-project"],
+        ["~/My Project/missing", "intended-project"],
+      ] as const) {
+        yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+          "start",
+          identifier,
+          "Inspect this project",
+          "--json",
+          "--base-dir",
+          baseDir,
+        ]).pipe(
+          Effect.provideService(HostProcess.HomeDirectory, home),
+          Effect.provideService(HostProcess.WorkingDirectory, cwd),
+        );
+        assert.strictEqual(
+          (yield* TestConsole.logLines).at(-1),
+          JSON.stringify({ threadId, projectId: expectedProjectId, runId: null }),
+          identifier,
+        );
+      }
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          NetService.layer,
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: { T3CODE_PORT: "3773" } })),
+        ),
+      ),
+    ),
+);
+
+/** Answers each tool call with the next scripted response for that tool. */
+const scriptedTools = (script: Record<string, Array<unknown>>) => {
+  const calls: Array<{ readonly tool: string; readonly args: unknown }> = [];
+  const call = ((tool: string, args: unknown) => {
+    calls.push({ tool, args });
+    const next = script[tool]?.shift();
+    return next === undefined ? Effect.die(`unscripted ${tool} call`) : Effect.succeed(next);
+  }) as ThreadTools["call"];
+  return { tools: { call } satisfies ThreadTools, calls };
 };
 
-it("resolves the current T3 thread from the agent environment", () => {
-  const thread = resolveThreadCliTarget(snapshot, undefined, { T3_THREAD_ID: THREAD_ID });
-  assert.strictEqual(thread.id, THREAD_ID);
-});
+it.effect("--wait follows the sent run to its continuation's terminal status", () =>
+  Effect.gen(function* () {
+    const continuation = RunId.make("run-2");
+    const { tools, calls } = scriptedTools({
+      t3_thread_wait: [
+        { threadId, runId, status: "running", timedOut: true },
+        { threadId, runId: continuation, status: "failed", timedOut: false },
+      ],
+      t3_thread_read: [{ thread: { pendingRequestCount: 0 } }],
+    });
 
-it("prefers an explicit thread id over the agent environment", () => {
-  const thread = resolveThreadCliTarget(snapshot, THREAD_ID, { T3_THREAD_ID: "other-thread" });
-  assert.strictEqual(thread.id, THREAD_ID);
-});
+    const outcome = yield* waitForRun(tools, threadId, runId);
 
-it("requires a target thread", () => {
-  assert.throws(() => resolveThreadCliTarget(snapshot, undefined, {}), ThreadCliUsageError);
-});
+    assert.deepStrictEqual(outcome, { type: "ended", runId: continuation, status: "failed" });
+    assert.deepStrictEqual(
+      calls.filter((entry) => entry.tool === "t3_thread_wait").map((entry) => entry.args),
+      [
+        { threadId, runId, timeoutMs: 15_000 },
+        { threadId, runId, timeoutMs: 15_000 },
+      ],
+    );
+  }),
+);
 
-it("computes a future wake time from a duration", () => {
-  const wake = resolveThreadCliWakeTime({
-    duration: Duration.days(10),
-    until: undefined,
-    now: DateTime.makeUnsafe("2026-09-16T00:00:00.000Z"),
-  });
-  assert.strictEqual(wake, "2026-09-26T00:00:00.000Z");
-});
+it.effect("--wait stops when the thread waits for an answer instead of polling forever", () =>
+  Effect.gen(function* () {
+    const { tools } = scriptedTools({
+      t3_thread_wait: [
+        { threadId, runId, status: "queued", timedOut: true },
+        { threadId, runId, status: "queued", timedOut: true },
+      ],
+      t3_thread_read: [{ thread: { pendingRequestCount: 1 } }],
+    });
 
-it("requires exactly one wake-time option", () => {
-  assert.throws(
-    () =>
-      resolveThreadCliWakeTime({
-        duration: Duration.hours(1),
-        until: "2026-09-17T00:00:00.000Z",
-        now: DateTime.makeUnsafe("2026-09-16T00:00:00.000Z"),
-      }),
-    ThreadCliUsageError,
-  );
-});
+    assert.deepStrictEqual(yield* waitForRun(tools, threadId, runId), { type: "needs_input" });
+  }),
+);
 
-const baseThread = snapshot.threads[0]!;
-type TestThread = Omit<typeof baseThread, "latestTurn"> & {
-  readonly latestTurn: ReturnType<typeof turn> | null;
+it.effect("--wait reports its run's result when a later run is the one waiting", () =>
+  Effect.gen(function* () {
+    const { tools } = scriptedTools({
+      t3_thread_wait: [
+        { threadId, runId, status: "running", timedOut: true },
+        { threadId, runId, status: "completed", timedOut: false },
+      ],
+      t3_thread_read: [{ thread: { pendingRequestCount: 1 } }],
+    });
+
+    assert.deepStrictEqual(yield* waitForRun(tools, threadId, runId), {
+      type: "ended",
+      runId,
+      status: "completed",
+    });
+  }),
+);
+
+/** Serves t3_thread_read pages the way the server does: positions count every item. */
+const timelineTools = (types: ReadonlyArray<string>) => {
+  const items = types.map((type, position) => ({ position, itemId: `item-${position}`, type }));
+  const served: Array<number> = [];
+  const call = ((_tool: string, input: unknown) => {
+    const args = input as { readonly afterPosition?: number; readonly limit: number };
+    // Scanning one match past the page keeps reads of huge fixtures linear.
+    const matching: typeof items = [];
+    for (let position = (args.afterPosition ?? -1) + 1; position < items.length; position++) {
+      const item = items[position]!;
+      if (["user_message", "assistant_message", "proposed_plan"].includes(item.type)) {
+        matching.push(item);
+        if (matching.length > args.limit) break;
+      }
+    }
+    const page = matching.slice(0, args.limit);
+    served.push(page.length);
+    return Effect.succeed({
+      thread: { itemCount: items.length },
+      items: page,
+      nextPosition: page.at(-1)?.position ?? null,
+      hasMore: matching.length > page.length,
+    });
+  }) as ThreadTools["call"];
+  const latest = (count: number) =>
+    items
+      .filter((item) => item.type === "user_message" || item.type === "assistant_message")
+      .slice(-count)
+      .map((item) => item.itemId);
+  return { tools: { call } satisfies ThreadTools, served, latest };
 };
-const withThread = (overrides: Partial<TestThread>) => ({
-  ...snapshot,
-  threads: [{ ...baseThread, ...overrides }],
-});
-const turn = (turnId: string, state: "running" | "completed" | "interrupted" | "error") => ({
-  turnId: TurnId.make(turnId),
-  state,
-  requestedAt: "2026-09-16T00:00:00.000Z",
-  startedAt: "2026-09-16T00:00:01.000Z",
-  completedAt: state === "running" ? null : "2026-09-16T00:00:05.000Z",
-  assistantMessageId: null,
-});
-const message = (
-  id: string,
-  role: OrchestrationMessage["role"],
-  turnId: string | null,
-  text: string,
-): OrchestrationMessage => ({
-  id: MessageId.make(id),
-  role,
-  text,
-  turnId: turnId === null ? null : TurnId.make(turnId),
-  streaming: false,
-  createdAt: "2026-09-16T00:00:00.000Z",
-  updatedAt: "2026-09-16T00:00:00.000Z",
-});
 
-it("lists unarchived threads newest first and hides archived ones by default", () => {
-  const older = {
-    ...baseThread,
-    id: ThreadId.make("older"),
-    updatedAt: "2026-09-15T00:00:00.000Z",
-  };
-  const archived = {
-    ...baseThread,
-    id: ThreadId.make("archived"),
-    updatedAt: "2026-09-17T00:00:00.000Z",
-    archivedAt: "2026-09-17T00:00:00.000Z",
-  };
-  const multi = { ...snapshot, threads: [older, baseThread, archived] };
-  assert.deepStrictEqual(
-    listThreadCliThreads(multi, { includeArchived: false }).map((thread) => thread.id),
-    [THREAD_ID, "older"],
-  );
-  assert.deepStrictEqual(
-    listThreadCliThreads(multi, { includeArchived: true }).map((thread) => thread.id),
-    ["archived", THREAD_ID, "older"],
-  );
-});
+const tail = (tools: number) => [...Array<string>(tools).fill("tool_call"), "assistant_message"];
 
-it("reports pending approvals ahead of a running turn", () => {
-  const [thread] = withThread({
-    latestTurn: turn("t1", "running"),
-    hasPendingApprovals: true,
-  }).threads;
-  assert.strictEqual(threadCliStatus(thread!), "approval");
-  assert.strictEqual(threadCliStatus(baseThread), "idle");
-});
+it.effect("show reads the end of a long thread, not its whole history", () =>
+  Effect.gen(function* () {
+    const { tools, served, latest } = timelineTools([
+      ...Array.from({ length: 1000 }, (_, index) =>
+        index % 2 === 0 ? "user_message" : "assistant_message",
+      ),
+      ...Array.from({ length: 10 }, () => tail(30)).flat(),
+      "proposed_plan",
+    ]);
 
-it("reads the message from stdin when the argument is omitted or '-'", () => {
-  assert.strictEqual(
-    resolveThreadCliMessageText("hi", () => "ignored"),
-    "hi",
-  );
-  assert.strictEqual(
-    resolveThreadCliMessageText(undefined, () => "  from stdin\n"),
-    "from stdin",
-  );
-  assert.strictEqual(
-    resolveThreadCliMessageText("-", () => "piped"),
-    "piped",
-  );
-  assert.throws(() => resolveThreadCliMessageText(undefined, () => undefined), ThreadCliUsageError);
-  assert.throws(() => resolveThreadCliMessageText("   ", () => "unused"), ThreadCliUsageError);
-});
+    const { messages } = yield* readLatestMessages(tools, threadId, 10);
 
-it("ignores the pre-dispatch turn until a new turn settles", () => {
-  const stale = withThread({ latestTurn: turn("t1", "completed") });
-  assert.strictEqual(findSettledTurn(stale, THREAD_ID, "t1"), undefined);
+    assert.deepStrictEqual(
+      messages.map((item) => item.itemId),
+      latest(10),
+    );
+    assert.isBelow(
+      served.reduce((sum, count) => sum + count, 0),
+      100,
+    );
+  }),
+);
 
-  const running = withThread({ latestTurn: turn("t2", "running") });
-  assert.strictEqual(findSettledTurn(running, THREAD_ID, "t1"), undefined);
+it.effect("show widens back to the first item when the thread has fewer messages", () =>
+  Effect.gen(function* () {
+    const { tools, latest } = timelineTools([
+      "user_message",
+      ...Array.from({ length: 4 }, () => tail(150)).flat(),
+    ]);
 
-  const done = withThread({ latestTurn: turn("t2", "completed") });
-  assert.deepStrictEqual(findSettledTurn(done, THREAD_ID, "t1"), {
-    turnId: "t2",
-    state: "completed",
-  });
+    const { messages } = yield* readLatestMessages(tools, threadId, 10);
 
-  const firstTurn = withThread({ latestTurn: turn("t1", "error") });
-  assert.deepStrictEqual(findSettledTurn(firstTurn, THREAD_ID, null), {
-    turnId: "t1",
-    state: "error",
-  });
-});
+    assert.deepStrictEqual(
+      messages.map((item) => item.itemId),
+      latest(10),
+    );
+    assert.lengthOf(messages, 5);
+  }),
+);
 
-it("joins every assistant message from the settled turn", () => {
-  const messages = [
-    message("m1", "user", "t2", "question"),
-    message("m2", "assistant", "t1", "old answer"),
-    message("m3", "assistant", "t2", "part one"),
-    message("m4", "system", "t2", "noise"),
-    message("m5", "assistant", "t2", "part two"),
-  ];
-  assert.strictEqual(selectTurnReply(messages, "t2"), "part one\n\npart two");
-});
+it.effect("show returns a --messages count larger than one call can spread", () =>
+  Effect.gen(function* () {
+    const { tools, latest } = timelineTools(Array<string>(200_000).fill("assistant_message"));
 
-const project = (
-  id: string,
-  workspaceRoot: string,
-  defaultModel: string | null = null,
-): OrchestrationShellSnapshot["projects"][number] => ({
-  id: ProjectId.make(id),
-  title: id,
-  workspaceRoot,
-  defaultModelSelection:
-    defaultModel === null
-      ? null
-      : { instanceId: ProviderInstanceId.make("codex"), model: defaultModel },
-  scripts: [],
-  createdAt: "2026-09-16T00:00:00.000Z",
-  updatedAt: "2026-09-16T00:00:00.000Z",
-});
+    const { messages } = yield* readLatestMessages(tools, threadId, 200_000);
 
-it("resolves the deepest project containing the working directory", () => {
-  const projects = {
-    ...snapshot,
-    projects: [project("hub", "/u/hub"), project("app", "/u/hub/app")],
-  };
-  assert.strictEqual(resolveThreadCliProject(projects, undefined, "/u/hub/app/src").id, "app");
-  assert.strictEqual(resolveThreadCliProject(projects, undefined, "/u/hub").id, "hub");
-  assert.strictEqual(resolveThreadCliProject(projects, "/u/hub/", "/elsewhere").id, "hub");
-  assert.throws(
-    () => resolveThreadCliProject(projects, undefined, "/u/hubby"),
-    ThreadCliUsageError,
-  );
-  assert.throws(() => resolveThreadCliProject(projects, "nope", "/u/hub"), ThreadCliUsageError);
-});
+    assert.deepStrictEqual(
+      messages.map((item) => item.itemId),
+      latest(200_000),
+    );
+  }),
+);
 
-it("picks the project default model, then the latest thread's, then explicit flags", () => {
-  const none = { provider: undefined, model: undefined };
-  const withDefault = project("project-1", "/p", "gpt-default");
-  assert.strictEqual(
-    resolveThreadCliModelSelection(snapshot, withDefault, none).model,
-    "gpt-default",
-  );
-
-  const noDefault = project("project-1", "/p");
-  assert.strictEqual(resolveThreadCliModelSelection(snapshot, noDefault, none).model, "gpt-5.6");
-
-  const switched = resolveThreadCliModelSelection(snapshot, noDefault, {
-    provider: "claudeAgent",
-    model: "claude-opus-5",
-  });
-  assert.deepStrictEqual(switched, {
-    instanceId: ProviderInstanceId.make("claudeAgent"),
-    model: "claude-opus-5",
-  });
-  assert.throws(
-    () =>
-      resolveThreadCliModelSelection(snapshot, noDefault, {
-        provider: "claudeAgent",
-        model: undefined,
-      }),
-    ThreadCliUsageError,
-  );
-
-  const empty = project("empty", "/e");
-  assert.throws(() => resolveThreadCliModelSelection(snapshot, empty, none), ThreadCliUsageError);
-});
-
-it("titles a new thread from the first line of its message", () => {
-  assert.strictEqual(deriveThreadCliTitle("Fix the build\nDetails follow"), "Fix the build");
-  assert.strictEqual(deriveThreadCliTitle("x".repeat(80)).length, 60);
+it("titles from a long first line without splitting an emoji", () => {
+  const title = titleFromMessage(`${"a".repeat(78)}😀 and the rest of a long first line`);
+  assert.strictEqual(title, `${"a".repeat(78)}…`);
 });

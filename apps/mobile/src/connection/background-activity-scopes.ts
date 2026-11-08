@@ -3,7 +3,7 @@ import {
   type BackgroundScope,
   type EnvironmentId,
   ThreadId,
-  ORCHESTRATION_WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -21,9 +21,7 @@ function notify(): void {
   for (const listener of listeners) {
     try {
       listener();
-    } catch {
-      // A failing observer must not corrupt retained-scope lifetime.
-    }
+    } catch {}
   }
 }
 
@@ -45,7 +43,7 @@ function stableScopeKey(environmentId: EnvironmentId, scope: BackgroundScope): s
 function scopeForSubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): BackgroundScope | null {
-  if (observation.method === ORCHESTRATION_WS_METHODS.subscribeThread) {
+  if (observation.method === ORCHESTRATION_V2_WS_METHODS.subscribeThread) {
     const input = observation.input as { readonly threadId?: unknown };
     return typeof input.threadId === "string"
       ? { type: "thread", threadId: ThreadId.make(input.threadId) }
@@ -57,7 +55,8 @@ function scopeForSubscription(
   if (observation.method !== WS_METHODS.subscribeVcsStatus) {
     return null;
   }
-  const input = observation.input as { readonly cwd?: unknown };
+  const input = observation.input as { readonly cwd?: unknown; readonly includeRemote?: unknown };
+  if (input.includeRemote === false) return null;
   return typeof input.cwd === "string" ? { type: "vcs-status", cwd: input.cwd } : null;
 }
 

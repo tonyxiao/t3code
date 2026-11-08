@@ -1,6 +1,14 @@
 import { richContentLanguage } from "@t3tools/chat-renderer/language";
 import { richContentDocument } from "@t3tools/chat-renderer/document";
-import { useContext, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import {
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+} from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
@@ -18,10 +26,9 @@ function RichMarkdownCode({
   const container = useRef<ComponentRef<typeof View>>(null);
   const inputBounds = useRef<{ top: number; bottom: number } | null>(null);
   const onInputFocus = useContext(RichInputFocusContext);
-  const onInputFocusRef = useRef(onInputFocus);
-  useEffect(() => {
-    onInputFocusRef.current = onInputFocus;
-  }, [onInputFocus]);
+  const releaseInputFocus = useEffectEvent((target: RichInputTarget) =>
+    onInputFocus?.(target, false),
+  );
   const inputTarget = useMemo<RichInputTarget>(
     () => ({
       measure: (callback) => {
@@ -45,7 +52,8 @@ function RichMarkdownCode({
     }),
     [content, language, theme],
   );
-  useEffect(() => () => onInputFocusRef.current?.(inputTarget, false), [inputTarget]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- unregisters this WebView input focus owner when its native view unmounts
+  useEffect(() => () => releaseInputFocus(inputTarget), [inputTarget]);
   return (
     <View ref={container} collapsable={false} style={{ minWidth: 0, width: "100%", height }}>
       <WebView

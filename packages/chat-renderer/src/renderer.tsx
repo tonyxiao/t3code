@@ -57,6 +57,7 @@ async function renderDiagram(code: string, theme: "light" | "dark") {
 export function MermaidDiagram({ code, theme }: { code: string; theme: "light" | "dark" }) {
   const [result, setResult] = useState<{ key: string; svg?: string; error?: string }>();
   const key = `${theme}:${code}`;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- renders with Mermaid’s async DOM API and ignores completion after unmount
   useEffect(() => {
     let cancelled = false;
     if (code.length > 50_000) return;

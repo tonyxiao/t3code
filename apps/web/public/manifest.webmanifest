@@ -1,5 +1,5 @@
 {
-  "id": "/",
+  "id": "/txcode-v2",
   "name": "TX Code",
   "short_name": "TX Code",
   "start_url": "/",
@@ -9,14 +9,26 @@
   "theme_color": "#161616",
   "icons": [
     {
-      "src": "/web-app-icon-192.png",
-      "sizes": "192x192",
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
       "type": "image/png"
     },
     {
-      "src": "/web-app-icon-512.png",
-      "sizes": "512x512",
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

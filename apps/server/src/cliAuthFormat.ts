@@ -61,7 +61,7 @@ export function formatIssuedPairingCredential(
       `Issued client pairing token ${credential.id}.`,
       `Token: ${credential.credential}`,
       ...(pairUrl ? [`Pair URL: ${pairUrl}`] : []),
-      `Expires at: ${credential.expiresAt}`,
+      `Expires at: ${toIsoString(credential.expiresAt)}`,
     ].join(newline) + newline
   );
 }
@@ -77,7 +77,7 @@ export function formatPairingCredentialList(
       credentials.map((credential) => ({
         id: credential.id,
         ...(credential.label ? { label: credential.label } : {}),
-        scopes: credential.scopes,
+        scopes: credential.permissions ?? credential.scopes,
         createdAt: toIsoString(credential.createdAt),
         expiresAt: toIsoString(credential.expiresAt),
       })),
@@ -95,7 +95,7 @@ export function formatPairingCredentialList(
       .map((credential) =>
         [
           `${credential.id}${credential.label ? ` (${credential.label})` : ""}`,
-          `  scopes: ${credential.scopes.join(" ")}`,
+          `  scopes: ${(credential.permissions ?? credential.scopes).join(" ")}`,
           `  created: ${toIsoString(credential.createdAt)}`,
           `  expires: ${toIsoString(credential.expiresAt)}`,
         ].join(newline),
@@ -124,7 +124,7 @@ export function formatIssuedSession(
         scopes: session.scopes,
         subject: session.subject,
         client: session.client,
-        expiresAt: session.expiresAt ? toIsoString(session.expiresAt) : null,
+        expiresAt: toIsoString(session.expiresAt),
       },
       null,
       2,
@@ -138,7 +138,7 @@ export function formatIssuedSession(
       `Token: ${session.token}`,
       `Subject: ${session.subject}`,
       `Client: ${formatClientMetadata(session.client)}`,
-      `Expires at: ${session.expiresAt ? toIsoString(session.expiresAt) : "until revoked"}`,
+      `Expires at: ${toIsoString(session.expiresAt)}`,
     ].join(newline) + newline
   );
 }
@@ -159,7 +159,7 @@ export function formatSessionList(
         client: session.client,
         connected: session.connected,
         issuedAt: toIsoString(session.issuedAt),
-        expiresAt: session.expiresAt ? toIsoString(session.expiresAt) : null,
+        expiresAt: toIsoString(session.expiresAt),
         lastConnectedAt: session.lastConnectedAt ? toIsoString(session.lastConnectedAt) : null,
       })),
       null,
@@ -184,7 +184,7 @@ export function formatSessionList(
           `  last connected: ${
             session.lastConnectedAt ? toIsoString(session.lastConnectedAt) : "never"
           }`,
-          `  expires: ${session.expiresAt ? toIsoString(session.expiresAt) : "until revoked"}`,
+          `  expires: ${toIsoString(session.expiresAt)}`,
         ].join(newline),
       )
       .join(`${newline}${newline}`) + newline

@@ -19,15 +19,13 @@ export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
   scheduler: onboardingScheduler,
   concurrency: {
     mode: "singleFlight",
-    key: (input: { pairingUrl?: string; host?: string; pairingCode?: string }) =>
+    key: (input: ConnectionOnboarding.PairingConnectionInput) =>
       `ui:${pairingKey(JSON.stringify(input))}`,
   },
-  execute: (input: {
-    readonly pairingUrl?: string;
-    readonly host?: string;
-    readonly pairingCode?: string;
-  }) =>
-    ConnectionOnboarding.pipe(Effect.flatMap((onboarding) => onboarding.registerPairing(input))),
+  execute: (input: ConnectionOnboarding.PairingConnectionInput) =>
+    ConnectionOnboarding.ConnectionOnboarding.pipe(
+      Effect.flatMap((onboarding) => onboarding.registerPairing(input)),
+    ),
 });
 
 export const importDesktopPairing = createRuntimeCommand(connectionAtomRuntime, {
@@ -37,17 +35,16 @@ export const importDesktopPairing = createRuntimeCommand(connectionAtomRuntime, 
     mode: "singleFlight",
     key: (input: { pairingUrl: string }) => `desktop:${pairingKey(input.pairingUrl)}`,
   },
-  execute: (input: { readonly pairingUrl: string }) =>
-    Effect.gen(function* () {
-      const registry = yield* EnvironmentRegistry;
-      const before = yield* SubscriptionRef.get(registry.entries);
-      const onboarding = yield* ConnectionOnboarding;
-      const environmentId = yield* onboarding.registerPairing(input);
-      return {
-        environmentId,
-        action: before.has(environmentId) ? "updated" : "added",
-      } as const;
-    }),
+  execute: Effect.fn("execute")(function* (input: { readonly pairingUrl: string }) {
+    const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+    const before = yield* SubscriptionRef.get(registry.entries);
+    const onboarding = yield* ConnectionOnboarding.ConnectionOnboarding;
+    const environmentId = yield* onboarding.registerPairing(input);
+    return {
+      environmentId,
+      action: before.has(environmentId) ? "updated" : "added",
+    } as const;
+  }),
 });
 
 export const connectSshEnvironment = createRuntimeCommand(connectionAtomRuntime, {
@@ -57,6 +54,8 @@ export const connectSshEnvironment = createRuntimeCommand(connectionAtomRuntime,
     mode: "serial",
     key: (input: { readonly target: DesktopSshEnvironmentTarget }) => JSON.stringify(input.target),
   },
-  execute: (input: { readonly target: DesktopSshEnvironmentTarget; readonly label?: string }) =>
-    ConnectionOnboarding.pipe(Effect.flatMap((onboarding) => onboarding.registerSsh(input))),
+  execute: (input: ConnectionOnboarding.SshConnectionInput) =>
+    ConnectionOnboarding.ConnectionOnboarding.pipe(
+      Effect.flatMap((onboarding) => onboarding.registerSsh(input)),
+    ),
 });

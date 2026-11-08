@@ -10,17 +10,29 @@ several views need the same environment.
 
 The [supervisor](../../packages/client-runtime/src/connection/supervisor.ts) owns
 transport retry policy; resolving an endpoint and opening an RPC session are single
-attempts. Transient failures retry with capped backoff. Offline states and
-authentication failures wait for a wakeup instead of spending attempts on
-unchanged conditions.
+attempts. Transient failures retry with jittered exponential backoff, capped at
+five minutes, that resets only after a connection stays up. Without jitter, every
+client of a restarted server reconnects in the same second; with a short cap, a
+client that can never connect retries all day. Offline states and authentication
+failures wait for a wakeup instead of spending attempts on unchanged conditions.
 
-Foregrounding needs different treatment depending on the connection's state.
-It wakes a retry immediately, leaves an ordinary in-flight attempt alone, and
-probes an established session before replacing it. Mobile uses a bounded
-three-second probe even after a long background interval: a native background
-task may have kept the socket alive. Failed or timed-out probes trigger immediate
-replacement without backoff. The bound matters because the OS can suspend a socket
-without reporting closure; preserving it without a health check can leave resume stuck.
+Foregrounding, a network change, an explicit retry, and an offline report probe
+the established session, and only a failed probe reconnects. Offline reports are
+often wrong, for example for a loopback server. The OS can kill a suspended
+socket without a close event, so a probe still unanswered after 500 ms asks the
+host for its public descriptor over a fresh request, again each second until it
+answers. If the host answers while the socket delivers no frame, the socket is
+dead and is replaced, even while the network reports offline: at once on
+loopback and LAN, and 2.5 seconds after the check starts elsewhere, where one
+lost packet can stall a live socket. Without that evidence the probe deadline
+decides: 3 seconds on loopback and LAN routes and after a long mobile
+suspension, when the data on screen is stale; 15 seconds elsewhere, because a
+tailnet over DERP or a VPN can be slower than that on a live socket. A long
+suspension's probe that times out also replaces the socket regardless of the
+network report. The web and desktop foreground probe skips the fresh request,
+because a busy host can answer it before a queued probe. Foregrounding also
+wakes a pending retry immediately. A long suspension restarts an in-flight
+attempt; a short one leaves it alone.
 
 The [registry](../../packages/client-runtime/src/connection/registry.ts) scopes
 connections by environment. An involuntary disconnect retains the registration
@@ -34,8 +46,15 @@ RPC sessions authenticate at socket upgrade, while HTTP requests need current
 credentials from the
 [authorization service](../../packages/client-runtime/src/authorization/service.ts).
 Replacing a healthy socket for HTTP renewal would interrupt conversations and
-change the transport generation without a transport failure. Credential expiry
-does not close the socket, and refresh failure belongs to the HTTP operation.
+change the transport generation without a transport failure. Refresh failure
+belongs to the HTTP operation.
+
+The server closes a socket when its session is revoked or expires. T3 Connect
+access tokens last one hour, so the driver renews a live socket's token in its
+last minute. The server then moves the socket to the newer session for the same
+DPoP key, subject, and scopes
+([`SessionStore.awaitInvalidation`](../../apps/server/src/auth/SessionStore.ts)).
+If renewal fails, the socket closes at expiry and the supervisor reconnects.
 
 Session listings must retain unrevoked connected sessions after credential expiry
 so an open connection does not disappear from connection management. This does
@@ -56,6 +75,35 @@ connection nor overwrite newer live data during a reconnect. Loading and
 resuming snapshots belongs to the shared state services, so every view agrees
 on which data is current.
 
+Shell snapshots can leave rows out when the client asks. Servers that advertise
+`shellThreadFamilies` leave out idle subagent children: a child stays while it
+has a live or queued run, a pending request or background work, or a subagent
+child of its own, so badge and working walks never meet a gap. Servers that also
+advertise `shellOlderSettled` keep only the 25 newest settled top-level threads
+(and any tied with the 25th, pinned, snoozed, live, or above a kept child); the
+snapshot's `olderSettled` names that cut and counts the rest per project. Left-out
+rows load on demand and merge behind shell rows
+([thread families](../../packages/client-runtime/src/state/threadFamilies.ts)):
+the family a thread view or a queued message mounts holds every active thread
+sharing the thread's root, so it also brings back an old settled thread opened by
+link; the Settled shelf reads pages below the cut; searches return the rows of
+older matches. A missing shell row therefore does not prove a thread is gone:
+code that deletes data or a worktree on absence must check the family or the
+server first.
+
+The Settled count is local Settled rows, minus local rows below the cut, plus the
+server's counts
+([older settled threads](../../packages/client-runtime/src/state/olderSettledThreads.ts)).
+The counts are re-read when a removal or an old row's arrival or change could
+move them, so archiving any thread costs one small read. A shelf lists an older
+row only above the highest page frontier of the environments that can still
+load, so the merged list stays a correct prefix while a page loads. An
+environment with no snapshot this session, or a failed page, holds no one back.
+On-demand reads wait for the session's first authoritative snapshot
+(`generation > 0`), and each is keyed by generation. A resume that skips that
+snapshot must still bump `generation` once verified, and may reuse a cached
+snapshot only when its omissions match what the session asks for.
+
 [Thread detail](../../packages/client-runtime/src/state/threads.ts) separates
 subscription lifetime from cache lifetime. Mounted consumers share one live
 stream, which stops when the last consumer unmounts; hidden mounted routes still
@@ -70,13 +118,9 @@ the shell can report a stop before the detail loads or catches up. A stopped
 thread stays mounted until its own stream is live and shows the stop, and the
 stream then closes and saves the settled state.
 Mobile adds a consumer for every unsettled, unarchived thread in enabled
-environments, independent of the visible route. iOS 26+ can run an explicitly
-started ten-minute continued-processing session with elapsed-time progress; the
-ordinary grace period remains the fallback. Android caps its foreground data-sync
-service at ten minutes. OS suspension still requires catching up on return. HTTP
-snapshot hydration is limited to four concurrent requests, but the resulting
-live subscriptions and retained histories scale with the number of open threads.
-Web does not add a keep-alive consumer.
+environments, independent of the visible route. Native background execution is
+finite, so the streams still need to catch up after OS suspension. Web does not
+add a keep-alive consumer.
 
 Retain state and cursor together only after an update finishes. Cancellation must
 not advance the cached cursor beyond the applied data, and an old scope must not

@@ -42,16 +42,20 @@ export function useCustomSnooze(
     pendingRef.current = true;
     setError(null);
     setPending(true);
+    let resolved: string | null = null;
     try {
       const result = await resolveText({
         text: input.text.trim(),
         now: now.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      if (revision.current !== requestRevision) return null;
-      if (!(Date.parse(result.snoozedUntil) > Date.now()))
-        throw new Error("Choose a date and time in the future.");
-      return result.snoozedUntil;
+      if (revision.current === requestRevision) {
+        if (Date.parse(result.snoozedUntil) > Date.now()) {
+          resolved = result.snoozedUntil;
+        } else {
+          setError("Choose a date and time in the future.");
+        }
+      }
     } catch (cause) {
       if (revision.current === requestRevision)
         setError(
@@ -61,12 +65,11 @@ export function useCustomSnooze(
               : cause.message
             : "Could not interpret this date. Try Date and time.",
         );
-      return null;
-    } finally {
-      pendingRef.current = false;
-      // Unmount invalidates the result; React ignores a state update on an unmounted host.
-      setPending(false);
     }
+    pendingRef.current = false;
+    // Unmount invalidates the result; React ignores a state update on an unmounted host.
+    setPending(false);
+    return resolved;
   };
   return { resolve, error, pending, clearError };
 }

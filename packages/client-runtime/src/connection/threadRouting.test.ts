@@ -14,7 +14,6 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import * as Crypto from "effect/Crypto";
 import type { ThreadRoutingEvent, ThreadRoutingResponse } from "@t3tools/contracts";
 import type { ConnectionCatalogEntry } from "./catalog.ts";
 import type { PreparedConnection, NetworkStatus } from "./model.ts";
@@ -143,8 +142,9 @@ it.effect("uses the selected connection's existing session to create a thread", 
   }),
 );
 
-for (const options of [{ disabled: true }, { offline: true }, { outdated: true }]) {
-  it.effect(`rejects unavailable targets without dispatching: ${JSON.stringify(options)}`, () =>
+it.effect.each([{ disabled: true }, { offline: true }, { outdated: true }])(
+  "rejects unavailable targets without dispatching: %o",
+  (options) =>
     Effect.gen(function* () {
       const h = yield* harness(options);
       const error = yield* executeThreadRoutingRequest(request).pipe(
@@ -154,23 +154,12 @@ for (const options of [{ disabled: true }, { offline: true }, { outdated: true }
       expect(error._tag).toBe("ThreadRoutingError");
       expect(h.targetCalls).toEqual([]);
     }),
-  );
-}
+);
 
 it.effect("the shared lifecycle bridges a source request and replies on its source session", () =>
   Effect.gen(function* () {
     const h = yield* harness();
-    yield* watchThreadRouting().pipe(
-      Effect.provide(h.registry),
-      Effect.provideService(
-        Crypto.Crypto,
-        Crypto.make({
-          randomBytes: (size) => new Uint8Array(size),
-          digest: (_algorithm, data) => Effect.succeed(data),
-        }),
-      ),
-      Effect.forkChild,
-    );
+    yield* watchThreadRouting().pipe(Effect.provide(h.registry), Effect.forkChild);
     yield* Deferred.await(h.registered);
     yield* Queue.offer(h.received, request);
     const response = yield* Deferred.await(h.response);

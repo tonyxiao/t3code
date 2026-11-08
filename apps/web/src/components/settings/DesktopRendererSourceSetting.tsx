@@ -1,5 +1,5 @@
 import type { JavaScriptSource, SourceSnapshot } from "@tonyxiao/javascript-source";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -19,9 +19,9 @@ export function DesktopRendererSourceSetting() {
   const [draftUrl, setDraftUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     if (bridge?.getJavaScriptSourceState) setSnapshot(await bridge.getJavaScriptSourceState());
-  }, [bridge]);
+  };
   useEffect(() => {
     let active = true;
     void bridge
@@ -42,7 +42,7 @@ export function DesktopRendererSourceSetting() {
       active = false;
     };
   }, [bridge]);
-  if (!bridge?.getJavaScriptSourceState) return <LegacyRendererSourceSetting />;
+  if (!bridge?.getJavaScriptSourceState) return null;
 
   const run = async (operation: () => Promise<void>) => {
     setPending(true);
@@ -52,9 +52,8 @@ export function DesktopRendererSourceSetting() {
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setPending(false);
     }
+    setPending(false);
   };
   const select = async (source: JavaScriptSource) => {
     await bridge.selectJavaScriptSource!(source);
@@ -190,59 +189,5 @@ export function DesktopRendererSourceSetting() {
         </p>
       ) : null}
     </>
-  );
-}
-
-// A remote frontend may still be opened by a native build predating the headless adapter.
-function LegacyRendererSourceSetting() {
-  const bridge = window.desktopBridge;
-  const [draftUrl, setDraftUrl] = useState(
-    bridge?.getLocalRendererUrl?.() ?? bridge?.getLastLocalRendererUrl?.() ?? "",
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  if (!bridge?.setLocalRendererUrl) return null;
-  const apply = async (url: string | null) => {
-    setPending(true);
-    try {
-      await bridge.setLocalRendererUrl!(url);
-    } catch (cause) {
-      setError(String(cause));
-      setPending(false);
-    }
-  };
-  return (
-    <SettingsRow
-      id="javascript-source"
-      title="JavaScript source"
-      description="Install a newer native build to manage saved bundles. This build supports Built-in and a local development server."
-    >
-      <div className="flex flex-wrap gap-2 py-3">
-        <Input
-          aria-label="Server URL"
-          nativeInput
-          size="sm"
-          value={draftUrl}
-          onChange={(event) => setDraftUrl(event.target.value)}
-          disabled={pending}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending || !draftUrl.trim()}
-          onClick={() => void apply(draftUrl)}
-        >
-          Use development server
-        </Button>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => void apply(null)}>
-          Use built-in
-        </Button>
-      </div>
-      {error ? (
-        <p role="alert" className="py-2 text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-    </SettingsRow>
   );
 }

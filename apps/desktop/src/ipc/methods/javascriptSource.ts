@@ -14,8 +14,8 @@ export const getJavaScriptSourceState = makeIpcMethod({
   payload: Schema.Void,
   result: JavaScriptSourceSnapshotSchema,
   handler: Effect.fn("desktop.ipc.javascriptSource.state")(function* () {
-    const { client } = yield* Sources.DesktopJavaScriptSource;
-    return yield* Sources.attempt(() => client.snapshot());
+    const { sourceApi } = yield* Sources.DesktopJavaScriptSource;
+    return yield* Sources.attempt(() => sourceApi.snapshot());
   }),
 });
 export const selectJavaScriptSource = makeIpcMethod({
@@ -31,8 +31,8 @@ export const resetJavaScriptDevelopmentServer = makeIpcMethod({
   payload: Schema.Void,
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.javascriptSource.resetServer")(function* () {
-    const { client } = yield* Sources.DesktopJavaScriptSource;
-    yield* Sources.attempt(() => client.resetDevelopmentServer());
+    const { sourceApi } = yield* Sources.DesktopJavaScriptSource;
+    yield* Sources.attempt(() => sourceApi.resetDevelopmentServer());
   }),
 });
 export const importJavaScriptBundle = makeIpcMethod({

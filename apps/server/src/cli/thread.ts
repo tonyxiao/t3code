@@ -1,1069 +1,780 @@
-// @effect-diagnostics nodeBuiltinImport:off - `thread send` reads piped message text from stdin.
 import {
-  AuthAdministrativeScopes,
-  CommandId,
-  DEFAULT_PROVIDER_INTERACTION_MODE,
-  DEFAULT_RUNTIME_MODE,
-  EnvironmentHttpApi,
-  MessageId,
-  ProviderInstanceId,
+  OrchestratorMcpFailure,
+  OrchestratorMcpThreadListResult,
+  OrchestratorMcpThreadReadResult,
+  OrchestratorMcpThreadSendResult,
+  OrchestratorMcpThreadWaitResult,
+  ProjectId,
+  RunId,
   ThreadId,
-  type ClientOrchestrationCommand,
-  type OrchestrationMessage,
-  type OrchestrationShellSnapshot,
-  type OrchestrationThreadDetailSnapshot,
-  type OrchestrationThreadShell,
+  TrimmedNonEmptyString,
+  type OrchestratorMcpThreadListItem,
+  type OrchestratorMcpThreadStatus,
+  type OrchestratorMcpThreadTimelineItem,
 } from "@t3tools/contracts";
-import * as NodeFS from "node:fs";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Console from "effect/Console";
-import * as Crypto from "effect/Crypto";
-import * as Deferred from "effect/Deferred";
-import * as Fiber from "effect/Fiber";
-import * as DateTime from "effect/DateTime";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as References from "effect/References";
+import * as Runtime from "effect/Runtime";
 import * as Schema from "effect/Schema";
+import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
-import { Argument, Command, Flag, GlobalFlag } from "effect/unstable/cli";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
+import { Argument, Command, Flag, GlobalFlag } from "effect/cli";
+
+import { snoozeCommand, wakeCommand, interruptCommand } from "./threadActions.ts";
+export { wakeAt } from "./threadActions.ts";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
+import { mcpToolSession, type McpToolSession } from "../mcp/AcpMcpStdioBridge.ts";
+import { expandHomePath } from "../os-jank.ts";
 import { readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
-import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
-import {
-  ThreadFollowRenderer,
-  threadEventStream,
-  type ThreadFollowOutput,
-} from "./threadFollow.ts";
-import {
-  type CliAuthLocationFlags,
-  DurationFromString,
-  projectLocationFlags,
-  resolveCliAuthConfig,
-} from "./config.ts";
+import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
-type ThreadCliDispatchCommand = Extract<
-  ClientOrchestrationCommand,
-  {
-    type:
-      | "thread.snooze"
-      | "thread.unsnooze"
-      | "thread.create"
-      | "thread.turn.start"
-      | "thread.turn.interrupt";
-  }
->;
+/**
+ * Short enough that a run which stops to ask the user something is noticed
+ * soon, since `t3_thread_wait` only returns on a terminal run.
+ */
+const WAIT_SLICE_MS = 15_000;
+const READ_PAGE_LIMIT = 100;
+const TITLE_MAX_CHARS = 80;
 
-export class ThreadCliUsageError extends Schema.TaggedError<ThreadCliUsageError>()(
-  "ThreadCliUsageError",
-  { message: Schema.String },
-) {}
-
-export class ThreadCliServerUnavailableError extends Schema.TaggedError<ThreadCliServerUnavailableError>()(
-  "ThreadCliServerUnavailableError",
-  { cause: Schema.optional(Schema.Defect()) },
+export class ThreadServerNotRunningError extends Schema.TaggedError<ThreadServerNotRunningError>()(
+  "ThreadServerNotRunningError",
+  { baseDir: Schema.String },
 ) {
+  override readonly [Runtime.errorReported] = false;
   override get message(): string {
-    return "No running TX Code server is available.";
+    return `No running T3 Code server uses ${this.baseDir}. Start T3 Code, then retry.`;
   }
 }
 
-export class ThreadCliRequestError extends Schema.TaggedError<ThreadCliRequestError>()(
-  "ThreadCliRequestError",
-  { cause: Schema.Defect() },
+export class ThreadServerUnreachableError extends Schema.TaggedError<ThreadServerUnreachableError>()(
+  "ThreadServerUnreachableError",
+  { origin: Schema.String, cause: Schema.Defect() },
 ) {
+  override readonly [Runtime.errorReported] = false;
   override get message(): string {
-    return "The TX Code server rejected the thread command.";
+    const reason = this.cause instanceof Error ? ` ${this.cause.message}` : "";
+    return `Could not reach the T3 Code server at ${this.origin}.${reason}`;
   }
 }
 
-const threadArgument = Argument.String("thread").pipe(
-  Argument.withDescription("Thread id. Defaults to T3_THREAD_ID inside a T3 agent session."),
-  Argument.optional,
-);
+export class ThreadToolFailedError extends Schema.TaggedError<ThreadToolFailedError>()(
+  "ThreadToolFailedError",
+  { tool: Schema.String, detail: Schema.String },
+) {
+  override readonly [Runtime.errorReported] = false;
+  override get message(): string {
+    return this.detail;
+  }
+}
 
-const forFlag = Flag.String("for").pipe(
-  Flag.withSchema(DurationFromString),
-  Flag.withDescription("Snooze duration, for example 1h, 10d, or 2 weeks."),
-  Flag.optional,
-);
+export class ThreadUsageError extends Schema.TaggedError<ThreadUsageError>()("ThreadUsageError", {
+  detail: Schema.String,
+}) {
+  override readonly [Runtime.errorReported] = false;
+  override get message(): string {
+    return this.detail;
+  }
+}
 
-const untilFlag = Flag.String("until").pipe(
-  Flag.withDescription("Absolute ISO-8601 wake time."),
-  Flag.optional,
-);
+export class ThreadProjectNotFoundError extends Schema.TaggedError<ThreadProjectNotFoundError>()(
+  "ThreadProjectNotFoundError",
+  { identifier: Schema.String },
+) {
+  override readonly [Runtime.errorReported] = false;
+  override get message(): string {
+    return `No T3 Code project matches '${this.identifier}'. Pass a project id or a path inside a project.`;
+  }
+}
 
-const jsonFlag = Flag.Boolean("json").pipe(
-  Flag.withDescription(
-    "Emit JSON instead of human-readable output. With --follow, emits one JSON object per line.",
+/** Exit code 2 lets a script tell "needs a human" apart from a failed run. */
+export class ThreadNeedsInputError extends Schema.TaggedError<ThreadNeedsInputError>()(
+  "ThreadNeedsInputError",
+  { threadId: ThreadId },
+) {
+  override readonly [Runtime.errorReported] = false;
+  override readonly [Runtime.errorExitCode] = 2;
+
+  override get message(): string {
+    return `Thread ${this.threadId} is waiting for an answer. Open it in T3 Code to respond.`;
+  }
+}
+
+export class ThreadRunEndedError extends Schema.TaggedError<ThreadRunEndedError>()(
+  "ThreadRunEndedError",
+  { threadId: ThreadId, status: Schema.String, error: Schema.optional(Schema.String) },
+) {
+  override readonly [Runtime.errorReported] = false;
+  override get message(): string {
+    const reason = this.error === undefined ? "." : `: ${this.error}`;
+    return `Thread ${this.threadId} stopped with status ${this.status}${reason}`;
+  }
+}
+
+const ThreadCliError = Schema.Union([
+  ThreadServerNotRunningError,
+  ThreadServerUnreachableError,
+  ThreadToolFailedError,
+  ThreadUsageError,
+  ThreadProjectNotFoundError,
+  ThreadNeedsInputError,
+  ThreadRunEndedError,
+]);
+const isThreadCliError = Schema.is(ThreadCliError);
+
+/**
+ * These errors are expected outcomes for a script, so they print as one line
+ * on stderr instead of the runtime's logged stack trace.
+ */
+const reportThreadErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.tapError((error) =>
+      isThreadCliError(error) ? Console.error(error.message) : Effect.void,
+    ),
+  );
+
+const decodeFailureText = Schema.decodeUnknownOption(Schema.fromJsonString(OrchestratorMcpFailure));
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const printJson = (value: unknown) => Console.log(encodeJson(value));
+
+const ToolResult = Schema.Struct({
+  isError: Schema.optional(Schema.Boolean),
+  structuredContent: Schema.optional(Schema.Unknown),
+  content: Schema.optional(
+    Schema.Array(Schema.Struct({ type: Schema.String, text: Schema.optional(Schema.String) })),
   ),
-  Flag.withDefault(false),
-);
+});
 
-const followFlag = Flag.Boolean("follow").pipe(
-  Flag.withAlias("f"),
-  Flag.withDescription(
-    "Stream assistant text live as it is written; activity lines go to stderr. Implies --wait for send/new.",
+const decodeToolResult = Schema.decodeUnknownEffect(ToolResult);
+
+const ProjectListResult = Schema.Struct({
+  projects: Schema.Array(
+    Schema.Struct({ id: ProjectId, title: Schema.String, workspaceRoot: Schema.String }),
   ),
-  Flag.withDefault(false),
-);
+  nextCursor: Schema.NullOr(Schema.Int),
+});
 
-const makeClient = (origin: string) => HttpApiClient.make(EnvironmentHttpApi, { baseUrl: origin });
+const ThreadLaunchResult = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  runId: Schema.NullOr(RunId),
+});
 
-const requestTimeout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.timeout(Duration.seconds(2)));
-
-// Thread detail snapshots carry message bodies, so they get more headroom than
-// the shell snapshot and dispatch calls.
-const detailRequestTimeout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.timeout(Duration.seconds(15)));
-
-const commandUuid = Crypto.Crypto.pipe(
-  Effect.flatMap((crypto) => crypto.randomUUIDv4),
-  Effect.mapError((cause) => new ThreadCliRequestError({ cause })),
-);
-
-const withThreadCliSession = <A, E, R>(
-  environmentAuth: EnvironmentAuth.EnvironmentAuth["Service"],
-  run: (token: string) => Effect.Effect<A, E, R>,
-) =>
-  Effect.acquireUseRelease(
-    environmentAuth.issueSession({
-      scopes: AuthAdministrativeScopes,
-      label: "t3 thread cli",
-    }),
-    (issued) => run(issued.token),
-    (issued) => environmentAuth.revokeSession(issued.sessionId).pipe(Effect.ignore({ log: true })),
-  );
-
-const fetchShellSnapshot = (origin: string, token: string) =>
-  Effect.gen(function* () {
-    const client = yield* makeClient(origin);
-    return yield* client.orchestration.shellSnapshot({
-      headers: { authorization: `Bearer ${token}` },
-    });
-  }).pipe(
-    requestTimeout,
-    Effect.mapError((cause) => new ThreadCliRequestError({ cause })),
-  );
-
-const fetchThreadDetail = (origin: string, token: string, threadId: string, turnLimit: number) =>
-  Effect.gen(function* () {
-    const client = yield* makeClient(origin);
-    return yield* client.orchestration.threadSnapshot({
-      headers: { authorization: `Bearer ${token}` },
-      params: { threadId: ThreadId.make(threadId) },
-      payload: { turnLimit },
-    } as Parameters<typeof client.orchestration.threadSnapshot>[0]);
-  }).pipe(
-    detailRequestTimeout,
-    Effect.mapError((cause) => new ThreadCliRequestError({ cause })),
-  );
-
-const dispatchThreadCommand = (origin: string, token: string, command: ThreadCliDispatchCommand) =>
-  Effect.gen(function* () {
-    const client = yield* makeClient(origin);
-    yield* client.orchestration.dispatch({
-      headers: { authorization: `Bearer ${token}` },
-      payload: command,
-    } as Parameters<typeof client.orchestration.dispatch>[0]);
-  }).pipe(
-    requestTimeout,
-    Effect.mapError((cause) => new ThreadCliRequestError({ cause })),
-  );
-
-export function resolveThreadCliTarget(
-  snapshot: OrchestrationShellSnapshot,
-  explicitThreadId: string | undefined,
-  environment: NodeJS.ProcessEnv,
-): OrchestrationThreadShell {
-  const threadId = explicitThreadId?.trim() || environment.T3_THREAD_ID?.trim();
-  if (!threadId) {
-    throw new ThreadCliUsageError({
-      message: "Pass a thread id or run inside a T3 agent session with T3_THREAD_ID set.",
-    });
-  }
-  const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
-  if (!thread) {
-    throw new ThreadCliUsageError({ message: `Thread '${threadId}' was not found.` });
-  }
-  return thread;
-}
-
-export function resolveThreadCliWakeTime(input: {
-  readonly duration: Duration.Duration | undefined;
-  readonly until: string | undefined;
-  readonly now: DateTime.Utc;
-}): string {
-  if ((input.duration === undefined) === (input.until === undefined)) {
-    throw new ThreadCliUsageError({ message: "Pass exactly one of --for or --until." });
-  }
-  const wake =
-    input.duration !== undefined
-      ? DateTime.add(input.now, { milliseconds: Duration.toMillis(input.duration) })
-      : Option.getOrThrowWith(
-          DateTime.make(input.until!),
-          () =>
-            new ThreadCliUsageError({ message: `Invalid ISO-8601 wake time '${input.until}'.` }),
-        );
-  if (DateTime.toEpochMillis(wake) <= DateTime.toEpochMillis(input.now)) {
-    throw new ThreadCliUsageError({ message: "The wake time must be in the future." });
-  }
-  return DateTime.formatIso(wake);
-}
-
-/** Pretty-printed JSON for `--json` output; these are plain CLI views, not wire payloads. */
-export function formatThreadCliJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
-/** Single-line JSON for NDJSON streaming output. */
-export function formatThreadCliJsonLine(value: unknown): string {
-  return JSON.stringify(value);
-}
-
-export type ThreadCliStatus = "running" | "approval" | "input" | "error" | "snoozed" | "idle";
-
-export function threadCliStatus(thread: OrchestrationThreadShell): ThreadCliStatus {
-  if (thread.hasPendingApprovals) return "approval";
-  if (thread.hasPendingUserInput) return "input";
-  if (isThreadCliTurnActive(thread)) return "running";
-  if (thread.latestTurn?.state === "error" || thread.session?.status === "error") return "error";
-  if (thread.snoozedUntil != null) return "snoozed";
-  return "idle";
-}
-
-export function isThreadCliTurnActive(thread: OrchestrationThreadShell): boolean {
-  return (
-    thread.latestTurn?.state === "running" ||
-    thread.session?.activeTurnId != null ||
-    thread.session?.status === "starting" ||
-    thread.session?.status === "running"
-  );
-}
-
-export interface ThreadCliSummary {
-  readonly id: string;
-  readonly projectId: string;
-  readonly title: string;
-  readonly status: ThreadCliStatus;
-  readonly provider: string;
-  readonly model: string;
-  readonly updatedAt: string;
-  readonly archived: boolean;
-}
-
-export function summarizeThread(thread: OrchestrationThreadShell): ThreadCliSummary {
-  return {
-    id: thread.id,
-    projectId: thread.projectId,
-    title: thread.title,
-    status: threadCliStatus(thread),
-    provider: thread.modelSelection.instanceId,
-    model: thread.modelSelection.model,
-    updatedAt: thread.updatedAt,
-    archived: thread.archivedAt != null,
-  };
-}
-
-export function listThreadCliThreads(
-  snapshot: OrchestrationShellSnapshot,
-  options: { readonly includeArchived: boolean },
-): ReadonlyArray<ThreadCliSummary> {
-  return snapshot.threads
-    .filter((thread) => options.includeArchived || thread.archivedAt == null)
-    .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .map(summarizeThread);
-}
-
-export function resolveThreadCliMessageText(
-  argument: string | undefined,
-  readStdin: () => string | undefined,
-): string {
-  const raw = argument === undefined || argument === "-" ? readStdin() : argument;
-  const text = raw?.trim();
-  if (text === undefined || text.length === 0) {
-    throw new ThreadCliUsageError({
-      message: "Provide a message argument or pipe the message on stdin.",
-    });
-  }
-  return text;
-}
-
-export function conversationMessages(
-  messages: ReadonlyArray<OrchestrationMessage>,
-): ReadonlyArray<OrchestrationMessage> {
-  return messages.filter((message) => message.role === "user" || message.role === "assistant");
-}
-
-export function toCliMessage(message: OrchestrationMessage) {
-  return {
-    id: message.id,
-    role: message.role,
-    turnId: message.turnId,
-    createdAt: message.createdAt,
-    streaming: message.streaming,
-    text: message.text,
-  };
-}
-
-/** Joins every assistant message in a turn, since agents often reply in several parts. */
-export function selectTurnReply(
-  messages: ReadonlyArray<OrchestrationMessage>,
-  turnId: string,
-): string {
-  return messages
-    .filter((message) => message.role === "assistant" && message.turnId === turnId)
-    .map((message) => message.text.trim())
-    .filter((text) => text.length > 0)
-    .join("\n\n");
-}
-
-type ThreadCliProject = OrchestrationShellSnapshot["projects"][number];
-
-/**
- * Matches a project by id, exact title, or workspace root. With no selector,
- * picks the project whose workspace root contains `cwd`, preferring the
- * deepest root so nested projects win over their parents.
- */
-export function resolveThreadCliProject(
-  snapshot: OrchestrationShellSnapshot,
-  selector: string | undefined,
-  cwd: string,
-): ThreadCliProject {
-  const projects = snapshot.projects;
-  if (selector !== undefined) {
-    const root = selector.replace(/\/+$/, "");
-    const match = projects.find(
-      (project) =>
-        project.id === selector || project.title === selector || project.workspaceRoot === root,
-    );
-    if (match === undefined) {
-      throw new ThreadCliUsageError({ message: `Unknown project '${selector}'.` });
-    }
-    return match;
-  }
-  const containing = projects
-    .filter(
-      (project) => cwd === project.workspaceRoot || cwd.startsWith(`${project.workspaceRoot}/`),
-    )
-    .toSorted((a, b) => b.workspaceRoot.length - a.workspaceRoot.length);
-  const [match] = containing;
-  if (match === undefined) {
-    throw new ThreadCliUsageError({
-      message: "No T3 project contains the current directory. Pass --project.",
-    });
-  }
-  return match;
-}
-
-/**
- * Uses the project's default model, falling back to its most recent thread's
- * model. Explicit --provider/--model flags override either; switching provider
- * requires a model because model ids are provider-specific.
- */
-export function resolveThreadCliModelSelection(
-  snapshot: OrchestrationShellSnapshot,
-  project: ThreadCliProject,
-  overrides: { readonly provider: string | undefined; readonly model: string | undefined } = {
-    provider: undefined,
-    model: undefined,
-  },
-): OrchestrationThreadShell["modelSelection"] {
-  const [recent] = snapshot.threads
-    .filter((thread) => thread.projectId === project.id)
-    .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const base = project.defaultModelSelection ?? recent?.modelSelection;
-  const provider = overrides.provider?.trim();
-  const model = overrides.model?.trim();
-  if (provider && provider !== base?.instanceId) {
-    if (!model) {
-      throw new ThreadCliUsageError({ message: "--provider requires --model." });
-    }
-    return { instanceId: ProviderInstanceId.make(provider), model };
-  }
-  if (base === undefined) {
-    if (provider && model) return { instanceId: ProviderInstanceId.make(provider), model };
-    throw new ThreadCliUsageError({
-      message: `Project '${project.title}' has no default model. Pass --provider and --model.`,
-    });
-  }
-  // Model options (reasoning effort etc.) belong to the base model; drop them when it changes.
-  return model && model !== base.model ? { instanceId: base.instanceId, model } : base;
-}
-
-export function deriveThreadCliTitle(text: string): string {
-  const firstLine = text.split("\n", 1)[0]!.trim();
-  return firstLine.length <= 60 ? firstLine : `${firstLine.slice(0, 57).trimEnd()}...`;
-}
-
-export interface SettledTurn {
-  readonly turnId: string;
-  readonly state: "completed" | "interrupted" | "error";
-}
-
-/**
- * Returns the thread's new turn once it has settled. A turn counts as new only
- * when its id differs from the one seen before dispatch, so a stale completed
- * turn can never be mistaken for the reply.
- */
-export function findSettledTurn(
-  snapshot: OrchestrationShellSnapshot,
-  threadId: string,
-  previousTurnId: string | null,
-): SettledTurn | undefined {
-  const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
-  const turn = thread?.latestTurn;
-  if (thread === undefined || turn == null || turn.turnId === previousTurnId) return undefined;
-  if (turn.state === "running" || isThreadCliTurnActive(thread)) return undefined;
-  return { turnId: turn.turnId, state: turn.state };
-}
-
-const waitForSettledTurn = (input: {
-  readonly threadId: string;
-  readonly previousTurnId: string | null;
-  readonly refresh: Effect.Effect<OrchestrationShellSnapshot, Error, HttpClient.HttpClient>;
-}): Effect.Effect<SettledTurn, Error, HttpClient.HttpClient> =>
-  Effect.gen(function* () {
-    while (true) {
-      yield* Effect.sleep(Duration.seconds(2));
-      const settled = findSettledTurn(yield* input.refresh, input.threadId, input.previousTurnId);
-      if (settled !== undefined) return settled;
-    }
+const toolFailureDetail = (result: typeof ToolResult.Type) => {
+  const text = result.content?.find((part) => part.text !== undefined)?.text ?? "";
+  return Option.match(decodeFailureText(text), {
+    onNone: () => text || "The tool call failed.",
+    onSome: (failure) => failure.message,
   });
+};
 
-const runThreadCli = Effect.fn("runThreadCli")(function* <A>(
-  flags: CliAuthLocationFlags,
-  run: (input: {
-    readonly snapshot: OrchestrationShellSnapshot;
-    readonly dispatch: (
-      command: ThreadCliDispatchCommand,
-    ) => Effect.Effect<void, Error, HttpClient.HttpClient>;
-    readonly fetchDetail: (
-      threadId: string,
-      turnLimit: number,
-    ) => Effect.Effect<OrchestrationThreadDetailSnapshot, Error, HttpClient.HttpClient>;
-    readonly refreshSnapshot: Effect.Effect<
-      OrchestrationShellSnapshot,
-      Error,
-      HttpClient.HttpClient
-    >;
-    readonly follow: (threadId: string) => ReturnType<typeof threadEventStream>;
-  }) => Effect.Effect<A, Error, Crypto.Crypto | HttpClient.HttpClient>,
+const makeThreadTools = (session: McpToolSession, origin: string) => {
+  const unexpected = (tool: string) =>
+    new ThreadToolFailedError({
+      tool,
+      detail: `The server sent an unexpected ${tool} result. Update the t3 CLI to match the server.`,
+    });
+  return {
+    call: Effect.fn("cli.thread.callTool")(function* <S extends Schema.Decoder<unknown>>(
+      tool: string,
+      args: Readonly<Record<string, unknown>>,
+      schema: S,
+    ): Effect.fn.Return<S["Type"], ThreadServerUnreachableError | ThreadToolFailedError> {
+      const raw = yield* session
+        .call(tool, args)
+        .pipe(Effect.mapError((cause) => new ThreadServerUnreachableError({ origin, cause })));
+      const result = yield* decodeToolResult(raw).pipe(Effect.mapError(() => unexpected(tool)));
+      if (result.isError === true) {
+        return yield* new ThreadToolFailedError({ tool, detail: toolFailureDetail(result) });
+      }
+      return yield* Schema.decodeUnknownEffect(schema)(result.structuredContent).pipe(
+        Effect.mapError(() => unexpected(tool)),
+      );
+    }),
+  };
+};
+export type ThreadTools = ReturnType<typeof makeThreadTools>;
+
+/**
+ * Signs in as a short-lived MCP client of the running server, the same way an
+ * outside agent does, and revokes that session when the command ends.
+ */
+const withThreadTools = Effect.fn("cli.thread.withThreadTools")(function* <A, E, R>(
+  flags: { readonly baseDir: Option.Option<string> },
+  run: (tools: ThreadTools) => Effect.Effect<A, E, R>,
 ) {
   const logLevel = yield* GlobalFlag.LogLevel;
   const config = yield* resolveCliAuthConfig(flags, logLevel);
-  const minimumLogLevel = config.logLevel;
-  const runtimeLayer = Layer.mergeAll(EnvironmentAuth.runtimeLayer, WorkspacePaths.layer).pipe(
-    Layer.provideMerge(FetchHttpClient.layer),
-    Layer.provide(ServerConfig.layer(config)),
-    Layer.provide(Layer.succeed(References.MinimumLogLevel, minimumLogLevel)),
-  );
-
   return yield* Effect.gen(function* () {
     const runtimeState = yield* readPersistedServerRuntimeState(config.serverRuntimeStatePath);
     if (Option.isNone(runtimeState)) {
-      return yield* new ThreadCliServerUnavailableError({});
+      return yield* new ThreadServerNotRunningError({ baseDir: config.baseDir });
     }
     const origin = runtimeState.value.origin;
     const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
-    return yield* withThreadCliSession(environmentAuth, (token) =>
-      Effect.gen(function* () {
-        // Only the first request proves the server is reachable. Later
-        // failures are real rejections and keep their own error.
-        const snapshot = yield* fetchShellSnapshot(origin, token).pipe(
-          Effect.catchTag(
-            "ThreadCliRequestError",
-            (cause) => new ThreadCliServerUnavailableError({ cause }),
-          ),
-        );
-        return yield* run({
-          snapshot,
-          dispatch: (command) => dispatchThreadCommand(origin, token, command),
-          fetchDetail: (threadId, turnLimit) =>
-            fetchThreadDetail(origin, token, threadId, turnLimit),
-          refreshSnapshot: fetchShellSnapshot(origin, token),
-          follow: (threadId) => threadEventStream({ origin, token, threadId }),
-        });
+    const issued = yield* Effect.acquireRelease(
+      environmentAuth.issueMcpClientSession({
+        label: "t3 thread cli",
+        // The CLI runs as the machine's owner. New threads still start at
+        // the project's default mode, never at this ceiling by default.
+        access: "full-access",
+        peerLink: false,
+        client: { deviceType: "bot" },
       }),
+      (session) =>
+        environmentAuth.revokeSession(session.sessionId).pipe(Effect.ignore({ log: true })),
     );
-  }).pipe(Effect.provide(runtimeLayer));
+    const session = yield* mcpToolSession({
+      endpoint: new URL("/mcp", origin).href,
+      authorization: `Bearer ${issued.token}`,
+      clientName: "t3-thread-cli",
+    }).pipe(Effect.mapError((cause) => new ThreadServerUnreachableError({ origin, cause })));
+    return yield* run(makeThreadTools(session, origin));
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      EnvironmentAuth.layerRuntime.pipe(
+        Layer.provide(ServerConfig.layer(config)),
+        Layer.provide(Layer.succeed(References.MinimumLogLevel, config.logLevel)),
+      ),
+    ),
+  );
 });
 
-const threadSnoozeCommand = Command.make("snooze", {
-  ...projectLocationFlags,
-  thread: threadArgument,
-  duration: forFlag,
-  until: untilFlag,
-}).pipe(
-  Command.withDescription(
-    "Snooze a thread. A running turn is allowed to finish without waking the thread again.",
-  ),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadSnoozeCli")(function* ({ snapshot, dispatch }) {
-        const thread = resolveThreadCliTarget(
-          snapshot,
-          Option.getOrUndefined(flags.thread),
-          process.env,
-        );
-        const snoozedUntil = resolveThreadCliWakeTime({
-          duration: Option.getOrUndefined(flags.duration),
-          until: Option.getOrUndefined(flags.until),
-          now: yield* DateTime.now,
-        });
-        const activeTurnId =
-          thread.session?.status === "running" || thread.session?.status === "starting"
-            ? (thread.session.activeTurnId ?? undefined)
-            : undefined;
-        yield* dispatch({
-          type: "thread.snooze",
-          commandId: CommandId.make(yield* commandUuid),
-          threadId: thread.id,
-          snoozedUntil,
-          ...(activeTurnId === undefined ? {} : { snoozedThroughTurnId: activeTurnId }),
-        });
-        yield* Console.log(
-          `Snoozed ${thread.id} (${thread.title}) until ${snoozedUntil}${
-            activeTurnId === undefined ? "." : ` through turn ${activeTurnId}.`
-          }`,
-        );
-      }),
-    ),
-  ),
-);
+const readMessageArgument = Effect.fn("cli.thread.readMessage")(function* (argument: string) {
+  const text =
+    argument === "-"
+      ? yield* Stdio.Stdio.pipe(
+          Effect.flatMap((stdio) => stdio.stdin.pipe(Stream.decodeText(), Stream.mkString)),
+        )
+      : argument;
+  if (text.trim().length === 0) {
+    return yield* new ThreadUsageError({ detail: "The message is empty." });
+  }
+  return text;
+});
 
-const threadInterruptCommand = Command.make("interrupt", {
-  ...projectLocationFlags,
-  thread: threadArgument,
-  wait: Flag.Boolean("wait").pipe(
-    Flag.withDescription("Wait until the turn has actually stopped."),
-    Flag.withDefault(false),
-  ),
-}).pipe(
-  Command.withDescription("Stop a thread's running turn."),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadInterruptCli")(function* ({ snapshot, dispatch, refreshSnapshot }) {
-        const thread = resolveThreadCliTarget(
-          snapshot,
-          Option.getOrUndefined(flags.thread),
-          process.env,
-        );
-        if (!isThreadCliTurnActive(thread)) {
-          yield* Console.log(`${thread.id} (${thread.title}) has no running turn.`);
-          return;
-        }
-        const turnId = thread.session?.activeTurnId ?? thread.latestTurn?.turnId;
-        yield* dispatch({
-          type: "thread.turn.interrupt",
-          commandId: CommandId.make(yield* commandUuid),
-          threadId: thread.id,
-          ...(turnId ? { turnId } : {}),
-          createdAt: DateTime.formatIso(yield* DateTime.now),
-        });
-        if (flags.wait) {
-          yield* Effect.gen(function* () {
-            while (true) {
-              yield* Effect.sleep(Duration.seconds(1));
-              const current = (yield* refreshSnapshot).threads.find((t) => t.id === thread.id);
-              if (current === undefined || !isThreadCliTurnActive(current)) return;
-            }
-          }).pipe(
-            Effect.timeoutOrElse({
-              duration: Duration.minutes(2),
-              orElse: () =>
-                Effect.fail(
-                  new ThreadCliUsageError({ message: `${thread.id} did not stop within 2m.` }),
-                ),
-            }),
-          );
-        }
-        yield* Console.log(`Interrupted ${thread.id} (${thread.title}).`);
-      }),
-    ),
-  ),
-);
+const listAllProjects = Effect.fn("cli.thread.listAllProjects")(function* (tools: ThreadTools) {
+  const projects: Array<(typeof ProjectListResult.Type)["projects"][number]> = [];
+  let cursor: number | null = 0;
+  while (cursor !== null) {
+    const page: typeof ProjectListResult.Type = yield* tools.call(
+      "t3_project_list",
+      { cursor, limit: 100 },
+      ProjectListResult,
+    );
+    projects.push(...page.projects);
+    cursor = page.nextCursor;
+  }
+  return projects;
+});
 
-const threadWakeCommand = Command.make("wake", {
-  ...projectLocationFlags,
-  thread: threadArgument,
-}).pipe(
-  Command.withDescription("Wake a snoozed thread."),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadWakeCli")(function* ({ snapshot, dispatch }) {
-        const thread = resolveThreadCliTarget(
-          snapshot,
-          Option.getOrUndefined(flags.thread),
-          process.env,
-        );
-        yield* dispatch({
-          type: "thread.unsnooze",
-          commandId: CommandId.make(yield* commandUuid),
-          threadId: ThreadId.make(thread.id),
-          reason: "user",
-        });
-        yield* Console.log(`Woke ${thread.id} (${thread.title}).`);
-      }),
-    ),
-  ),
-);
+/** A project id, or a path inside a project's folder (deepest project wins). */
+const resolveProject = Effect.fn("cli.thread.resolveProject")(function* (
+  tools: ThreadTools,
+  identifier: string,
+) {
+  const projects = yield* listAllProjects(tools);
+  const byId = projects.find((project) => project.id === identifier);
+  if (byId !== undefined) return byId;
 
-const threadStatusCommand = Command.make("status", {
-  ...projectLocationFlags,
-  thread: threadArgument,
-}).pipe(
-  Command.withDescription("Show a thread's snooze status."),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadStatusCli")(function* ({ snapshot }) {
-        const thread = resolveThreadCliTarget(
-          snapshot,
-          Option.getOrUndefined(flags.thread),
-          process.env,
-        );
-        const state =
-          thread.snoozedUntil == null
-            ? "awake"
-            : `snoozed until ${thread.snoozedUntil}${
-                thread.snoozedThroughTurnId == null
-                  ? ""
-                  : ` through turn ${thread.snoozedThroughTurnId}`
-              }`;
-        yield* Console.log(`${thread.id} (${thread.title}): ${state}.`);
+  const path = yield* Path.Path;
+  const fileSystem = yield* FileSystem.FileSystem;
+  // Stored roots keep the path the project was added with, which may pass
+  // through a symlink (macOS /tmp), so both sides compare as real paths.
+  const realPath = (value: string) =>
+    fileSystem.realPath(value).pipe(Effect.orElseSucceed(() => value));
+  const target = yield* realPath(
+    path.resolve(yield* HostProcess.WorkingDirectory, yield* expandHomePath(identifier)),
+  );
+  const roots = yield* Effect.forEach(projects, (project) =>
+    Effect.map(realPath(project.workspaceRoot), (root) => ({ project, root })),
+  );
+  const containing = roots
+    .filter(({ root }) => {
+      const relative = path.relative(root, target);
+      return (
+        relative === "" ||
+        (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+      );
+    })
+    .toSorted((left, right) => right.root.length - left.root.length)[0];
+  if (containing === undefined) {
+    return yield* new ThreadProjectNotFoundError({ identifier });
+  }
+  return containing.project;
+});
+
+/** Every item on a timeline view, oldest first. */
+const readTimeline = Effect.fn("cli.thread.readTimeline")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  view: "messages" | "activity",
+) {
+  const items: Array<OrchestratorMcpThreadTimelineItem> = [];
+  let afterPosition: number | undefined;
+  let page: OrchestratorMcpThreadReadResult;
+  do {
+    page = yield* tools.call(
+      "t3_thread_read",
+      {
+        threadId,
+        view,
+        limit: READ_PAGE_LIMIT,
+        runLimit: 1,
+        ...(afterPosition === undefined ? {} : { afterPosition }),
+      },
+      OrchestratorMcpThreadReadResult,
+    );
+    items.push(...page.items);
+    afterPosition = page.nextPosition ?? undefined;
+  } while (page.hasMore && afterPosition !== undefined);
+  return { thread: page.thread, items };
+});
+
+/**
+ * The latest `count` user and assistant messages, oldest first. Positions
+ * count every timeline item, so the read starts near the end and widens
+ * backward only while tool and plan items leave too few messages.
+ */
+export const readLatestMessages = Effect.fn("cli.thread.readLatestMessages")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  count: number,
+) {
+  let { thread } = yield* tools.call(
+    "t3_thread_read",
+    { threadId, limit: 1, runLimit: 1 },
+    OrchestratorMcpThreadReadResult,
+  );
+  let messages: Array<OrchestratorMcpThreadTimelineItem> = [];
+  // The newest window has no upper bound, so items added since the first
+  // read are still shown.
+  let before: number | undefined;
+  let start = thread.itemCount;
+  let span = Math.max(count, READ_PAGE_LIMIT);
+  do {
+    const end = before;
+    start = Math.max(0, start - span);
+    const window: Array<OrchestratorMcpThreadTimelineItem> = [];
+    let afterPosition = start - 1;
+    let page: OrchestratorMcpThreadReadResult;
+    do {
+      page = yield* tools.call(
+        "t3_thread_read",
+        {
+          threadId,
+          view: "messages",
+          limit: READ_PAGE_LIMIT,
+          runLimit: 1,
+          ...(afterPosition < 0 ? {} : { afterPosition }),
+        },
+        OrchestratorMcpThreadReadResult,
+      );
+      window.push(
+        ...page.items.filter(
+          (item) =>
+            (item.type === "user_message" || item.type === "assistant_message") &&
+            (end === undefined || item.position < end),
+        ),
+      );
+      afterPosition = page.nextPosition ?? Number.POSITIVE_INFINITY;
+    } while (page.hasMore && afterPosition < (end ?? Number.POSITIVE_INFINITY) - 1);
+    thread = page.thread;
+    // A window can hold the whole --messages count, too many to spread as arguments.
+    messages = window.concat(messages);
+    before = start;
+    span *= 2;
+  } while (messages.length < count && start > 0);
+  return { thread, messages: messages.slice(Math.max(0, messages.length - count)) };
+});
+
+/** Item text past the read's per-item cap. */
+const readFullText = Effect.fn("cli.thread.readFullText")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  item: OrchestratorMcpThreadTimelineItem,
+) {
+  let text = item.text ?? "";
+  let nextTextOffset = item.textTruncated ? (item.nextTextOffset ?? null) : null;
+  while (nextTextOffset !== null) {
+    const page = yield* tools.call(
+      "t3_thread_read",
+      { threadId, itemId: item.itemId, textOffset: nextTextOffset, runLimit: 1 },
+      OrchestratorMcpThreadReadResult,
+    );
+    const chunk = page.items.find((candidate) => candidate.itemId === item.itemId);
+    if (chunk === undefined) break;
+    text += chunk.text ?? "";
+    nextTextOffset = chunk.textTruncated ? (chunk.nextTextOffset ?? null) : null;
+  }
+  return text;
+});
+
+/** The run's last assistant message, or its last error when it did not complete. */
+const runResultText = Effect.fn("cli.thread.runResultText")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  runId: RunId,
+  type: "assistant_message" | "error",
+) {
+  const { items } = yield* readTimeline(
+    tools,
+    threadId,
+    type === "assistant_message" ? "messages" : "activity",
+  );
+  const item = items.findLast((candidate) => candidate.runId === runId && candidate.type === type);
+  return item === undefined ? null : yield* readFullText(tools, threadId, item);
+});
+
+type WaitOutcome =
+  | {
+      readonly type: "ended";
+      readonly runId: RunId | null;
+      readonly status: OrchestratorMcpThreadStatus;
+    }
+  | { readonly type: "needs_input" };
+
+/**
+ * Waits for this exact run, following a restart to its continuation, so a
+ * message another client sends meanwhile cannot stand in for its result.
+ */
+export const waitForRun = Effect.fn("cli.thread.waitForRun")(function* (
+  tools: ThreadTools,
+  threadId: ThreadId,
+  runId: RunId,
+) {
+  const waitSlice = (timeoutMs: number) =>
+    tools.call("t3_thread_wait", { threadId, runId, timeoutMs }, OrchestratorMcpThreadWaitResult);
+  const ended = (waited: OrchestratorMcpThreadWaitResult) =>
+    ({ type: "ended", runId: waited.runId, status: waited.status }) satisfies WaitOutcome;
+  while (true) {
+    const waited = yield* waitSlice(WAIT_SLICE_MS);
+    if (!waited.timedOut) return ended(waited);
+    // A pending request on this run, or on an earlier run this one is queued
+    // behind, blocks it until someone answers.
+    const { thread } = yield* tools.call(
+      "t3_thread_read",
+      { threadId, limit: 1, runLimit: 1 },
+      OrchestratorMcpThreadReadResult,
+    );
+    if (thread.pendingRequestCount > 0) {
+      // The count is thread-wide: if this run ended since the slice, the
+      // request belongs to a later run.
+      const recheck = yield* waitSlice(1);
+      return recheck.timedOut ? ({ type: "needs_input" } satisfies WaitOutcome) : ended(recheck);
+    }
+  }
+});
+
+/**
+ * With --json the result always reaches stdout, so a script keeps the thread
+ * id even when the run fails.
+ */
+const finishRun = Effect.fn("cli.thread.finishRun")(function* (
+  tools: ThreadTools,
+  input: {
+    readonly threadId: ThreadId;
+    readonly runId: RunId;
+    readonly json: boolean;
+  },
+) {
+  const outcome = yield* waitForRun(tools, input.threadId, input.runId);
+  const runId = outcome.type === "ended" ? (outcome.runId ?? input.runId) : input.runId;
+  const status = outcome.type === "ended" ? outcome.status : "waiting";
+  const reply =
+    status === "completed"
+      ? yield* runResultText(tools, input.threadId, runId, "assistant_message")
+      : null;
+  const error =
+    status === "completed" || status === "waiting"
+      ? null
+      : yield* runResultText(tools, input.threadId, runId, "error");
+  if (input.json) {
+    yield* printJson({ threadId: input.threadId, runId, status, reply, error });
+  } else if (reply !== null) {
+    yield* Console.log(reply);
+  }
+  if (outcome.type === "needs_input") {
+    return yield* new ThreadNeedsInputError({ threadId: input.threadId });
+  }
+  if (status !== "completed") {
+    return yield* new ThreadRunEndedError({
+      threadId: input.threadId,
+      status,
+      ...(error === null ? {} : { error }),
+    });
+  }
+});
+
+export const titleFromMessage = (message: string) => {
+  const firstLine = message.trim().split("\n")[0]?.trim() ?? "";
+  if (firstLine.length <= TITLE_MAX_CHARS) return firstLine;
+  let end = TITLE_MAX_CHARS - 1;
+  const previous = firstLine.charCodeAt(end - 1);
+  const next = firstLine.charCodeAt(end);
+  if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+    end -= 1;
+  }
+  return `${firstLine.slice(0, end).trimEnd()}…`;
+};
+
+const launchWorkspaceStrategy = (input: {
+  readonly worktree: Option.Option<string>;
+  readonly branch: Option.Option<string>;
+}) =>
+  Option.match(input.worktree, {
+    onNone: () =>
+      Option.isSome(input.branch)
+        ? Effect.fail(new ThreadUsageError({ detail: "--branch needs --worktree <base-ref>." }))
+        : Effect.void,
+    onSome: (baseRef) =>
+      Effect.succeed({
+        type: "worktree" as const,
+        baseRef,
+        ...Option.match(input.branch, { onNone: () => ({}), onSome: (branch) => ({ branch }) }),
       }),
-    ),
-  ),
+  });
+
+const jsonFlag = Flag.Boolean("json").pipe(
+  Flag.withDescription("Print JSON instead of text."),
+  Flag.withDefault(false),
 );
+const waitFlag = Flag.Boolean("wait").pipe(
+  Flag.withDescription(
+    "Wait for the agent to finish and print its reply. Exits 1 if the run fails and 2 if it waits for an answer.",
+  ),
+  Flag.withDefault(false),
+);
+const messageArgument = Argument.String("message").pipe(
+  Argument.withDescription("Message for the agent, or - to read it from stdin."),
+);
+const threadArgument = Argument.String("thread").pipe(Argument.withDescription("Thread id."));
+
+const decodeThreadIdValue = Schema.decodeUnknownEffect(ThreadId);
+const decodeTitle = Schema.decodeUnknownEffect(TrimmedNonEmptyString);
+const decodeThreadId = (value: string) =>
+  decodeThreadIdValue(value.trim()).pipe(
+    Effect.mapError(() => new ThreadUsageError({ detail: `'${value}' is not a thread id.` })),
+  );
 
 const threadListCommand = Command.make("list", {
   ...projectLocationFlags,
-  json: jsonFlag,
-  all: Flag.Boolean("all").pipe(
-    Flag.withDescription("Include archived threads."),
-    Flag.withDefault(false),
+  project: Flag.String("project").pipe(
+    Flag.withDescription("Project id or a path inside the project. Defaults to this directory."),
+    Flag.withDefault("."),
   ),
+  json: jsonFlag,
 }).pipe(
-  Command.withDescription("List threads, most recently updated first."),
+  Command.withDescription("List a project's threads, newest first."),
   Command.withHandler((flags) =>
-    runThreadCli(
+    withThreadTools(
       flags,
-      Effect.fn("threadListCli")(function* ({ snapshot }) {
-        const threads = listThreadCliThreads(snapshot, { includeArchived: flags.all });
+      Effect.fn("cli.thread.list")(function* (tools) {
+        const project = yield* resolveProject(tools, flags.project);
+        const threads: Array<OrchestratorMcpThreadListItem> = [];
+        let cursor: number | null = 0;
+        while (cursor !== null) {
+          const page: OrchestratorMcpThreadListResult = yield* tools.call(
+            "t3_thread_list",
+            { projectId: project.id, includeSubagents: false, limit: 100, cursor },
+            OrchestratorMcpThreadListResult,
+          );
+          threads.push(...page.threads);
+          cursor = page.nextCursor;
+        }
         if (flags.json) {
-          yield* Console.log(formatThreadCliJson(threads));
-          return;
+          return yield* printJson(threads);
         }
         for (const thread of threads) {
-          yield* Console.log(
-            `${thread.id}  ${thread.status.padEnd(11)}  ${thread.updatedAt}  ${thread.title}`,
-          );
+          yield* Console.log(`${thread.threadId}  ${thread.status.padEnd(11)}  ${thread.title}`);
         }
       }),
+    ).pipe(reportThreadErrors),
+  ),
+);
+
+const threadStartCommand = Command.make("start", {
+  ...projectLocationFlags,
+  project: Argument.String("project").pipe(
+    Argument.withDescription("Project id or a path inside the project, such as ."),
+  ),
+  message: messageArgument,
+  title: Flag.String("title").pipe(
+    Flag.withDescription("Thread title. Defaults to the message's first line."),
+    Flag.optional,
+  ),
+  provider: Flag.String("provider").pipe(
+    Flag.withDescription("Provider instance id. Pass with --model."),
+    Flag.optional,
+  ),
+  model: Flag.String("model").pipe(
+    Flag.withDescription("Model slug. Defaults to the project's default model."),
+    Flag.optional,
+  ),
+  worktree: Flag.String("worktree").pipe(
+    Flag.withDescription(
+      "Run in a new git worktree based on this branch, tag, or commit, instead of the project folder.",
     ),
+    Flag.optional,
+  ),
+  branch: Flag.String("branch").pipe(
+    Flag.withDescription("Branch name for the new worktree."),
+    Flag.optional,
+  ),
+  wait: waitFlag,
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription("Start a thread in a project and print its id."),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const message = yield* readMessageArgument(flags.message);
+      const workspaceStrategy = yield* launchWorkspaceStrategy(flags);
+      if (Option.isSome(flags.provider) !== Option.isSome(flags.model)) {
+        return yield* new ThreadUsageError({ detail: "--provider and --model go together." });
+      }
+      const title = yield* decodeTitle(
+        Option.getOrElse(flags.title, () => titleFromMessage(message)),
+      ).pipe(Effect.mapError(() => new ThreadUsageError({ detail: "The title is empty." })));
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.start")(function* (tools) {
+          const project = yield* resolveProject(tools, flags.project);
+          const launched = yield* tools.call(
+            "t3_thread_launch",
+            {
+              projectId: project.id,
+              title,
+              message,
+              ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
+              ...(Option.isSome(flags.provider) && Option.isSome(flags.model)
+                ? {
+                    modelSelection: {
+                      instanceId: flags.provider.value,
+                      model: flags.model.value,
+                    },
+                  }
+                : {}),
+            },
+            ThreadLaunchResult,
+          );
+          if (flags.wait && launched.runId !== null) {
+            if (!flags.json) yield* Console.error(`Thread ${launched.threadId}`);
+            return yield* finishRun(tools, {
+              threadId: launched.threadId,
+              runId: launched.runId,
+              json: flags.json,
+            });
+          }
+          yield* flags.json ? printJson(launched) : Console.log(launched.threadId);
+        }),
+      );
+    }).pipe(reportThreadErrors),
+  ),
+);
+
+const threadSendCommand = Command.make("send", {
+  ...projectLocationFlags,
+  thread: threadArgument,
+  message: messageArgument,
+  wait: waitFlag,
+  json: jsonFlag,
+}).pipe(
+  Command.withDescription(
+    "Send a message to a thread. A busy thread gets it as its next turn; nothing is interrupted.",
+  ),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      const message = yield* readMessageArgument(flags.message);
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.send")(function* (tools) {
+          const sent = yield* tools.call(
+            "t3_thread_send",
+            { threadId, message, mode: "queue" },
+            OrchestratorMcpThreadSendResult,
+          );
+          if (flags.wait) {
+            return yield* finishRun(tools, { threadId, runId: sent.runId, json: flags.json });
+          }
+          yield* flags.json
+            ? printJson(sent)
+            : Console.log(sent.delivery === "queued" ? "Queued." : "Sent.");
+        }),
+      );
+    }).pipe(reportThreadErrors),
   ),
 );
 
 const threadShowCommand = Command.make("show", {
   ...projectLocationFlags,
   thread: threadArgument,
-  turns: Flag.Int("turns").pipe(
-    Flag.withDescription("Number of recent turns to include. Default: 5."),
-    Flag.withDefault(5),
+  messages: Flag.Int("messages").pipe(
+    Flag.withDescription("How many of the latest messages to print."),
+    Flag.withDefault(10),
   ),
-  follow: followFlag,
   json: jsonFlag,
 }).pipe(
-  Command.withDescription(
-    "Print a thread's recent user and assistant messages. With --follow, keep streaming new output until interrupted.",
-  ),
+  Command.withDescription("Show a thread's state and its latest messages."),
   Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadShowCli")(function* (cli) {
-        const { snapshot, fetchDetail } = cli;
-        const thread = resolveThreadCliTarget(
-          snapshot,
-          Option.getOrUndefined(flags.thread),
-          process.env,
-        );
-        const detail = yield* fetchDetail(thread.id, Math.max(1, flags.turns));
-        const messages = conversationMessages(detail.thread.messages);
-        if (flags.json) {
-          yield* Console.log(
-            formatThreadCliJson({
-              thread: summarizeThread(thread),
-              messages: messages.map(toCliMessage),
-            }),
-          );
-          return;
-        }
-        yield* Console.log(`${thread.id} (${thread.title}) — ${threadCliStatus(thread)}\n`);
-        for (const message of messages) {
-          yield* Console.log(`[${message.role}] ${message.createdAt}\n${message.text}\n`);
-        }
-        if (flags.follow) {
-          const renderer = new ThreadFollowRenderer();
-          // Anything already printed above is seeded so it is not repeated;
-          // an in-progress message continues from where the snapshot left off.
-          renderer.seed(detail.thread.messages);
-          yield* cli
-            .follow(thread.id)
-            .pipe(
-              Stream.runForEach((item) =>
-                writeFollowOutput(item.kind === "snapshot" ? [] : renderer.handleItem(item), false),
-              ),
-            );
-        }
-      }),
-    ),
-  ),
-);
-
-/**
- * Writes followed output. Plain mode sends reply text to stdout and activity to
- * stderr, so stdout stays the pure reply. JSON mode emits one NDJSON object per
- * chunk on stdout.
- */
-const writeFollowOutput = (outputs: ReadonlyArray<ThreadFollowOutput>, json: boolean) =>
-  Effect.sync(() => {
-    for (const output of outputs) {
-      if (json) {
-        process.stdout.write(`${formatThreadCliJsonLine(output)}\n`);
-      } else if (output.type === "text") {
-        process.stdout.write(output.text);
-      } else {
-        process.stderr.write(`\n· ${output.summary}\n`);
-      }
-    }
-  });
-
-/**
- * Starts consuming the live stream in the background and resolves once the
- * initial snapshot has seeded the renderer, so nothing sent afterwards is
- * missed or duplicated.
- */
-const startFollowing = Effect.fn("startFollowing")(function* (input: {
-  readonly cli: ThreadCliRunInput;
-  readonly threadId: string;
-  readonly renderer: ThreadFollowRenderer;
-  readonly json: boolean;
-}) {
-  const ready = yield* Deferred.make<void>();
-  const fiber = yield* input.cli.follow(input.threadId).pipe(
-    Stream.runForEach((item) =>
-      Effect.gen(function* () {
-        if (item.kind === "snapshot" || item.kind === "synchronized") {
-          yield* Deferred.succeed(ready, undefined);
-        }
-        yield* writeFollowOutput(input.renderer.handleItem(item), input.json);
-      }),
-    ),
-    Effect.ensuring(Deferred.succeed(ready, undefined)),
-    Effect.forkScoped,
-  );
-  yield* Deferred.await(ready);
-  return fiber;
-});
-
-const readThreadCliStdin = () => (process.stdin.isTTY ? undefined : NodeFS.readFileSync(0, "utf8"));
-
-const waitFlag = Flag.Boolean("wait").pipe(
-  Flag.withDescription("Wait for the turn to finish and print the assistant reply."),
-  Flag.withDefault(false),
-);
-
-const timeoutFlag = Flag.String("timeout").pipe(
-  Flag.withSchema(DurationFromString),
-  Flag.withDescription("Maximum time to wait with --wait or --follow. Default: 30m."),
-  Flag.optional,
-);
-
-const messageArgument = Argument.String("message").pipe(
-  Argument.withDescription("Message text. Omit or pass `-` to read it from stdin."),
-  Argument.optional,
-);
-
-type ThreadCliRunInput = Parameters<Parameters<typeof runThreadCli>[1]>[0];
-
-/**
- * Dispatches a turn, then either reports that it started or waits for the new
- * turn to settle and prints its reply. Shared by `send` and `new`.
- */
-const startThreadCliTurn = Effect.fn("startThreadCliTurn")(function* (input: {
-  readonly cli: ThreadCliRunInput;
-  readonly threadId: ThreadId;
-  readonly label: string;
-  readonly previousTurnId: string | null;
-  /** Commands dispatched before the turn, such as creating the thread. */
-  readonly prepare?: ReadonlyArray<ThreadCliDispatchCommand>;
-  readonly command: (ids: {
-    readonly commandId: CommandId;
-    readonly messageId: MessageId;
-    readonly createdAt: string;
-  }) => Extract<ThreadCliDispatchCommand, { type: "thread.turn.start" }>;
-  readonly wait: boolean;
-  readonly follow: boolean;
-  readonly timeout: Option.Option<Duration.Duration>;
-  readonly json: boolean;
-}) {
-  for (const command of input.prepare ?? []) {
-    yield* input.cli.dispatch(command);
-  }
-  // Subscribe before dispatching so the start of the reply is never missed.
-  const renderer = new ThreadFollowRenderer();
-  const follower = input.follow
-    ? yield* startFollowing({
-        cli: input.cli,
-        threadId: input.threadId,
-        renderer,
-        json: input.json,
-      })
-    : undefined;
-
-  const messageId = MessageId.make(yield* commandUuid);
-  yield* input.cli.dispatch(
-    input.command({
-      commandId: CommandId.make(yield* commandUuid),
-      messageId,
-      createdAt: DateTime.formatIso(yield* DateTime.now),
-    }),
-  );
-  if (!input.wait && !input.follow) {
-    yield* Console.log(
-      input.json
-        ? formatThreadCliJson({ threadId: input.threadId, messageId, status: "started" })
-        : `Sent to ${input.threadId} (${input.label}).`,
-    );
-    return;
-  }
-
-  const timeout = Option.getOrElse(input.timeout, () => Duration.minutes(30));
-  const settled = yield* waitForSettledTurn({
-    threadId: input.threadId,
-    previousTurnId: input.previousTurnId,
-    refresh: input.cli.refreshSnapshot,
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: timeout,
-      orElse: () =>
-        Effect.fail(
-          new ThreadCliUsageError({
-            message: `Timed out after ${Duration.format(timeout)} waiting for ${input.threadId}.`,
-          }),
-        ),
-    }),
-  );
-  const detail = yield* input.cli.fetchDetail(input.threadId, 1);
-  const reply = selectTurnReply(detail.thread.messages, settled.turnId);
-
-  if (follower !== undefined) {
-    yield* Fiber.interrupt(follower);
-    // The stored messages are authoritative; print anything the stream missed.
-    yield* writeFollowOutput(
-      renderer.reconcile(detail.thread.messages, settled.turnId),
-      input.json,
-    );
-    yield* Effect.sync(() =>
-      process.stdout.write(
-        input.json
-          ? `${formatThreadCliJsonLine({
-              type: "result",
-              threadId: input.threadId,
-              messageId,
-              turnId: settled.turnId,
-              state: settled.state,
-              reply,
-            })}\n`
-          : "\n",
-      ),
-    );
-  } else {
-    yield* Console.log(
-      input.json
-        ? formatThreadCliJson({
-            threadId: input.threadId,
-            messageId,
-            turnId: settled.turnId,
-            state: settled.state,
-            reply,
-          })
-        : reply,
-    );
-  }
-  if (settled.state !== "completed") {
-    return yield* new ThreadCliUsageError({
-      message: `Turn ${settled.turnId} ended with state '${settled.state}'.`,
-    });
-  }
-}, Effect.scoped);
-
-const threadSendCommand = Command.make("send", {
-  ...projectLocationFlags,
-  thread: Argument.String("thread").pipe(
-    Argument.withDescription("Thread id. Use `-` for T3_THREAD_ID inside a T3 agent session."),
-  ),
-  message: messageArgument,
-  wait: waitFlag,
-  follow: followFlag,
-  timeout: timeoutFlag,
-  json: jsonFlag,
-}).pipe(
-  Command.withDescription(
-    "Send a message to a thread, starting a new turn with the thread's current provider and model.",
-  ),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadSendCli")(function* (cli) {
-        const thread = resolveThreadCliTarget(
-          cli.snapshot,
-          flags.thread === "-" ? undefined : flags.thread,
-          process.env,
-        );
-        const text = resolveThreadCliMessageText(
-          Option.getOrUndefined(flags.message),
-          readThreadCliStdin,
-        );
-        if (isThreadCliTurnActive(thread)) {
-          return yield* new ThreadCliUsageError({
-            message: `Thread ${thread.id} already has a turn in progress.`,
-          });
-        }
-        yield* startThreadCliTurn({
-          cli,
-          threadId: thread.id,
-          label: thread.title,
-          previousTurnId: thread.latestTurn?.turnId ?? null,
-          command: ({ commandId, messageId, createdAt }) => ({
-            type: "thread.turn.start",
-            commandId,
-            threadId: thread.id,
-            message: { messageId, role: "user", text, attachments: [] },
-            runtimeMode: thread.runtimeMode,
-            interactionMode: thread.interactionMode,
-            createdAt,
-          }),
-          wait: flags.wait,
-          follow: flags.follow,
-          timeout: flags.timeout,
-          json: flags.json,
-        });
-      }),
-    ),
-  ),
-);
-
-const threadNewCommand = Command.make("new", {
-  ...projectLocationFlags,
-  project: Flag.String("project").pipe(
-    Flag.withDescription(
-      "Project id, title, or workspace path. Defaults to the project containing the current directory.",
-    ),
-    Flag.optional,
-  ),
-  title: Flag.String("title").pipe(
-    Flag.withDescription("Thread title. Defaults to the first line of the message."),
-    Flag.optional,
-  ),
-  provider: Flag.String("provider").pipe(
-    Flag.withDescription("Provider instance id, for example `codex` or `claudeAgent`."),
-    Flag.optional,
-  ),
-  model: Flag.String("model").pipe(
-    Flag.withDescription("Model id. Required when --provider differs from the project default."),
-    Flag.optional,
-  ),
-  message: messageArgument,
-  wait: waitFlag,
-  follow: followFlag,
-  timeout: timeoutFlag,
-  json: jsonFlag,
-}).pipe(
-  Command.withDescription(
-    "Create a thread and send its first message, using the project's default provider and model.",
-  ),
-  Command.withHandler((flags) =>
-    runThreadCli(
-      flags,
-      Effect.fn("threadNewCli")(function* (cli) {
-        const project = resolveThreadCliProject(
-          cli.snapshot,
-          Option.getOrUndefined(flags.project),
-          process.cwd(),
-        );
-        const modelSelection = resolveThreadCliModelSelection(cli.snapshot, project, {
-          provider: Option.getOrUndefined(flags.provider),
-          model: Option.getOrUndefined(flags.model),
-        });
-        const text = resolveThreadCliMessageText(
-          Option.getOrUndefined(flags.message),
-          readThreadCliStdin,
-        );
-        const title = Option.getOrElse(flags.title, () => deriveThreadCliTitle(text));
-        const threadId = ThreadId.make(yield* commandUuid);
-        // The HTTP dispatch endpoint does not expand `thread.turn.start`
-        // bootstraps (only the WebSocket path does), so create the thread
-        // explicitly before starting its first turn.
-        const createCommand: ThreadCliDispatchCommand = {
-          type: "thread.create",
-          commandId: CommandId.make(yield* commandUuid),
-          threadId,
-          projectId: project.id,
-          title,
-          modelSelection,
-          runtimeMode: DEFAULT_RUNTIME_MODE,
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          branch: null,
-          worktreePath: null,
-          createdAt: DateTime.formatIso(yield* DateTime.now),
-        };
-        yield* startThreadCliTurn({
-          cli,
-          threadId,
-          label: title,
-          previousTurnId: null,
-          prepare: [createCommand],
-          command: ({ commandId, messageId, createdAt }) => ({
-            type: "thread.turn.start",
-            commandId,
+    Effect.gen(function* () {
+      const threadId = yield* decodeThreadId(flags.thread);
+      yield* withThreadTools(
+        flags,
+        Effect.fn("cli.thread.show")(function* (tools) {
+          const { thread, messages: latest } = yield* readLatestMessages(
+            tools,
             threadId,
-            message: { messageId, role: "user", text, attachments: [] },
-            modelSelection,
-            runtimeMode: DEFAULT_RUNTIME_MODE,
-            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-            createdAt,
-          }),
-          wait: flags.wait,
-          follow: flags.follow,
-          timeout: flags.timeout,
-          json: flags.json,
-        });
-      }),
-    ),
+            flags.messages,
+          );
+          const messages = yield* Effect.forEach(latest, (item) =>
+            readFullText(tools, threadId, item).pipe(
+              Effect.map((text) => ({
+                role: item.type === "user_message" ? "user" : "assistant",
+                runId: item.runId,
+                text,
+              })),
+            ),
+          );
+          if (flags.json) {
+            return yield* printJson({ thread, messages });
+          }
+          yield* Console.log(thread.title);
+          yield* Console.log(
+            [thread.threadId, thread.status, `${thread.providerInstanceId}/${thread.model}`].join(
+              "  ",
+            ),
+          );
+          if (thread.worktreePath !== null) {
+            yield* Console.log(`${thread.branch ?? "(no branch)"}  ${thread.worktreePath}`);
+          }
+          if (thread.pendingRequestCount > 0) {
+            yield* Console.log(`Waiting for ${thread.pendingRequestCount} answer(s).`);
+          }
+          for (const entry of messages) {
+            yield* Console.log(`\n[${entry.role}]\n${entry.text}`);
+          }
+        }),
+      );
+    }).pipe(reportThreadErrors),
   ),
 );
 
 export const threadCommand = Command.make("thread").pipe(
-  Command.withDescription("List, read, create, message, and snooze threads."),
+  Command.withDescription("Start, message, and read threads on the running server."),
   Command.withSubcommands([
+    snoozeCommand, wakeCommand, interruptCommand,
     threadListCommand,
-    threadShowCommand,
+    threadStartCommand,
     threadSendCommand,
-    threadNewCommand,
-    threadInterruptCommand,
-    threadSnoozeCommand,
-    threadWakeCommand,
-    threadStatusCommand,
+    threadShowCommand,
   ]),
 );

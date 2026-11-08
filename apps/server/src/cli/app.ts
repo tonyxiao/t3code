@@ -1,5 +1,6 @@
 // @effect-diagnostics globalTimers:off -- The Node socket client owns its response deadline and clears it on every completion path.
-import * as NodeCrypto from "node:crypto";
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect stat follows symlinks; IPC ownership validation requires lstat.
+import * as NodeFSP from "node:fs/promises";
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodeProcess from "node:process";
@@ -9,22 +10,23 @@ import {
   DesktopAppActivationErrorCode,
   DesktopAppActivationResponse,
   type DesktopAppActivationPlatform,
+  type DesktopAppActivationRequest,
   type DesktopAppControlRequest,
 } from "@t3tools/contracts";
-import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
-import { resolveRemotePairingTarget } from "@t3tools/shared/remote";
 import {
-  HostProcessPlatform,
-  HostProcessUserId,
-  HostProcessWorkingDirectory,
-} from "@t3tools/shared/hostProcess";
+  resolveDesktopAppControlAddress,
+  type DesktopAppControlAddress,
+} from "@t3tools/shared/desktopAppControl";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { resolveRemotePairingTarget } from "@t3tools/shared/remote";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { Argument, Command, Flag } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/cli";
 
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
@@ -92,14 +94,26 @@ function isDesktopPlatform(platform: NodeJS.Platform): platform is DesktopAppAct
   return platform === "darwin" || platform === "linux" || platform === "win32";
 }
 
-function sendDesktopAppActivationRequest(input: {
-  readonly address: string;
-  readonly fallbackAddress?: string;
+async function sendDesktopAppActivationRequest(input: {
+  readonly address: DesktopAppControlAddress;
+  readonly fallbackAddress?: DesktopAppControlAddress;
+  readonly userId: number | undefined;
   readonly request: DesktopAppControlRequest;
   readonly timeoutMs?: number;
 }): Promise<DesktopAppActivationResponse> {
+  if (input.address.directory !== null) {
+    const stat = await NodeFSP.lstat(input.address.directory);
+    if (
+      !stat.isDirectory() ||
+      input.userId === undefined ||
+      stat.uid !== input.userId ||
+      (stat.mode & 0o077) !== 0
+    ) {
+      throw new Error("The desktop app socket directory is not private or owned by this user.");
+    }
+  }
   return new Promise((resolve, reject) => {
-    const socket = NodeNet.createConnection(input.address);
+    const socket = NodeNet.createConnection(input.address.address);
     socket.setEncoding("utf8");
     let buffer = "";
     let settled = false;
@@ -174,6 +188,7 @@ function sendDesktopAppActivationRequest(input: {
         resolve(
           sendDesktopAppActivationRequest({
             address: input.fallbackAddress,
+            userId: input.userId,
             request: input.request,
             ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
           }),
@@ -238,7 +253,7 @@ export const pairImportCommand = Command.make("import", {
   Command.withHandler((flags) =>
     Effect.gen(function* () {
       const environment = yield* appEnvironment;
-      const platform = yield* HostProcessPlatform;
+      const platform = yield* HostProcess.Platform;
       if (Option.isSome(environment.sshConnection) || Option.isSome(environment.sshTty)) {
         return yield* new DesktopAppSshUnsupportedError({});
       }
@@ -260,7 +275,7 @@ export const pairImportCommand = Command.make("import", {
       const path = yield* Path.Path;
       const configuredBaseDir = Option.getOrUndefined(flags.baseDir) ?? environment.t3Home;
       const baseDir = yield* resolveBaseDir(configuredBaseDir);
-      const userId = yield* HostProcessUserId;
+      const userId = yield* HostProcess.UserId;
       const addressFor = (subdirectory: "userdata" | "dev") =>
         resolveDesktopAppControlAddress({
           stateDir: path.join(baseDir, subdirectory),
@@ -268,18 +283,20 @@ export const pairImportCommand = Command.make("import", {
           tempDir: NodeOS.tmpdir(),
           userId,
           joinPath: path.join,
-        }).address;
+        });
       const address = addressFor("userdata");
       const fallbackAddress =
         Option.isNone(flags.baseDir) && !environment.t3Home?.trim() ? addressFor("dev") : undefined;
+      const requestId = yield* Effect.sync(() => SecureRandom.uuidV4Unsafe());
       const response = yield* Effect.tryPromise({
         try: () =>
           sendDesktopAppActivationRequest({
+            userId,
             address,
             ...(fallbackAddress === undefined ? {} : { fallbackAddress }),
             request: {
               version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-              requestId: NodeCrypto.randomUUID(),
+              requestId,
               type: "import-pairing",
               pairingUrl,
             },
@@ -335,7 +352,7 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   readonly workspaceRoot: Option.Option<string>;
 }) {
   const environment = yield* appEnvironment;
-  const hostPlatform = yield* HostProcessPlatform;
+  const hostPlatform = yield* HostProcess.Platform;
   if (Option.isSome(environment.sshConnection) || Option.isSome(environment.sshTty)) {
     return yield* new DesktopAppSshUnsupportedError({});
   }
@@ -348,9 +365,9 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   const baseDir = yield* resolveBaseDir(configuredBaseDir);
   const allowDevFallback = Option.isNone(flags.baseDir) && !environment.t3Home?.trim();
   const rawWorkspaceRoot =
-    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcessWorkingDirectory);
+    Option.getOrUndefined(flags.workspaceRoot) ?? (yield* HostProcess.WorkingDirectory);
   const workspaceRoot = path.resolve(yield* expandHomePath(rawWorkspaceRoot));
-  const userId = yield* HostProcessUserId;
+  const userId = yield* HostProcess.UserId;
   const resolveAddress = (stateSubdirectory: "userdata" | "dev") =>
     resolveDesktopAppControlAddress({
       stateDir: path.join(baseDir, stateSubdirectory),
@@ -358,10 +375,12 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
       tempDir: NodeOS.tmpdir(),
       userId,
       joinPath: path.join,
-    }).address;
-  const request: DesktopAppControlRequest = {
+    });
+  const random = yield* SecureRandom.SecureRandom;
+  const requestId = yield* random.uuidV4();
+  const request: DesktopAppActivationRequest = {
     version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-    requestId: NodeCrypto.randomUUID(),
+    requestId,
     type: "open-workspace",
     workspaceRoot,
     platform: hostPlatform,
@@ -373,12 +392,16 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     try: () =>
       sendDesktopAppActivationRequest({
         address,
+        userId,
         ...(fallbackAddress === undefined ? {} : { fallbackAddress }),
         request,
       }),
     catch: (cause) =>
       new DesktopAppUnreachableError({
-        candidateAddresses: fallbackAddress === undefined ? [address] : [address, fallbackAddress],
+        candidateAddresses:
+          fallbackAddress === undefined
+            ? [address.address]
+            : [address.address, fallbackAddress.address],
         requestId: request.requestId,
         workspaceRoot,
         cause,

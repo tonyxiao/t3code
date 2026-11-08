@@ -1,3 +1,4 @@
+import type { AppBarMenuItem } from "../../components/ui/AppBar.types";
 import {
   type SidebarFilterModes,
   type SidebarFilterKind,
@@ -178,4 +179,14 @@ export function buildHomeListFilterNativeMenu(
     actions: convert(menu.items, "filter"),
     onAction: (id: string) => actionsById.get(id)?.(),
   };
+}
+
+export function buildHomeListFilterMenuItems(props: Parameters<typeof buildHomeListFilterMenu>[0]): AppBarMenuItem[] {
+  const convert = (items: readonly HomeListFilterMenuItem[], prefix: string): AppBarMenuItem[] => items.map((item, index) => {
+    const id = `${prefix}:${index}`;
+    return item.type === "action"
+      ? { id, title: item.title, subtitle: item.subtitle, selected: item.state === "on", onPress: item.onPress }
+      : { id, title: item.title, items: convert(item.items, id) };
+  });
+  return convert(buildHomeListFilterMenu(props).items, "filter");
 }

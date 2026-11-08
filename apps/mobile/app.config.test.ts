@@ -1,116 +1,47 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
+import { afterEach, expect, it, vi } from "vite-plus/test";
 
-// Keep local credentials out of the build-config fixtures.
+import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
+import assetLinks from "../web/public/.well-known/assetlinks.json";
+
+// Keep config parsing independent of local env files and build credentials.
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ ...process.env }),
+  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
 }));
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  vi.resetModules();
 });
 
-async function loadConfig(env: Record<string, string | undefined>) {
-  vi.stubEnv("APP_VARIANT", env.APP_VARIANT ?? "production");
-  for (const key of [
-    "T3CODE_MOBILE_APP_ID",
-    "T3CODE_MOBILE_SCHEME",
-    "T3CODE_MOBILE_EAS_PROJECT_ID",
-    "T3CODE_MOBILE_EAS_OWNER",
-    "T3CODE_MOBILE_SLUG",
-    "T3CODE_MOBILE_APPLE_TEAM_ID",
-    "T3CODE_MOBILE_ASSOCIATED_DOMAINS",
-    "T3CODE_MOBILE_UPDATES_ENABLED",
-    "T3CODE_IOS_PERSONAL_TEAM",
-  ])
-    vi.stubEnv(key, env[key]);
+async function loadConfig(variant: string | undefined) {
+  vi.resetModules();
+  vi.stubEnv("APP_VARIANT", variant);
   return (await import("./app.config.ts")).default;
 }
 
-describe("private mobile builds", () => {
-  it("keeps the display name while isolating signing and update configuration", async () => {
-    const config = await loadConfig({
-      T3CODE_MOBILE_APP_ID: "com.example.private",
-      T3CODE_MOBILE_SCHEME: "example-t3",
-    });
+it.each(["prod", ""])("rejects APP_VARIANT=%j before selecting production IDs", async (value) => {
+  await expect(loadConfig(value)).rejects.toThrow(
+    "APP_VARIANT must be development, preview, or production.",
+  );
+});
 
-    expect(config.name).toBe("TX Code");
-    expect(config.ios?.bundleIdentifier).toBe("com.example.private");
-    expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
-      "com.example.private.background-sync",
-    ]);
-    expect(config.ios?.infoPlist?.UIBackgroundModes).toContain("processing");
-    expect(config.android?.package).toBe("com.example.private");
-    expect(config.scheme).toBe("example-t3");
-    expect(config.ios?.appleTeamId).toBeUndefined();
-    expect(config.ios?.associatedDomains).toEqual([]);
-    expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
-      "$(AppIdentifierPrefix)com.example.private",
-    ]);
-    expect(config.updates?.enabled).toBe(false);
-    expect(config.updates?.url).toBeUndefined();
-    expect(config.extra?.eas.projectId).toBeUndefined();
-    expect(config.owner).toBeUndefined();
-  });
-
-  it("derives the update source from the private Expo project", async () => {
-    const config = await loadConfig({
-      T3CODE_MOBILE_APP_ID: "com.example.private",
-      T3CODE_MOBILE_EAS_PROJECT_ID: "00000000-0000-4000-8000-000000000001",
-      T3CODE_MOBILE_EAS_OWNER: "example-team",
-      T3CODE_MOBILE_SLUG: "private-mobile",
-      T3CODE_MOBILE_APPLE_TEAM_ID: "EXAMPLE123",
-      T3CODE_MOBILE_ASSOCIATED_DOMAINS:
-        "webcredentials:auth.example.com, applinks:auth.example.com",
-    });
-
-    expect(config.owner).toBe("example-team");
-    expect(config.slug).toBe("private-mobile");
-    expect(config.extra?.eas.projectId).toBe("00000000-0000-4000-8000-000000000001");
-    expect(config.updates?.url).toBe("https://u.expo.dev/00000000-0000-4000-8000-000000000001");
-    expect(config.updates?.enabled).toBe(true);
-    expect(config.ios?.appleTeamId).toBe("EXAMPLE123");
-    expect(config.ios?.associatedDomains).toEqual([
-      "webcredentials:auth.example.com",
-      "applinks:auth.example.com",
-    ]);
-  });
-
-  it.each([
-    ["production", "com.tonyxiao.txcode"],
-    ["development", "com.tonyxiao.txcode.dev"],
-    ["preview", "com.tonyxiao.txcode.preview"],
-  ])("uses our %s identity without upstream signing or updates", async (variant, bundleId) => {
-    const config = await loadConfig({ APP_VARIANT: variant });
-    expect(config.ios?.bundleIdentifier).toBe(bundleId);
-    expect(config.android?.package).toBe(bundleId);
-    expect(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers).toEqual([
-      `${bundleId}.background-sync`,
-    ]);
-    expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
-      `$(AppIdentifierPrefix)${bundleId}`,
-    ]);
-    expect(config.ios?.appleTeamId).toBeUndefined();
-    expect(config.ios?.associatedDomains).toEqual([]);
-    expect(config.owner).toBeUndefined();
-    expect(config.updates?.enabled).toBe(false);
-    expect(config.updates?.url).toBeUndefined();
-    expect(config.extra?.eas.projectId).toBeUndefined();
-    expect(config.plugins).toContainEqual([
-      "expo-widgets",
-      expect.objectContaining({
-        bundleIdentifier: `${bundleId}.widgets`,
-        groupIdentifier: `group.${bundleId}`,
-      }),
-    ]);
-    expect(config.plugins).toContainEqual([
-      "expo-sharing",
-      expect.objectContaining({
-        ios: expect.objectContaining({
-          extensionBundleIdentifier: `${bundleId}.sharing`,
-          appGroupId: `group.${bundleId}`,
-        }),
-      }),
-    ]);
-  });
+it.each([
+  [undefined, "com.t3tools.t3code"],
+  ["development", "com.t3tools.t3code.dev"],
+  ["preview", "com.t3tools.t3code.preview"],
+  ["production", "com.t3tools.t3code"],
+])("keeps the iOS and Android identifiers for APP_VARIANT=%j", async (value, identifier) => {
+  const config = await loadConfig(value);
+  expect(config.ios?.bundleIdentifier).toBe(identifier);
+  expect(config.android?.package).toBe(identifier);
+  // Copied thread links open this app only while app.t3.codes lists it.
+  const host = new URL(DEFAULT_HOSTED_APP_URL).host;
+  expect(config.ios?.associatedDomains).toContain(`applinks:${host}`);
+  expect(appleAppSiteAssociation.applinks.details[0]?.appIDs).toContain(
+    `${config.ios?.appleTeamId}.${identifier}`,
+  );
+  expect(config.android?.intentFilters?.[0]?.data).toEqual([
+    { scheme: "https", host, pathPrefix: "/threads/" },
+  ]);
+  expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
 });

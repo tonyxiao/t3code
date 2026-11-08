@@ -14,6 +14,8 @@ export const BRAND_ASSET_PATHS = {
   productionWebAppleTouchIconPng: "assets/prod/t3-black-web-apple-touch-180.png",
   productionWebAppIcon192Png: "assets/prod/t3-black-web-app-192.png",
   productionWebAppIcon512Png: "assets/prod/t3-black-web-app-512.png",
+  productionWebIcon192Png: "assets/prod/t3-black-web-icon-192x192.png",
+  productionWebIcon512Png: "assets/prod/t3-black-web-icon-512x512.png",
 
   nightlyIconComposerProject: "assets/nightly/app-icon.icon",
   nightlyIosIconPng: "assets/nightly/nightly-ios-1024.png",
@@ -26,6 +28,8 @@ export const BRAND_ASSET_PATHS = {
   nightlyWebAppleTouchIconPng: "assets/nightly/nightly-web-apple-touch-180.png",
   nightlyWebAppIcon192Png: "assets/nightly/nightly-web-app-192.png",
   nightlyWebAppIcon512Png: "assets/nightly/nightly-web-app-512.png",
+  nightlyWebIcon192Png: "assets/nightly/nightly-web-icon-192x192.png",
+  nightlyWebIcon512Png: "assets/nightly/nightly-web-icon-512x512.png",
 
   developmentDesktopIconPng: "assets/dev/blueprint-macos-1024.png",
   developmentWindowsIconIco: "assets/dev/blueprint-windows.ico",
@@ -35,6 +39,8 @@ export const BRAND_ASSET_PATHS = {
   developmentWebAppleTouchIconPng: "assets/dev/blueprint-web-apple-touch-180.png",
   developmentWebAppIcon192Png: "assets/dev/blueprint-web-app-192.png",
   developmentWebAppIcon512Png: "assets/dev/blueprint-web-app-512.png",
+  developmentWebIcon192Png: "assets/dev/blueprint-web-icon-192x192.png",
+  developmentWebIcon512Png: "assets/dev/blueprint-web-icon-512x512.png",
 } as const;
 
 export type WebAssetBrand = "development" | "nightly" | "production";
@@ -45,10 +51,6 @@ export type WebAssetChannel = (typeof WEB_ASSET_CHANNELS)[number];
 
 export function resolveWebAssetBrandForChannel(channel: WebAssetChannel): WebAssetBrand {
   return channel === "nightly" ? "nightly" : "production";
-}
-
-export function resolveWebAssetBrandForPackageVersion(version: string): WebAssetBrand {
-  return /^[^-+]+-(?:nightly|preview)\./.test(version) ? "nightly" : "production";
 }
 
 export interface IconOverride {
@@ -63,6 +65,8 @@ const WEB_ICON_TARGET_FILENAMES = {
   appleTouchIconPng: "apple-touch-icon.png",
   webAppIcon192Png: "web-app-icon-192.png",
   webAppIcon512Png: "web-app-icon-512.png",
+  icon192Png: "icon-192x192.png",
+  icon512Png: "icon-512x512.png",
 } as const;
 
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
@@ -73,6 +77,8 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
     webAppIcon192Png: BRAND_ASSET_PATHS.developmentWebAppIcon192Png,
     webAppIcon512Png: BRAND_ASSET_PATHS.developmentWebAppIcon512Png,
+    icon192Png: BRAND_ASSET_PATHS.developmentWebIcon192Png,
+    icon512Png: BRAND_ASSET_PATHS.developmentWebIcon512Png,
   },
   nightly: {
     faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
@@ -81,6 +87,8 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
     webAppIcon192Png: BRAND_ASSET_PATHS.nightlyWebAppIcon192Png,
     webAppIcon512Png: BRAND_ASSET_PATHS.nightlyWebAppIcon512Png,
+    icon192Png: BRAND_ASSET_PATHS.nightlyWebIcon192Png,
+    icon512Png: BRAND_ASSET_PATHS.nightlyWebIcon512Png,
   },
   production: {
     faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
@@ -89,6 +97,8 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
     webAppIcon192Png: BRAND_ASSET_PATHS.productionWebAppIcon192Png,
     webAppIcon512Png: BRAND_ASSET_PATHS.productionWebAppIcon512Png,
+    icon192Png: BRAND_ASSET_PATHS.productionWebIcon192Png,
+    icon512Png: BRAND_ASSET_PATHS.productionWebIcon512Png,
   },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 
@@ -121,6 +131,14 @@ export function resolveWebIconOverrides(
     {
       sourceRelativePath: sourcePaths.webAppIcon512Png,
       targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.webAppIcon512Png}`,
+    },
+    {
+      sourceRelativePath: sourcePaths.icon192Png,
+      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.icon192Png}`,
+    },
+    {
+      sourceRelativePath: sourcePaths.icon512Png,
+      targetRelativePath: `${targetDirectory}/${WEB_ICON_TARGET_FILENAMES.icon512Png}`,
     },
   ];
 }

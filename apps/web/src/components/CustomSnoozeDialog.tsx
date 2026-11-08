@@ -1,9 +1,10 @@
+import { useEffect, useId, useState } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useCustomSnooze } from "../hooks/useCustomSnooze";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { serverEnvironment } from "../state/server";
 import { useAtomCommand } from "../state/use-atom-command";
-import { useEffect, useId, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { create } from "zustand";
 import {
   localSnoozeDate,
@@ -12,9 +13,10 @@ import {
   type CustomSnoozeInput,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { Button } from "./ui/button";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Settings2Icon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { weekStartsOn } from "../timestampFormat";
+import { useNowMinute } from "../hooks/useNowMinute";
 import { Popover, PopoverTrigger, PopoverPopup } from "./ui/popover";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -44,7 +46,6 @@ type Request = {
   readonly resolve: (choice: SnoozeChoice | null) => void;
 };
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }));
-
 let nextRequestId = 0;
 
 export function requestCustomSnooze(environmentId: EnvironmentId): Promise<SnoozeChoice | null> {
@@ -60,8 +61,15 @@ function finish(choice: SnoozeChoice | null) {
   request?.resolve(choice);
 }
 
+function startOfLocalDay(ms: number) {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
 export function CustomSnoozeDialogHost() {
   const request = useRequest((state) => state.request);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resolves any pending snooze request promise with null when the dialog host unmounts
   useEffect(() => () => finish(null), []);
   return request ? (
     <CustomSnoozeDialog key={request.id} environmentId={request.environmentId} />
@@ -70,7 +78,11 @@ export function CustomSnoozeDialogHost() {
 
 function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId }) {
   const id = useId();
+  const navigate = useNavigate();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
+  const nowMinute = useNowMinute();
+  // Follows the clock so a dialog left open past midnight stops offering yesterday.
+  const today = startOfLocalDay(Date.parse(`${nowMinute}Z`));
   const [mode, setMode] = useState<CustomSnoozeInput["mode"]>("text");
   const [text, setText] = useState("");
   const [date, setDate] = useState(initial);
@@ -153,7 +165,7 @@ function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId })
                   </div>
                 ) : mode === "date" ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="flex min-w-0 flex-col gap-1.5">
+                    <div className="flex min-w-0 flex-col gap-2">
                       <Label htmlFor={`${id}-date`}>Date</Label>
                       <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                         <PopoverTrigger
@@ -179,7 +191,7 @@ function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId })
                             selected={date}
                             defaultMonth={date}
                             {...(weekStartsOn === undefined ? {} : { weekStartsOn })}
-                            disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                            disabled={{ before: today }}
                             onSelect={(selected) => {
                               setDate(selected);
                               setCalendarOpen(false);
@@ -256,6 +268,21 @@ function CustomSnoozeDialog({ environmentId }: { environmentId: EnvironmentId })
             )}
           </DialogPanel>
           <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost-muted"
+              className="sm:mr-auto"
+              onClick={() => {
+                finish(null);
+                void navigate({
+                  to: "/settings/threads",
+                  hash: "snooze-options",
+                });
+              }}
+            >
+              <Settings2Icon />
+              Edit snooze options
+            </Button>
             <Button type="button" variant="outline" onClick={() => finish(null)}>
               Cancel
             </Button>

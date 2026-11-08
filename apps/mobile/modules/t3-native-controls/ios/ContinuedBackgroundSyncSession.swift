@@ -15,7 +15,7 @@ protocol BackgroundSyncSessionController: AnyObject {
 final class ContinuedBackgroundSyncSession: BackgroundSyncSessionController {
   // Registration lasts for the process, including across React bridge reloads.
   static let shared = ContinuedBackgroundSyncSession()
-  private let identifier = "\(Bundle.main.bundleIdentifier ?? "com.tonyxiao.txcode").background-sync"
+  private let identifier = "\(Bundle.main.bundleIdentifier ?? "com.tonyxiao.txcode.v2").background-sync"
   private let duration = 600
   private var registered = false
   private var task: BGContinuedProcessingTask?

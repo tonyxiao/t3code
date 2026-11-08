@@ -76,6 +76,8 @@ for (const variant of ICON_VARIANTS) {
     [outputs.appleTouch, 180],
     [outputs.webApp192, 192],
     [outputs.webApp512, 512],
+    [outputs.webIcon192, 192],
+    [outputs.webIcon512, 512],
     [outputs.favicon16, 16],
     [outputs.favicon32, 32],
   ] as const)

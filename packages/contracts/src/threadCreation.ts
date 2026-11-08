@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { EnvironmentId, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ModelSelection } from "./orchestration.ts";
+import { ModelSelection } from "./modelSelection.ts";
 
 export const ThreadCreationInput = Schema.Struct({
   title: TrimmedNonEmptyString,
@@ -43,6 +43,7 @@ export class ThreadRoutingError extends Schema.TaggedError<ThreadRoutingError>()
     message: Schema.String,
     environmentId: Schema.optional(EnvironmentId),
     threadId: Schema.optional(ThreadId),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 

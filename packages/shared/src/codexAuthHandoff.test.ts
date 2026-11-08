@@ -4,6 +4,7 @@ import {
   codexAuthorizationRequest,
   codexAuthDeliveryUrl,
   codexAuthHandoffUrl,
+  codexCallbackUrl,
   readCodexAuthDelivery,
   readCodexAuthHandoff,
 } from "./codexAuthHandoff.ts";
@@ -32,6 +33,9 @@ const callbackUrl = `http://127.0.0.1:54213/auth/callback?state=${"a".repeat(43)
 describe("Codex desktop handoff", () => {
   it("keeps the hosted return route, account, and environment with the code in a fragment", () => {
     expect(readCodexAuthHandoff(codexAuthHandoffUrl(input), false)).toEqual(input);
+    expect(new URL(codexAuthHandoffUrl(input)).protocol).toBe("txcode:");
+    const tonyReturn = { ...input, returnUrl: "tony-txcode://app/settings/providers" };
+    expect(readCodexAuthHandoff(codexAuthHandoffUrl(tonyReturn), false)).toEqual(tonyReturn);
     const delivery = codexAuthDeliveryUrl(input, callbackUrl);
     expect(new URL(delivery).search).toBe("");
     expect(readCodexAuthDelivery(delivery)).toEqual({
@@ -75,5 +79,27 @@ describe("Codex desktop handoff", () => {
     url.searchParams.set("redirect_uri", "https://attacker.example/auth/callback");
     expect(() => codexAuthorizationRequest(url.toString())).toThrow();
     expect(() => codexAuthDeliveryUrl(input, callbackUrl + "&state=another")).toThrow();
+  });
+});
+
+describe("pasted Codex callback", () => {
+  const { redirectUri, state } = codexAuthorizationRequest(input.authorizationUrl);
+  const copied = callbackUrl.slice("http://".length);
+
+  it("accepts a callback copied without its scheme", () => {
+    expect(codexCallbackUrl(copied, redirectUri, state).toString()).toBe(callbackUrl);
+  });
+  it("accepts leading whitespace with or without a scheme", () => {
+    expect(codexCallbackUrl(` \t\n${callbackUrl}`, redirectUri, state).toString()).toBe(
+      callbackUrl,
+    );
+    expect(codexCallbackUrl(` \t\n${copied}`, redirectUri, state).toString()).toBe(callbackUrl);
+  });
+  it("still rejects a scheme-less callback for another address or sign-in", () => {
+    expect(() =>
+      codexCallbackUrl(copied.replace("127.0.0.1", "localhost"), redirectUri, state),
+    ).toThrow();
+    expect(() => codexCallbackUrl(copied.replace("54213", "54214"), redirectUri, state)).toThrow();
+    expect(() => codexCallbackUrl(`${copied}&state=another`, redirectUri, state)).toThrow();
   });
 });

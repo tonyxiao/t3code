@@ -12,7 +12,7 @@ import {
   type DesktopAppControlRequest,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
-import { HostProcessPlatform, HostProcessUserId } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect } from "vite-plus/test";
@@ -84,8 +84,8 @@ function exchange(address: string, payload: DesktopAppControlRequest) {
 describe("desktop app control server", () => {
   it.effect("roundtrips a request and removes its socket on shutdown", () =>
     Effect.gen(function* () {
-      const platform = yield* HostProcessPlatform;
-      const userId = yield* HostProcessUserId;
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
       yield* Effect.promise(async () => {
         const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-control-test-"));
         const target = makeTarget(NodePath.join(root, "userdata"), platform, userId);
@@ -139,8 +139,8 @@ describe("desktop app control server", () => {
 
   it.effect("cancels a queued request when the client disconnects", () =>
     Effect.gen(function* () {
-      const platform = yield* HostProcessPlatform;
-      const userId = yield* HostProcessUserId;
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
       yield* Effect.promise(async () => {
         const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-cancel-test-"));
         const target = makeTarget(NodePath.join(root, "userdata"), platform, userId);
@@ -175,11 +175,10 @@ describe("desktop app control server", () => {
     }),
   );
 
-  // Two desktop apps can share one state dir, such as nightly and a preview build.
   it.effect("keeps a newer app's socket when an older app on the same state dir quits", () =>
     Effect.gen(function* () {
-      const platform = yield* HostProcessPlatform;
-      const userId = yield* HostProcessUserId;
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
       if (platform === "win32") return;
       yield* Effect.promise(async () => {
         const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-takeover-test-"));
@@ -199,8 +198,8 @@ describe("desktop app control server", () => {
 
   it.effect("binds its address again after the socket file is removed", () =>
     Effect.gen(function* () {
-      const platform = yield* HostProcessPlatform;
-      const userId = yield* HostProcessUserId;
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
       if (platform === "win32") return;
       yield* Effect.promise(async () => {
         const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-app-reclaim-test-"));
