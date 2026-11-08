@@ -73,7 +73,7 @@ export const catalog = defineCatalog(schema, {
 const elementSchema = z
   .object({
     type: z.string(),
-    props: z.record(z.string(), z.unknown()),
+    props: z.record(z.string(), z.unknown()).default({}),
     children: z.array(z.string()).max(200).optional(),
     on: z.record(z.string(), z.unknown()).optional(),
   })

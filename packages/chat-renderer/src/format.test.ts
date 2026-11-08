@@ -29,6 +29,36 @@ describe("chat specs", () => {
     expect(spec.elements.diagram?.props.code).toBe("graph TD; A-->B");
     expect(spec.state).toEqual({ form: { name: "Tony" } });
   });
+  it("accepts a financial overview whose Fields container omits empty props", () => {
+    const spec = parseChatSpec(
+      JSON.stringify({
+        root: "card",
+        elements: {
+          card: {
+            type: "Card",
+            props: { title: "Financial overview" },
+            children: ["metrics"],
+          },
+          metrics: { type: "Fields", children: ["revenue"] },
+          revenue: { type: "Field", props: { label: "Revenue", value: "$12.4M" } },
+        },
+      }),
+    );
+    expect(spec.elements.metrics?.props).toEqual({});
+    expect(spec.elements.revenue?.props.value).toBe("$12.4M");
+  });
+  it("still rejects missing required props and explicitly invalid props", () => {
+    for (const element of [
+      { type: "Text" },
+      { type: "Field", props: { label: "Revenue" } },
+      { type: "Fields", props: null },
+      { type: "Fields", props: { unsupported: true } },
+    ]) {
+      expect(() =>
+        parseChatSpec(JSON.stringify({ root: "element", elements: { element } })),
+      ).toThrow();
+    }
+  });
   it("rejects missing references and cycles", () => {
     const spec = card();
     spec.elements.card.children = ["missing"];
