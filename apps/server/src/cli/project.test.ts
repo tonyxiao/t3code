@@ -144,7 +144,7 @@ it.effect.each(["snapshot", "mutation"] as const)(
       const workspaceRoot = NodePath.join(root, "workspace");
       yield* fs.makeDirectory(workspaceRoot);
       yield* persistServerRuntimeState({
-        path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
+        path: NodePath.join(baseDir, "userdata", "server-runtime-v2.json"),
         state: yield* makePersistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: 3_773,
