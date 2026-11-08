@@ -31,12 +31,10 @@ access follows the tailnet's existing access rules. Mac updates currently check
 in the background and require explicit download/restart. Do not embed a shared
 GitHub token or other download credential in the app.
 
-The private v2 build uses `com.tonyxiao.txcode.tony`, the `tony-txcode` URL
-scheme, `~/.t3-tony`, and its own Electron user-data directory. The T3 home
-remains shared with v1 for the existing one-time thread migration. The server
-ownership lock permits only one server in that home at a time. It supports
-direct server pairing. Hosted Clerk passkeys are disabled until this fork has
-its own associated-domain configuration. Other builds keep upstream defaults.
+The private release uses the standard V2 app identity, `com.tonyxiao.txcode.v2`,
+the `txcode` URL scheme, and the V2 Electron profile. Its default T3 home is
+`~/.t3`; V2 keeps its runtime and database files separate from V1. Signing and
+update-feed configuration do not create another app variant.
 
 The upstream release workflows also publish npm packages and hosted sites.
 Use this private build script; do not push upstream-style release tags to

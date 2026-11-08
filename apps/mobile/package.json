@@ -13,7 +13,6 @@
     "start:dev": "APP_VARIANT=development expo start",
     "start:preview": "APP_VARIANT=preview expo start",
     "start:prod": "APP_VARIANT=production expo start",
-    "start:tony": "T3CODE_MOBILE_TONY_BUILD=1 T3CODE_MOBILE_REMOTE_JS=1 APP_VARIANT=production expo start --dev-client --scheme tony-txcode --lan",
     "showcase": "APP_VARIANT=production EXPO_PUBLIC_SHOWCASE=1 expo start --dev-client --scheme txcode",
     "screenshots": "node ../../scripts/mobile-showcase.ts",
     "android": "EXPO_NO_GIT_STATUS=1 expo prebuild --clean --platform android && expo run:android",

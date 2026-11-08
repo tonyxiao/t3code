@@ -6,10 +6,9 @@ import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 
-vi.stubGlobal("__T3CODE_TONY_DESKTOP__", true);
 vi.mock("electron", () => ({ protocol: { registerSchemesAsPrivileged: vi.fn() } }));
 
-it.effect("isolates private desktop state and URL handling from the installed upstream app", () =>
+it.effect("isolates V2 desktop state and URL handling from the installed upstream app", () =>
   Effect.gen(function* () {
     const paths = yield* Effect.promise(() => import("./DesktopStatePaths.ts"));
     const protocol = yield* Effect.promise(() => import("../electron/ElectronProtocol.ts"));
@@ -22,22 +21,22 @@ it.effect("isolates private desktop state and URL handling from the installed up
         joinPath: NodePath.join,
         t3Home: Option.none(),
       }),
-      "/Users/tony/.t3-tony",
+      "/Users/tony/.t3",
     );
-    assert.equal(protocol.getDesktopUrl(false), "tony-txcode://app/");
+    assert.equal(protocol.getDesktopUrl(false), "txcode://app/");
     assert.equal(
       yield* userData.resolveUserDataPath({
         appDataDirectory: "/Users/tony/Library/Application Support",
         isDevelopment: false,
         platform: "darwin",
       }),
-      "/Users/tony/Library/Application Support/tony-txcode-v2",
+      "/Users/tony/Library/Application Support/t3code-v2",
     );
     assert.equal(
       environment.resolveDesktopAppBranding({ isDevelopment: false, appVersion: "1.0.0" })
         .displayName,
-      "Tony TX Code (Alpha)",
+      "TX Code (Alpha)",
     );
-    assert.equal(early.resolveLinuxDesktopEntryName(false), "com.tonyxiao.txcode.tony.desktop");
+    assert.equal(early.resolveLinuxDesktopEntryName(false), "com.tonyxiao.txcode.v2.desktop");
   }).pipe(Effect.provide(NodeServices.layer)),
 );

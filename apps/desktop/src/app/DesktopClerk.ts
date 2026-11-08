@@ -1,4 +1,3 @@
-import { isTonyDesktop } from "./TonyDesktop.ts";
 import { createClerkBridge } from "@clerk/electron";
 import * as NodeURL from "node:url";
 import { storage } from "@clerk/electron/storage";
@@ -94,7 +93,7 @@ function createDesktopClerkBridge(stateDir: string, isDevelopment: boolean, user
       userDataPath,
     ),
     manageSingleInstanceLock: false,
-    passkeys: !isTonyDesktop,
+    passkeys: true,
     renderer: {
       scheme: ElectronProtocol.getDesktopScheme(isDevelopment),
       host: ElectronProtocol.DESKTOP_HOST,

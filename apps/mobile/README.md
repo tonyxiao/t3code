@@ -128,9 +128,8 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 The fork's `private` profile builds a self-contained `TX Code` app under
 `com.tonyxiao.txcode.v2`, while `tx-code` and `tx-code:remote` target its preview
-identity and optional remote JavaScript launcher. The `tony:*` profiles use
-separate `com.tonyxiao.txcode.tony` identities and embedded-bundle recovery;
-the v1 `com.tonyxiao.t3code` apps remain installed independently.
+identity and optional remote JavaScript launcher with embedded-bundle recovery.
+V1 apps keep their existing identities and can remain installed independently.
 Set signing credentials and any associated domains through the matching EAS
 environment; the app config also accepts the `T3CODE_MOBILE_APP_*` and
 `T3CODE_MOBILE_EAS_*` overrides used by the new profiles.

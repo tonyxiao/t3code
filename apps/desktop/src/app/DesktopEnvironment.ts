@@ -11,7 +11,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import { isTonyDesktop } from "./TonyDesktop.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
@@ -86,7 +85,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = isTonyDesktop ? "Tony TX Code" : "TX Code";
+const APP_BASE_NAME = "TX Code";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -229,13 +228,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isTonyDesktop
-        ? isDevelopment
-          ? "com.tonyxiao.txcode.tony.dev"
-          : "com.tonyxiao.txcode.tony"
-        : isDevelopment
-          ? "com.tonyxiao.txcode.v2.dev"
-          : "com.tonyxiao.txcode.v2",
+      isDevelopment ? "com.tonyxiao.txcode.v2.dev" : "com.tonyxiao.txcode.v2",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxApplicationsDir,

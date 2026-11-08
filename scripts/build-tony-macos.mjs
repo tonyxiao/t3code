@@ -25,7 +25,6 @@ const scratch = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "tony-t3-notar
 const env = {
   ...process.env,
   PATH: `${process.cwd()}/node_modules/.bin:${process.env.PATH}`,
-  T3CODE_DESKTOP_TONY_BUILD: "1",
   T3CODE_DESKTOP_UPDATE_URL: "https://cs-mini.meteor-ruffe.ts.net/txcode-v2-downloads/macos/",
 };
 delete env.ELECTRON_RUN_AS_NODE;

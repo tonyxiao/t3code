@@ -62,8 +62,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const isTonyDesktopBuild = process.env.T3CODE_DESKTOP_TONY_BUILD === "1";
-const DESKTOP_APP_ID = isTonyDesktopBuild ? "com.tonyxiao.txcode.tony" : "com.tonyxiao.txcode.v2";
+const DESKTOP_APP_ID = "com.tonyxiao.txcode.v2";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2707,7 +2706,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   }
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
-    (!isTonyDesktopBuild ? Option.getOrUndefined(env.githubRepository)?.trim() : "") ||
+    Option.getOrUndefined(env.githubRepository)?.trim() ||
     ""
   ).trim();
   if (!rawRepo) return undefined;
@@ -2768,7 +2767,6 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
-  if (isTonyDesktopBuild) return "Tony TX Code (Alpha)";
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "TX Code (Nightly)"
     : (desktopPackageJson.productName ?? "TX Code");
@@ -2846,13 +2844,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       extendInfo: {
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
-        NSLocalNetworkUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
-        NSScreenCaptureUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} captures the active window when you use the window capture shortcut.`,
-        NSCameraUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the camera.`,
-        NSMicrophoneUsageDescription: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} lets commands run by terminals and coding agents use the microphone.`,
-        NSCalendarsUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need access to your calendars.`,
-        NSCalendarsFullAccessUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need to read and write your calendar events.`,
-        NSCalendarsWriteOnlyAccessUsageDescription: `Commands you run in ${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} may need to add events to your calendars.`,
+        NSLocalNetworkUsageDescription: `TX Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
+        NSScreenCaptureUsageDescription: `TX Code captures the active window when you use the window capture shortcut.`,
+        NSCameraUsageDescription: `TX Code lets commands run by terminals and coding agents use the camera.`,
+        NSMicrophoneUsageDescription: `TX Code lets commands run by terminals and coding agents use the microphone.`,
+        NSCalendarsUsageDescription: `Commands you run in TX Code may need access to your calendars.`,
+        NSCalendarsFullAccessUsageDescription: `Commands you run in TX Code may need to read and write your calendar events.`,
+        NSCalendarsWriteOnlyAccessUsageDescription: `Commands you run in TX Code may need to add events to your calendars.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2866,10 +2864,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: isTonyDesktopBuild ? "Tony TX Code" : "TX Code",
-          schemes: isTonyDesktopBuild
-            ? ["tony-txcode", "tony-txcode-dev"]
-            : ["txcode", "txcode-dev"],
+          name: "TX Code",
+          schemes: ["txcode", "txcode-dev"],
         },
         {
           name: "Web site URL",
@@ -2921,10 +2917,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
         {
-          name: isTonyDesktopBuild ? "Tony TX Code" : "TX Code",
-          schemes: isTonyDesktopBuild
-            ? ["tony-txcode", "tony-txcode-dev"]
-            : ["txcode", "txcode-dev"],
+          name: "TX Code",
+          schemes: ["txcode", "txcode-dev"],
         },
       ],
       desktop: {
@@ -3820,7 +3814,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
   const configuredMacPasskeySigning =
-    options.platform === "mac" && options.signed && !isTonyDesktopBuild
+    options.platform === "mac" && options.signed
       ? yield* Effect.try({
           try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
@@ -3885,7 +3879,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     ...(macWebAuthn ? { t3codeWebAuthn: macWebAuthn } : {}),
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: `${isTonyDesktopBuild ? "Tony TX Code" : "TX Code"} is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.`,
+    description: `TX Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.`,
     license: "MIT",
     homepage: "https://t3.codes",
     author: "T3 Tools",

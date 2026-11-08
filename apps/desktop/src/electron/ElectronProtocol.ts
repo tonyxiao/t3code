@@ -12,11 +12,9 @@ import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
 
-import { isTonyDesktop } from "../app/TonyDesktop.ts";
-
 export const DESKTOP_HOST = "app";
-const DESKTOP_PRODUCTION_SCHEME = isTonyDesktop ? "tony-txcode" : "txcode";
-const DESKTOP_DEVELOPMENT_SCHEME = isTonyDesktop ? "tony-txcode-dev" : "txcode-dev";
+const DESKTOP_PRODUCTION_SCHEME = "txcode";
+const DESKTOP_DEVELOPMENT_SCHEME = "txcode-dev";
 
 export function getDesktopScheme(isDevelopment: boolean): string {
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;

@@ -14,7 +14,6 @@ import {
   resolveDesktopStateDir,
   type JoinPath,
 } from "./DesktopStatePaths.ts";
-import { isTonyDesktop } from "./TonyDesktop.ts";
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
@@ -32,13 +31,7 @@ export interface EarlyLinuxElectronOptions {
 }
 
 export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
-  isTonyDesktop
-    ? isDevelopment
-      ? "com.tonyxiao.txcode.tony.dev.desktop"
-      : "com.tonyxiao.txcode.tony.desktop"
-    : isDevelopment
-      ? "com.tonyxiao.txcode.v2.dev.desktop"
-      : "com.tonyxiao.txcode.v2.desktop";
+  isDevelopment ? "com.tonyxiao.txcode.v2.dev.desktop" : "com.tonyxiao.txcode.v2.desktop";
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();

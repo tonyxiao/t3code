@@ -11,7 +11,6 @@ Object.assign(process.env, repoEnv);
 process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const isTonyBuild = repoEnv.T3CODE_MOBILE_TONY_BUILD === "1";
 const remoteJsEnabled = repoEnv.T3CODE_MOBILE_REMOTE_JS === "1";
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
@@ -103,30 +102,6 @@ const VARIANT_CONFIG = {
   },
 } as const;
 
-const TONY_VARIANT_CONFIG = {
-  development: {
-    ...VARIANT_CONFIG.development,
-    appName: "Tony TX Code Dev",
-    scheme: "tony-txcode-dev",
-    iosBundleIdentifier: "com.tonyxiao.txcode.tony.dev",
-    androidPackage: "com.tonyxiao.txcode.tony.dev",
-  },
-  preview: {
-    ...VARIANT_CONFIG.preview,
-    appName: "Tony TX Code Preview",
-    scheme: "tony-txcode-preview",
-    iosBundleIdentifier: "com.tonyxiao.txcode.tony.preview",
-    androidPackage: "com.tonyxiao.txcode.tony.preview",
-  },
-  production: {
-    ...VARIANT_CONFIG.production,
-    appName: "Tony TX Code",
-    scheme: "tony-txcode",
-    iosBundleIdentifier: "com.tonyxiao.txcode.tony",
-    androidPackage: "com.tonyxiao.txcode.tony",
-  },
-} as const;
-
 function resolveAppVariant(value: string | undefined): AppVariant {
   switch (value) {
     case "development":
@@ -140,12 +115,11 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = isTonyBuild ? TONY_VARIANT_CONFIG[APP_VARIANT] : VARIANT_CONFIG[APP_VARIANT];
+const variant = VARIANT_CONFIG[APP_VARIANT];
 const privateAppId = repoEnv.T3CODE_MOBILE_APP_ID?.trim();
 const privateAppName = repoEnv.T3CODE_MOBILE_APP_NAME?.trim();
 const easProjectId =
-  repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim() ??
-  (isTonyBuild ? "f6cd51c6-6875-4ce4-9360-7aefaf9ee333" : "d763fcb8-d37c-41ea-a773-b54a0ab4a454");
+  repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim() ?? "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 // Copied thread links open the app.
 const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
@@ -269,9 +243,7 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: isTonyBuild
-      ? repoEnv.T3CODE_MOBILE_UPDATES_ENABLED === "1"
-      : repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
     url: `https://u.expo.dev/${easProjectId}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
@@ -284,19 +256,16 @@ const config: ExpoConfig = {
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId:
-      repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ?? (isTonyBuild ? "H82Z395PDV" : "ARK85ZXQ4Z"),
+    appleTeamId: repoEnv.T3CODE_MOBILE_APPLE_TEAM_ID?.trim() ?? "ARK85ZXQ4Z",
     associatedDomains: repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS
       ? repoEnv.T3CODE_MOBILE_ASSOCIATED_DOMAINS.split(",")
           .map((domain) => domain.trim())
           .filter(Boolean)
-      : isTonyBuild
-        ? ["applinks:clerk.t3.codes", "webcredentials:clerk.t3.codes"]
-        : [
-            `applinks:${"clerk.t3.codes"}`,
-            `webcredentials:${"clerk.t3.codes"}`,
-            `applinks:${HOSTED_APP_HOST}`,
-          ],
+      : [
+          `applinks:${"clerk.t3.codes"}`,
+          `webcredentials:${"clerk.t3.codes"}`,
+          `applinks:${HOSTED_APP_HOST}`,
+        ],
     entitlements: {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
@@ -533,7 +502,7 @@ const config: ExpoConfig = {
       observe: { endpointUrl: observeEndpointUrl },
     },
   },
-  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ?? (isTonyBuild ? "txlforge-tony" : "pingdotgg"),
+  owner: repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() ?? "pingdotgg",
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,
